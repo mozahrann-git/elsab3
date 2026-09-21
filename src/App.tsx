@@ -427,7 +427,7 @@ export default function App() {
   const handleUpdateBannerPhoto = (newUrl: string) => {
     setBannerPhotoUrl(newUrl);
     // Save to live cloud database
-    saveSiteBannerToDb(newUrl).catch(err => console.error('[Firebase] Failed to save banner:', err));
+    saveSiteBannerToDb(newUrl).catch(err => { console.error('[Firebase] Failed to save banner:', err); alert('اللوجو/البانر ماتحفظش على السيرفر. اتأكد إنك داخل بحساب الأدمن وجرّب تاني.'); });
     try {
       localStorage.setItem('hadaba_custom_banner_url', newUrl);
     } catch {
@@ -457,7 +457,7 @@ export default function App() {
 
   const handleUpdateLogoPhoto = (newUrl: string) => {
     setCustomLogoUrl(newUrl);
-    saveSiteLogoToDb(newUrl).catch(err => console.error('[Firebase] Failed to save logo:', err));
+    saveSiteLogoToDb(newUrl).catch(err => { console.error('[Firebase] Failed to save logo:', err); alert('اللوجو/البانر ماتحفظش على السيرفر. اتأكد إنك داخل بحساب الأدمن وجرّب تاني.'); });
     safeLocalStorageSet('hadaba_custom_logo_url', newUrl);
     safeLocalStorageSet('elseba_custom_logo_url', newUrl);
     window.dispatchEvent(new Event('lion_logo_updated'));

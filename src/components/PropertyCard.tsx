@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Property } from '../types';
 import { Heart, ArrowLeftRight, Edit3, Briefcase, CheckCircle2, Play, Video, ChevronLeft, ChevronRight, Volume2, VolumeX, Image as ImageIcon } from 'lucide-react';
-import { formatPrice } from '../utils/helpers';
+import { formatPrice, getVideoEmbedInfo } from '../utils/helpers';
 import { INITIAL_PRICE_MAP_DATA } from '../data/marketPriceData';
 import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { hydratePropertyMedia } from '../utils/propertyMedia';
@@ -35,7 +35,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   showFairPriceMeter = true
 }) => {
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
-  const [showInlineVideo, setShowInlineVideo] = useState(false);
+  // الفيديو بيظهر في خانة الكارت على طول، والصور بزرار
+  const [showInlineVideo, setShowInlineVideo] = useState(true);
 
   // Touch swipe coordinates
   const touchStartX = useRef<number | null>(null);
@@ -170,18 +171,9 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           onTouchEnd={handleTouchEnd}
         >
           {/* 1. If user has video and NO images (or toggled inline video): Render the real Video Player directly */}
-          {(!hasImages && hasVideo) || (showInlineVideo && hasVideo) ? (
-            <div 
-              className="w-full h-full relative bg-black flex items-center justify-center"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <PropertyVideoPlayer
-                videoUrl={property.videoUrl!}
-                title={property.title}
-                className="w-full h-full object-cover"
-                autoPlay={false}
-                videoMuted={property.videoMuted ?? true}
-              />
+          {hasVideo && (showInlineVideo || !hasImages) ? (
+            <div className="w-full h-full relative bg-black">
+              <CardVideo videoUrl={property.videoUrl!} poster={validPropImages[0]} title={property.title} />
               {hasImages && (
                 <button
                   type="button"
@@ -445,6 +437,58 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         )}
       </div>
 
+    </div>
+  );
+};
+
+/* فيديو جوه خانة الكارت: بيشتغل لوحده صامت ومتكرر لما الكارت يظهر على الشاشة، وبيقف لما يختفي */
+const CardVideo: React.FC<{ videoUrl: string; poster?: string; title: string }> = ({ videoUrl, poster, title }) => {
+  const ref = useRef<HTMLVideoElement>(null);
+  const info = getVideoEmbedInfo(videoUrl, true);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) el.play().catch(() => {});
+        else el.pause();
+      },
+      { threshold: 0.4 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [videoUrl]);
+
+  if (info?.type === 'direct' && info.src) {
+    // صورة مصغرة من Cloudinary لو مفيش صورة للوحدة
+    const cloudPoster = info.src.includes('res.cloudinary.com') ? info.src.replace(/\.(mp4|mov|webm|m4v)(\?.*)?$/i, '.jpg') : undefined;
+    return (
+      <video
+        ref={ref}
+        src={info.src}
+        poster={poster || cloudPoster}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-label={`فيديو ${title}`}
+        className="w-full h-full object-cover"
+      />
+    );
+  }
+
+  // يوتيوب: صورته المصغرة ملو الخانة، والفيديو نفسه في صفحة الوحدة
+  const yt = videoUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  const thumb = yt ? `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg` : poster;
+  return (
+    <div className="w-full h-full relative">
+      {thumb && <img src={thumb} alt={title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
+      <span className="absolute inset-0 flex items-center justify-center">
+        <span className="w-12 h-12 rounded-full bg-black/60 border border-white/40 flex items-center justify-center">
+          <Play size={18} className="fill-white text-white" />
+        </span>
+      </span>
     </div>
   );
 };

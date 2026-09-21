@@ -40,6 +40,8 @@ export const auth = getAuth(app);
 
 // Ensure a valid authenticated Firebase Auth session exists at all times
 export async function ensureAuth(): Promise<FirebaseUser | null> {
+  // لازم نستنى Firebase يرجّع الجلسة المحفوظة الأول (بعد الـ refresh)،
+  // وإلا هيعمل دخول مجهول فوق جلسة الأدمن ويخرّجه
   await auth.authStateReady();
   if (auth.currentUser) return auth.currentUser;
   try {
@@ -603,7 +605,8 @@ export function subscribeToSiteConfig(
 export async function saveSiteBannerToDb(bannerUrl: string): Promise<void> {
   try {
     const configDoc = doc(db, 'site_config', 'global');
-    const sanitized = cleanFirestoreData({ bannerUrl });
+    // البانر بيترفع على Cloudinary، وFirestore بيخزن الرابط بس
+    const sanitized = cleanFirestoreData({ bannerUrl: await ensureUploaded(bannerUrl, 'branding', 'banner') });
     await setDoc(configDoc, sanitized, { merge: true });
   } catch (error) {
     console.error('[Firebase] Error saving site banner:', error);
@@ -614,7 +617,7 @@ export async function saveSiteBannerToDb(bannerUrl: string): Promise<void> {
 export async function saveSiteLogoToDb(logoUrl: string): Promise<void> {
   try {
     const configDoc = doc(db, 'site_config', 'global');
-    const sanitized = cleanFirestoreData({ logoUrl });
+    const sanitized = cleanFirestoreData({ logoUrl: await ensureUploaded(logoUrl, 'branding', 'logo') });
     await setDoc(configDoc, sanitized, { merge: true });
   } catch (error) {
     console.error('[Firebase] Error saving site logo:', error);
