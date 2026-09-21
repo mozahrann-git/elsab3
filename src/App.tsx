@@ -173,6 +173,9 @@ export default function App() {
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
   const [isQuotaBannerDismissed, setIsQuotaBannerDismissed] = useState<boolean>(false);
 
+  // بيتغير مع كل تسجيل دخول/خروج، عشان الاشتراكات تتعمل من جديد بصلاحيات الحساب الحالي
+  const [authKey, setAuthKey] = useState<string>('init');
+
   // Firestore Real-Time Subscriptions & Cache Hydration on Mount
   useEffect(() => {
     // 0. Test Connection
@@ -312,7 +315,8 @@ export default function App() {
       unsubConfig();
       unsubBrokers();
     };
-  }, []);
+    // بتتعمل من جديد لما الأدمن أو الموظف يدخل، لأن الاشتراك اللي اتعمل وهو زائر بيتقفل بخطأ صلاحيات
+  }, [authKey]);
 
   // Save properties changes to IndexedDB and safe cache (never throws QuotaExceededError)
   useEffect(() => {
@@ -366,6 +370,7 @@ export default function App() {
   // التحقق الحقيقي: الواجهة مبتصدقش localStorage، بتسأل Firebase Auth + staff_access
   useEffect(() => {
     const unsub = subscribeToStaffAuth(async (user) => {
+      setAuthKey(user && !user.isAnonymous ? user.uid : 'guest');
       if (!user || user.isAnonymous) {
         setIsAdminLoggedIn(false);
         setIsSalesLoggedIn(false);
