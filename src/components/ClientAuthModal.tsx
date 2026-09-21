@@ -18,7 +18,7 @@ import {
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { formatPrice } from '../utils/helpers';
 import { safeLocalStorageSet, safeSessionStorageSet } from '../utils/storageHelper';
-import { signInStaff } from '../services/firebaseService';
+import { signInStaff, getStaffRole, signOutToGuest } from '../services/firebaseService';
 
 interface ClientAuthModalProps {
   isOpen: boolean;
@@ -128,105 +128,48 @@ export const ClientAuthModal: React.FC<ClientAuthModalProps> = ({
       return;
     }
 
-    // 1. Check if identifier is Admin (Smart Match)
-    const configuredAdminEmail = (adminCredentials?.email || 'admin@lion-estates.com').toLowerCase().trim();
-    const configuredAdminPass = (adminCredentials?.password || 'lion2025').trim();
-
-    const validAdminIdentifiers = [
-      'admin',
-      'admin@elsaba.com',
-      'admin@elseba.com',
-      'admin@elsebaa.com',
-      'admin@lion-estates.com',
-      'admin@lion.com',
-      'admin@hadaba.com',
-      'admin@admin.com',
-      'mo.zahrann@gmail.com',
-      configuredAdminEmail
-    ];
-
-    const validAdminPasswords = [
-      'lion2025',
-      'admin123',
-      'admin',
-      '123456',
-      'elsaba2025',
-      'elseba2025',
-      configuredAdminPass
-    ];
-
-    const isAdminIdent = 
-      validAdminIdentifiers.includes(identifier) ||
-      identifier.startsWith('admin') ||
-      identifier.includes('admin@') ||
-      identifier === configuredAdminEmail;
-
-    if (isAdminIdent) {
-      if (!pass || !validAdminPasswords.includes(pass)) {
-        if (!pass) {
-          setErrorMsg('يرجى إدخال كلمة المرور لحساب الإدارة');
+    // 1+2. الأدمن والموظفين: دخول حقيقي من Firebase بالإيميل، والدور من staff_access
+    if (identifier.includes('@')) {
+      const isKnownStaffEmail =
+        identifier.startsWith('admin') ||
+        salesAgents.some((a) => (a.email || '').toLowerCase().trim() === identifier);
+      if (!pass) {
+        if (isKnownStaffEmail) {
+          setErrorMsg('يرجى إدخال كلمة المرور');
           return;
         }
-        setErrorMsg('كلمة المرور غير صحيحة لحساب الإدارة');
-        return;
-      }
-
-      safeLocalStorageSet('lion_admin_auth', JSON.stringify({
-        email: identifier,
-        isLoggedIn: true,
-        lastLogin: new Date().toISOString()
-      }));
-      safeSessionStorageSet('lion_admin_auth', JSON.stringify({
-        email: identifier,
-        isLoggedIn: true,
-        lastLogin: new Date().toISOString()
-      }));
-      safeLocalStorageSet('lion_admin_logged_in', 'true');
-      safeSessionStorageSet('lion_admin_logged_in', 'true');
-
-      try {
-        localStorage.removeItem('hadaba_current_client');
-      } catch {
-        // ignore
-      }
-
-      setSuccessMsg('تم التحقق من حساب الإدارة بنجاح! جاري فتح لوحة التحكم...');
-      setTimeout(() => {
-        if (onLoginAdminSuccess) onLoginAdminSuccess();
-        onClose();
-      }, 500);
-      return;
-    }
-
-    // 2. Check if identifier matches a Sales Agent
-    const matchedAgent = salesAgents.find((a) => {
-      const aEmail = (a.email || '').toLowerCase().trim();
-      const aName = a.name.toLowerCase().trim();
-      const aPhone = (a.phone || '').trim();
-      return (
-        (aEmail && (aEmail === identifier || identifier.includes(aEmail))) ||
-        (aName && (aName === identifier || identifier.includes(aName))) ||
-        (aPhone && aPhone.includes(identifier))
-      );
-    });
-
-    if (matchedAgent) {
-      if (matchedAgent.isActive === false) {
-        setErrorMsg('تم إيقاف هذا الحساب مؤقتاً. يرجى مراجعة الإدارة.');
-        return;
-      }
-
-      try {
-        await signInStaff(matchedAgent.email, pass || 'sales123');
-        setSuccessMsg(`أهلاً بك يا ${matchedAgent.name}! جاري الدخول لنظام المبيعات...`);
-        setTimeout(() => {
-          if (onLoginSalesSuccess) onLoginSalesSuccess(matchedAgent);
-          onClose();
-        }, 800);
-        return;
-      } catch (staffAuthErr) {
-        setErrorMsg('كلمة المرور غير صحيحة لحساب مستشار المبيعات.');
-        return;
+      } else {
+        try {
+          const user = await signInStaff(identifier, pass);
+          const role = await getStaffRole(user.email);
+          if (role === 'admin') {
+            try { localStorage.removeItem('hadaba_current_client'); } catch { /* ignore */ }
+            setSuccessMsg('تم التحقق من حساب الإدارة بنجاح! جاري فتح لوحة التحكم...');
+            setTimeout(() => {
+              if (onLoginAdminSuccess) onLoginAdminSuccess();
+              onClose();
+            }, 500);
+            return;
+          }
+          const matchedAgent = salesAgents.find((a) => (a.email || '').toLowerCase().trim() === identifier);
+          if (role === 'sales' && matchedAgent && matchedAgent.isActive !== false) {
+            setSuccessMsg(`أهلاً بك يا ${matchedAgent.name}! جاري الدخول لنظام المبيعات...`);
+            setTimeout(() => {
+              if (onLoginSalesSuccess) onLoginSalesSuccess(matchedAgent);
+              onClose();
+            }, 800);
+            return;
+          }
+          await signOutToGuest();
+          setErrorMsg('الحساب ده مش مسجّل ضمن فريق السبع. كلّم الإدارة.');
+          return;
+        } catch {
+          if (isKnownStaffEmail) {
+            setErrorMsg('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+            return;
+          }
+          // مش موظف: يكمّل كعميل عادي
+        }
       }
     }
 
