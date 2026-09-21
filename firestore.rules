@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    // الشقق والمعروضات: القراءة والكتابة والحذف
+    match /properties/{propertyId} {
+      allow read, write: if true;
+
+      // بيانات المالك الخاصة بالوحدة
+      match /private/{docId} {
+        allow read, write: if true;
+      }
+    }
+
+    // فريق المبيعات: السماح بالقراءة والكتابة
+    match /sales_agents/{agentId} {
+      allow read, write: if true;
+    }
+
+    // طلبات المعاينة
+    match /viewing_requests/{requestId} {
+      allow read, write: if true;
+    }
+
+    // تقارير وكومنتات المعاينات الميدانية
+    match /viewing_feedbacks/{feedbackId} {
+      allow read, write: if true;
+    }
+
+    // ملفات البروكرز والمكاتب الشريكة
+    match /brokers/{brokerId} {
+      allow read, write: if true;
+    }
+
+    // عملاء الـ CRM والصفقات
+    match /crm_leads/{leadId} {
+      allow read, write: if true;
+    }
+
+    // إعدادات وتخصيصات الموقع
+    match /site_config/{configId} {
+      allow read, write: if true;
+    }
+
+    // طلبات إضافة شقق الملاك
+    match /owner_submissions/{submissionId} {
+      allow read, write: if true;
+    }
+
+    // حسابات وصلاحيات مستخدمي البوابات
+    match /portal_users/{userId} {
+      allow read, write: if true;
+    }
+
+    // سجل الرقابة والحوكمة اللحظية الموحد
+    match /governance_audit_logs/{logId} {
+      allow read, write: if true;
+    }
+  }
+}
+

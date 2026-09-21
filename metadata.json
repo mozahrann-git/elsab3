@@ -1,0 +1,6 @@
+{
+  "name": "السبع للعقارات | ريسيل الهضبة الوسطى بالمقطم",
+  "description": "منصة السبع للعقارات - المتخصصة في شقق الريسيل (سوبر لوكس ونصف تشطيب) بأحياء الهضبة الوسطى من الحي الأول إلى الثامن بالمقطم.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

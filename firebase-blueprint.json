@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "Property": {
+      "title": "Property",
+      "description": "Real estate listing document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "price": { "type": "number" },
+        "area": { "type": "number" }
+      },
+      "required": ["id", "code", "title", "price"]
+    },
+    "SalesAgent": {
+      "title": "SalesAgent",
+      "description": "Real estate sales team member and account",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Sales CRM lead client entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "phone"]
+    },
+    "SiteConfig": {
+      "title": "SiteConfig",
+      "description": "Site global configuration such as custom banner",
+      "type": "object",
+      "properties": {
+        "bannerUrl": { "type": "string" }
+      }
+    },
+    "OwnerSubmission": {
+      "title": "OwnerSubmission",
+      "description": "Resale property submission from a direct owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "ownerPhone": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "ownerName", "ownerPhone"]
+    },
+    "OwnerPrivate": {
+      "title": "OwnerPrivate",
+      "description": "Sensitive property owner personal identifiable information isolated from public listing",
+      "type": "object",
+      "properties": {
+        "ownerName": { "type": "string" },
+        "ownerPhone": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "PortalUser": {
+      "title": "PortalUser",
+      "description": "Role-based user account for Landlords, Brokers, Sales Agents, and Admins",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "email", "name", "role"]
+    },
+    "GovernanceAuditLog": {
+      "title": "GovernanceAuditLog",
+      "description": "Unified governance event and activity audit log across all portals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "actorName": { "type": "string" },
+        "severity": { "type": "string" }
+      },
+      "required": ["id", "type", "title", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/properties/{propertyId}": {
+      "schema": "Property",
+      "description": "All public and managed property listings"
+    },
+    "/properties/{propertyId}/private/{docId}": {
+      "schema": "OwnerPrivate",
+      "description": "Isolated private owner contact data accessible only to staff and admins"
+    },
+    "/sales_agents/{agentId}": {
+      "schema": "SalesAgent",
+      "description": "Sales team members, logins, and performance stats"
+    },
+    "/crm_leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Customer leads and deal pipeline"
+    },
+    "/site_config/{configId}": {
+      "schema": "SiteConfig",
+      "description": "Global website configuration"
+    },
+    "/owner_submissions/{submissionId}": {
+      "schema": "OwnerSubmission",
+      "description": "Submissions submitted by property owners"
+    },
+    "/portal_users/{userId}": {
+      "schema": "PortalUser",
+      "description": "Role-based portal accounts and access permissions"
+    },
+    "/governance_audit_logs/{logId}": {
+      "schema": "GovernanceAuditLog",
+      "description": "Governance activity logs across all portals"
+    }
+  }
+}
