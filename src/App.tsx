@@ -810,7 +810,7 @@ export default function App() {
 
   const [closedDeals, setClosedDeals] = useState<ClosedDeal[]>(() => {
     try {
-      const saved = localStorage.getItem('lion_closed_deals');
+      const saved = localStorage.getItem('lion_closed_deals_v2');
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
@@ -819,7 +819,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    safeLocalStorageSet('lion_closed_deals', JSON.stringify(closedDeals));
+    safeLocalStorageSet('lion_closed_deals_v2', JSON.stringify(closedDeals));
   }, [closedDeals]);
 
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {

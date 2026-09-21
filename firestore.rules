@@ -10,6 +10,8 @@ service cloud.firestore {
     function hasAccess() { return isRealUser() && exists(/databases/$(database)/documents/staff_access/$(staffEmail())); }
     function isAdmin()   { return hasAccess() && roleOf() == 'admin'; }
     function isStaff()   { return hasAccess() && roleOf() in ['admin', 'sales']; }
+    function isBroker()  { return hasAccess() && roleOf() == 'broker'; }
+    function myBrokerId() { return get(/databases/$(database)/documents/staff_access/$(staffEmail())).data.brokerId; }
 
     // ---------- الصلاحيات: الأدمن بس ----------
     match /staff_access/{email} {
@@ -53,7 +55,7 @@ service cloud.firestore {
     // ---------- طلبات المعاينة ----------
     match /viewing_requests/{id} {
       allow create: if true;
-      allow read, update: if isStaff();
+      allow read, update: if isStaff() || (isBroker() && resource.data.brokerId == myBrokerId());
       allow delete: if isAdmin();
     }
 
@@ -64,8 +66,14 @@ service cloud.firestore {
     }
 
     // ---------- البروكرز والتقييمات وحسابات البوابات: الفريق بس لحد ما البوابات تتبني صح ----------
-    match /brokers/{id}              { allow read, write: if isStaff(); }
-    match /viewing_feedbacks/{id}    { allow read, write: if isStaff(); }
+    match /brokers/{id} {
+      allow read: if isStaff() || (isBroker() && id == myBrokerId());
+      allow write: if isStaff();
+    }
+    match /viewing_feedbacks/{id} {
+      allow read, write: if isStaff();
+      allow create: if isBroker();
+    }
     match /portal_users/{id}         { allow read, write: if isAdmin(); }
     match /governance_audit_logs/{id} {
       allow create: if isStaff();

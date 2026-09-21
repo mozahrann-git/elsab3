@@ -75,58 +75,8 @@ export const INITIAL_PRICE_MAP_DATA: NeighborhoodPriceMapData[] = [
   }
 ];
 
-export const INITIAL_CLOSED_DEALS: ClosedDeal[] = [
-  {
-    id: 'deal-1',
-    neighborhood: 'الحي الأول',
-    area: 150,
-    price: 3675000,
-    daysToClose: 18,
-    timeframeLabel: 'اتباعت الأسبوع ده',
-    closedDate: '2026-09-12',
-    notes: 'دور ثاني واجهة بحري - كاش'
-  },
-  {
-    id: 'deal-2',
-    neighborhood: 'الحي الثالث',
-    area: 130,
-    price: 3380000,
-    daysToClose: 25,
-    timeframeLabel: 'اتباعت من أسبوعين',
-    closedDate: '2026-09-02',
-    notes: 'تشطيب سوبر لوكس كمبوند فلورينتا'
-  },
-  {
-    id: 'deal-3',
-    neighborhood: 'تقسيم المباحث',
-    area: 200,
-    price: 3800000,
-    daysToClose: 40,
-    timeframeLabel: 'اتباعت الشهر ده',
-    closedDate: '2026-08-25',
-    notes: 'دور أول بلكونة مميزة'
-  },
-  {
-    id: 'deal-4',
-    neighborhood: 'الحي الثاني',
-    area: 175,
-    price: 3850000,
-    daysToClose: 14,
-    timeframeLabel: 'اتباعت الشهر ده',
-    closedDate: '2026-08-18',
-    notes: 'أرضي بحديقة خاصة مسجلة'
-  },
-  {
-    id: 'deal-5',
-    neighborhood: 'الحي الرابع',
-    area: 120,
-    price: 2340000,
-    daysToClose: 22,
-    timeframeLabel: 'اتباعت الشهر ده',
-    closedDate: '2026-08-10',
-    notes: 'نصف تشطيب استلام فوري'
-  }
-];
+// بداية نضيفة: الصفقات الحقيقية بتتضاف من لوحة الإدارة
+export const INITIAL_CLOSED_DEALS: ClosedDeal[] = [];
 
 export interface ValuationParams {
   neighborhood: HadabaWostaNeighborhood;

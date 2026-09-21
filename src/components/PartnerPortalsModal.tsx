@@ -1,5 +1,6 @@
 import React from 'react';
 import { LandlordPortalPage } from './LandlordPortalPage';
+import { PortalAuthGate, PortalSessionBar } from './PortalAuthGate';
 import { Property } from '../types';
 
 interface PartnerPortalsModalProps {
@@ -14,8 +15,23 @@ interface PartnerPortalsModalProps {
   onOpenValuation?: () => void;
 }
 
-export const PartnerPortalsModal: React.FC<PartnerPortalsModalProps> = (props) => {
-  return <LandlordPortalPage {...props} />;
-};
+/* المالك بيدخل بإيميله، وبيشوف الوحدات المربوطة بيه في staff_access بس */
+export const PartnerPortalsModal: React.FC<PartnerPortalsModalProps> = (props) => (
+  <PortalAuthGate isOpen={props.isOpen} role="owner" onClose={props.onClose}>
+    {(access, logout) => {
+      const codes = (access.propertyCodes || []).map((c) => c.toUpperCase());
+      const mine =
+        access.role === 'admin'
+          ? props.properties
+          : props.properties.filter((p) => codes.includes(String((p as any).code || p.id).toUpperCase()) || codes.includes(String(p.id).toUpperCase()));
+      return (
+        <>
+          <PortalSessionBar access={access} onLogout={logout} />
+          <LandlordPortalPage {...props} properties={mine} />
+        </>
+      );
+    }}
+  </PortalAuthGate>
+);
 
 export { LandlordPortalPage };

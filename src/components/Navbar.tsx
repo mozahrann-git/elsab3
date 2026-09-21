@@ -95,6 +95,19 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
+  // وقف سكرول الصفحة اللي ورا القائمة طول ما هي مفتوحة
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [mobileMenuOpen]);
+
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 15);
@@ -418,14 +431,17 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* ========================================================= */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex" dir="rtl">
-          {/* Backdrop */}
+          {/* Backdrop (من غير blur عشان الموبايل ميتقلش) */}
           <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-black/60 transition-opacity"
             onClick={() => setMobileMenuOpen(false)}
           />
 
-          {/* Drawer Content */}
-          <div className="relative w-full max-w-sm sm:max-w-md bg-[#FAF8F5] h-full shadow-2xl z-50 flex flex-col justify-between overflow-y-auto border-l border-[#ECE8DF] animate-in slide-in-from-right duration-250">
+          {/* Drawer Content: السكرول جوه القائمة بس، والصفحة اللي وراها واقفة */}
+          <div
+            className="relative w-full max-w-sm sm:max-w-md bg-[#FAF8F5] shadow-2xl z-50 flex flex-col justify-between overflow-y-auto overscroll-contain border-l border-[#ECE8DF] animate-in slide-in-from-right duration-250"
+            style={{ height: '100dvh', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+          >
             
             {/* Drawer Top Header */}
             <div>

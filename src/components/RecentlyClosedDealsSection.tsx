@@ -18,6 +18,8 @@ export const RecentlyClosedDealsSection: React.FC<RecentlyClosedDealsSectionProp
   onOpenResaleSubmit
 }) => {
   const activeList = closedDeals || deals || INITIAL_CLOSED_DEALS;
+  // مفيش صفقات حقيقية لسه؟ القسم ميظهرش بدل ما يعرض أرقام وهمية
+  if (!activeList || activeList.length === 0) return null;
 
   return (
     <section id="closed-deals-section" className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-16 font-ibm" dir="rtl">

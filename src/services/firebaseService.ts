@@ -114,6 +114,34 @@ export async function getStaffRole(email?: string | null): Promise<'admin' | 'sa
   }
 }
 
+/** بيانات الحساب كاملة من staff_access: الدور + ربطه بالبروكر أو بوحدات المالك */
+export interface StaffAccess {
+  email: string;
+  role: 'admin' | 'sales' | 'broker' | 'owner' | 'disabled' | null;
+  name?: string;
+  brokerId?: string;          // للبروكر: ID ملفه في brokers
+  propertyCodes?: string[];   // للمالك: أكواد وحداته
+}
+
+export async function getStaffAccess(email?: string | null): Promise<StaffAccess | null> {
+  if (!email) return null;
+  const key = email.trim().toLowerCase();
+  try {
+    const snap = await getDoc(doc(db, 'staff_access', key));
+    if (!snap.exists()) return null;
+    const d = snap.data() as any;
+    const codes = Array.isArray(d.propertyCodes)
+      ? d.propertyCodes
+      : typeof d.propertyCodes === 'string'
+        ? d.propertyCodes.split(',').map((c: string) => c.trim()).filter(Boolean)
+        : [];
+    return { email: key, role: d.role ?? null, name: d.name, brokerId: d.brokerId, propertyCodes: codes };
+  } catch (err) {
+    console.warn('[Auth] access lookup failed:', err);
+    return null;
+  }
+}
+
 /** بيرجّع الزائر لحالة "مجهول" بعد خروج الموظف */
 export async function signOutToGuest(): Promise<void> {
   await signOut(auth);
