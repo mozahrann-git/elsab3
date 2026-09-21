@@ -146,7 +146,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               <input
                 type="text"
                 required
-                placeholder="البريد الإلكتروني"
+                placeholder="admin أو البريد الإلكتروني"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full py-3 px-3.5 pl-10 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-xs sm:text-sm text-[#141414] placeholder-[#A3A09A] focus:outline-none focus:border-[#A07A26] focus:bg-white transition-all text-left font-ibm"

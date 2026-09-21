@@ -346,16 +346,8 @@ export default function App() {
   }, [ownerSubmissions]);
 
   // 3. Admin Authentication State (Persistent until explicit logout)
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    try {
-      const fromLocal = safeLocalStorageGet('lion_admin_logged_in');
-      const fromSession = sessionStorage.getItem('lion_admin_logged_in');
-      const fromAuth = safeLocalStorageGet('lion_admin_auth');
-      return fromLocal === 'true' || fromSession === 'true' || Boolean(fromAuth);
-    } catch {
-      return false;
-    }
-  });
+  // الأدمن بيتحدد من Firebase بس (في useEffect تحت)، مش من ذاكرة المتصفح
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
 
   const [adminCredentials, setAdminCredentials] = useState(() => {
     try {
