@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { SalesAgent } from '../types';
 import { safeLocalStorageSet, safeSessionStorageSet } from '../utils/storageHelper';
-import { signInStaff } from '../services/firebaseService';
+import { signInStaff, getStaffRole, signOutToGuest } from '../services/firebaseService';
 import { LionLogo } from './LionLogo';
 
 interface AdminLoginModalProps {
@@ -40,8 +40,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   salesAgents = [],
   adminCredentials,
 }) => {
-  const configuredAdminEmail = (adminCredentials?.email || 'admin@lion-estates.com').toLowerCase().trim();
-  const configuredAdminPass = (adminCredentials?.password || 'lion2025').trim();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -56,176 +54,47 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     setError('');
     setLoading(true);
 
-    const targetIdentifier = email.trim().toLowerCase();
+    const targetEmail = email.trim().toLowerCase();
     const targetPass = password.trim();
 
-    if (!targetIdentifier || !targetPass) {
-      setError('يرجى إدخال البريد الإلكتروني أو اسم المستخدم وكلمة المرور.');
+    if (!targetEmail || !targetPass) {
+      setError('يرجى إدخال البريد الإلكتروني وكلمة المرور.');
       setLoading(false);
       return;
     }
 
-    // List of valid Admin emails / identifiers
-    const validAdminIdentifiers = [
-      'admin',
-      'owner',
-      'zahran',
-      'admin@lion-estates.com',
-      'mo.zahrann@gmail.com',
-      'admin@elsaba.com',
-      'admin@elseba.com',
-      'admin@elsebaa.com',
-      'admin@lion.com',
-      'admin@hadaba.com',
-      'admin@admin.com',
-      configuredAdminEmail
-    ];
-
-    const validAdminPasswords = [
-      'lion2025',
-      'admin123',
-      'admin',
-      '123456',
-      'elsaba2025',
-      'elseba2025',
-      'hadaba2025',
-      configuredAdminPass
-    ];
-
-    const isExplicitAdmin = 
-      targetIdentifier === 'admin' ||
-      targetIdentifier === 'owner' ||
-      targetIdentifier === 'zahran' ||
-      targetIdentifier.startsWith('admin@') ||
-      targetIdentifier.includes('admin') ||
-      validAdminIdentifiers.includes(targetIdentifier) ||
-      targetIdentifier === configuredAdminEmail;
-
-    const emailToAuth = targetIdentifier === 'admin' ? configuredAdminEmail : targetIdentifier;
-
-    // 1. Direct Admin Credential Verification (Reliable, Zero Lockout)
-    if (isExplicitAdmin && (validAdminPasswords.includes(targetPass) || targetPass === configuredAdminPass)) {
-      safeLocalStorageSet('lion_admin_auth', JSON.stringify({
-        email: emailToAuth,
-        isLoggedIn: true,
-        lastLogin: new Date().toISOString()
-      }));
-      safeSessionStorageSet('lion_admin_auth', JSON.stringify({
-        email: emailToAuth,
-        isLoggedIn: true,
-        lastLogin: new Date().toISOString()
-      }));
-      safeLocalStorageSet('lion_admin_logged_in', 'true');
-      safeSessionStorageSet('lion_admin_logged_in', 'true');
-
-      // Attempt background Firebase Auth sync without blocking
-      signInStaff(emailToAuth, targetPass).catch(() => {});
-
-      if (typeof onLoginSuccess === 'function') {
-        onLoginSuccess();
-      } else if (typeof onSuccessLogin === 'function') {
-        onSuccessLogin();
-      }
-      setLoading(false);
-      onClose();
-      return;
-    }
-
-    // 2. Check if Sales Agent matches
-    const matchedAgent = salesAgents.find((a) => {
-      const aEmail = (a.email || '').toLowerCase().trim();
-      const aName = a.name.toLowerCase().trim();
-      return aEmail === targetIdentifier || aName === targetIdentifier;
-    });
-
-    if (matchedAgent) {
-      if (matchedAgent.isActive === false) {
-        setError('تم إيقاف هذا الحساب مؤقتاً. يرجى التواصل مع الإدارة.');
-        setLoading(false);
-        return;
-      }
-
-      // If matched agent default or valid pass
-      if (validAdminPasswords.includes(targetPass) || targetPass === 'sales2025' || targetPass === '123456') {
-        if (onSalesLoginSuccess) {
-          onSalesLoginSuccess(matchedAgent);
-        }
-        setLoading(false);
-        onClose();
-        return;
-      }
-    }
-
-    // 3. Authenticate with Firebase Auth
     try {
-      await signInStaff(emailToAuth, targetPass);
+      // 1) دخول حقيقي من Firebase Auth
+      const user = await signInStaff(targetEmail, targetPass);
+      // 2) الدور من staff_access (الأدمن بيحدده من Firebase Console)
+      const role = await getStaffRole(user.email);
 
-      // Successful Firebase Auth Login
-      if (isExplicitAdmin || emailToAuth === configuredAdminEmail) {
-        safeLocalStorageSet('lion_admin_auth', JSON.stringify({
-          email: emailToAuth,
-          isLoggedIn: true,
-          lastLogin: new Date().toISOString()
-        }));
-        safeSessionStorageSet('lion_admin_auth', JSON.stringify({
-          email: emailToAuth,
-          isLoggedIn: true,
-          lastLogin: new Date().toISOString()
-        }));
-        safeLocalStorageSet('lion_admin_logged_in', 'true');
-        safeSessionStorageSet('lion_admin_logged_in', 'true');
+      if (role === 'admin') {
+        onLoginSuccess ? onLoginSuccess() : onSuccessLogin?.();
+        setLoading(false);
+        onClose();
+        return;
+      }
 
-        if (typeof onLoginSuccess === 'function') {
-          onLoginSuccess();
-        } else if (typeof onSuccessLogin === 'function') {
-          onSuccessLogin();
+      if (role === 'sales') {
+        const matchedAgent = salesAgents.find((a) => (a.email || '').toLowerCase().trim() === targetEmail);
+        if (matchedAgent && matchedAgent.isActive !== false && onSalesLoginSuccess) {
+          onSalesLoginSuccess(matchedAgent);
+          setLoading(false);
+          onClose();
+          return;
         }
-        setLoading(false);
-        onClose();
-        return;
       }
 
-      if (matchedAgent && onSalesLoginSuccess) {
-        onSalesLoginSuccess(matchedAgent);
-        setLoading(false);
-        onClose();
-        return;
-      }
-
-      // Default fallback if authenticated
-      safeLocalStorageSet('lion_admin_logged_in', 'true');
-      if (typeof onLoginSuccess === 'function') {
-        onLoginSuccess();
-      } else if (typeof onSuccessLogin === 'function') {
-        onSuccessLogin();
-      }
+      // حساب موجود بس مالوش صلاحية
+      await signOutToGuest();
+      setError('الحساب ده مش مسجّل ضمن فريق الإدارة. كلّم مدير المنصة.');
       setLoading(false);
-      onClose();
     } catch (authError: any) {
-      console.warn('[Auth] Sign in fallback check:', authError);
-      
-      // If admin password matched even after firebase error
-      if (isExplicitAdmin && (validAdminPasswords.includes(targetPass) || targetPass.length >= 4)) {
-        safeLocalStorageSet('lion_admin_logged_in', 'true');
-        if (typeof onLoginSuccess === 'function') {
-          onLoginSuccess();
-        } else if (typeof onSuccessLogin === 'function') {
-          onSuccessLogin();
-        }
-        setLoading(false);
-        onClose();
-        return;
-      }
-
-      if (authError?.code === 'auth/wrong-password' || authError?.code === 'auth/invalid-credential') {
-        setError('كلمة المرور غير صحيحة. يرجى التأكد وإعادة المحاولة.');
-      } else if (authError?.code === 'auth/user-not-found') {
-        setError('الحساب غير مسجل. يرجى التأكد من البريد الإلكتروني.');
-      } else if (authError?.code === 'auth/too-many-requests') {
-        setError('تم تكرار المحاولات الخاطئة عدة مرات. يرجى الانتظار قليلاً.');
-      } else {
-        setError('بيانات الدخول غير صحيحة. يرجى التأكد من اسم المستخدم أو البريد وكلمة المرور.');
-      }
+      const code = authError?.code || '';
+      if (code.includes('too-many-requests')) setError('محاولات كتير. استنى دقايق وجرّب تاني.');
+      else if (code.includes('network')) setError('مشكلة في الاتصال بالإنترنت.');
+      else setError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
       setLoading(false);
     }
   };

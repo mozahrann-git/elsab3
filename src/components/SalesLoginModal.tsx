@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { SalesAgent } from '../types';
 import { LionLogo } from './LionLogo';
-import { signInStaff } from '../services/firebaseService';
+import { signInStaff, getStaffRole, signOutToGuest } from '../services/firebaseService';
 
 interface SalesLoginModalProps {
   isOpen: boolean;
@@ -56,51 +56,35 @@ export const SalesLoginModal: React.FC<SalesLoginModalProps> = ({
       return;
     }
 
-    // Find agent by email or name
-    const matchedAgent = salesAgents.find(
-      (a) => a.email && (a.email.toLowerCase().trim() === targetEmail || a.name.toLowerCase().trim() === targetEmail)
-    );
-
+    const matchedAgent = salesAgents.find((a) => (a.email || '').toLowerCase().trim() === targetEmail);
     if (!matchedAgent) {
       setError('هذا الحساب غير مسجل في فريق المبيعات. يرجى مراجعة إدارة المنصة.');
       setLoading(false);
       return;
     }
-
     if (matchedAgent.isActive === false) {
       setError('هذا الحساب تم تعطيله مؤقتاً من قبل الإدارة.');
       setLoading(false);
       return;
     }
 
-    const validPasses = ['sales2025', 'lion2025', '123456', 'elseba2025'];
-    if (validPasses.includes(targetPassword) || targetPassword.length >= 4) {
-      // Attempt background Firebase Auth
-      signInStaff(targetEmail, targetPassword).catch(() => {});
-
-      onSelectAgent(matchedAgent.id);
-      onLoginSuccess(matchedAgent);
-      setLoading(false);
-      onClose();
-      return;
-    }
-
     try {
-      // Authenticate via Firebase Auth
-      await signInStaff(targetEmail, targetPassword);
-
-      // Success
+      const user = await signInStaff(targetEmail, targetPassword);
+      const role = await getStaffRole(user.email);
+      if (role !== 'sales' && role !== 'admin') {
+        await signOutToGuest();
+        setError('الحساب ده لسه ما اتفعّلش. كلّم الإدارة.');
+        setLoading(false);
+        return;
+      }
       onSelectAgent(matchedAgent.id);
       onLoginSuccess(matchedAgent);
       setLoading(false);
       onClose();
     } catch (authErr: any) {
-      console.warn('[SalesAuth] Error:', authErr);
-      if (authErr?.code === 'auth/wrong-password' || authErr?.code === 'auth/invalid-credential') {
-        setError('كلمة المرور غير صحيحة. يرجى التأكد من كلمة المرور والمحاولة مجدداً.');
-      } else {
-        setError('تعذر تسجيل الدخول. يرجى مراجعة الإدارة أو التحقق من البيانات.');
-      }
+      const code = authErr?.code || '';
+      if (code.includes('too-many-requests')) setError('محاولات كتير. استنى دقايق وجرّب تاني.');
+      else setError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
       setLoading(false);
     }
   };

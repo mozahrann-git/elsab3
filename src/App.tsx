@@ -114,7 +114,10 @@ import {
   saveOwnerSubmissionToDb,
   saveViewingRequestToDb,
   subscribeToBrokers,
-  seedBrokersToDb
+  seedBrokersToDb,
+  subscribeToStaffAuth,
+  getStaffRole,
+  signOutToGuest
 } from './services/firebaseService';
 
 const DEFAULT_FOOTER_CONFIG: FooterConfig = {
@@ -360,6 +363,21 @@ export default function App() {
     return DEFAULT_ADMIN_CREDENTIALS;
   });
 
+  // التحقق الحقيقي: الواجهة مبتصدقش localStorage، بتسأل Firebase Auth + staff_access
+  useEffect(() => {
+    const unsub = subscribeToStaffAuth(async (user) => {
+      if (!user || user.isAnonymous) {
+        setIsAdminLoggedIn(false);
+        setIsSalesLoggedIn(false);
+        return;
+      }
+      const role = await getStaffRole(user.email);
+      setIsAdminLoggedIn(role === 'admin');
+      if (role !== 'admin' && role !== 'sales') setIsSalesLoggedIn(false);
+    });
+    return () => unsub();
+  }, []);
+
   const handleAdminLogin = (status: boolean) => {
     setIsAdminLoggedIn(status);
     if (status) {
@@ -378,6 +396,7 @@ export default function App() {
   };
 
   const handleAdminLogout = () => {
+    signOutToGuest().catch(() => {});
     setIsAdminLoggedIn(false);
     safeLocalStorageSet('lion_admin_logged_in', 'false');
     safeSessionStorageSet('lion_admin_logged_in', 'false');
@@ -950,6 +969,7 @@ export default function App() {
   };
 
   const handleSalesLogout = () => {
+    signOutToGuest().catch(() => {});
     setIsSalesLoggedIn(false);
     safeLocalStorageSet('lion_sales_logged_in', 'false');
   };

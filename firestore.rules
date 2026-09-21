@@ -2,62 +2,79 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() { return request.auth != null; }
+    // ---------- مين بيطلب؟ ----------
+    function signedIn()  { return request.auth != null; }
+    function staffEmail() { return request.auth.token.email.lower(); }
+    function isRealUser() { return signedIn() && request.auth.token.firebase.sign_in_provider == 'password'; }
+    function roleOf()    { return get(/databases/$(database)/documents/staff_access/$(staffEmail())).data.role; }
+    function hasAccess() { return isRealUser() && exists(/databases/$(database)/documents/staff_access/$(staffEmail())); }
+    function isAdmin()   { return hasAccess() && roleOf() == 'admin'; }
+    function isStaff()   { return hasAccess() && roleOf() in ['admin', 'sales']; }
 
-    // الشقق والمعروضات: القراءة والكتابة والحذف
+    // ---------- الصلاحيات: الأدمن بس ----------
+    match /staff_access/{email} {
+      allow read: if isRealUser() && (staffEmail() == email || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ---------- الشقق: الكل يشوف، الفريق يعدّل، الأدمن يمسح ----------
     match /properties/{propertyId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
 
-      // بيانات المالك الخاصة بالوحدة
+      // بيانات المالك: الفريق بس
       match /private/{docId} {
-        allow read, write: if true;
+        allow read, write: if isStaff();
       }
     }
 
-    // فريق المبيعات: السماح بالقراءة والكتابة
+    // ---------- فريق المبيعات: الأسماء ظاهرة، التعديل للأدمن ----------
     match /sales_agents/{agentId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
+      allow update: if isStaff();   // الموظف بيحدّث النقاط والإحصائيات
     }
 
-    // طلبات المعاينة
-    match /viewing_requests/{requestId} {
-      allow read, write: if true;
-    }
-
-    // تقارير وكومنتات المعاينات الميدانية
-    match /viewing_feedbacks/{feedbackId} {
-      allow read, write: if true;
-    }
-
-    // ملفات البروكرز والمكاتب الشريكة
-    match /brokers/{brokerId} {
-      allow read, write: if true;
-    }
-
-    // عملاء الـ CRM والصفقات
+    // ---------- العملاء: أي زائر يبعت، الفريق يدير ----------
     match /crm_leads/{leadId} {
-      allow read, write: if true;
+      allow create: if true;
+      allow read, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
-    // إعدادات وتخصيصات الموقع
-    match /site_config/{configId} {
-      allow read, write: if true;
+    // ---------- طلبات الملاك: أي مالك يبعت، الفريق يراجع ----------
+    match /owner_submissions/{id} {
+      allow create: if true;
+      allow read, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
-    // طلبات إضافة شقق الملاك
-    match /owner_submissions/{submissionId} {
-      allow read, write: if true;
+    // ---------- طلبات المعاينة ----------
+    match /viewing_requests/{id} {
+      allow create: if true;
+      allow read, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
-    // حسابات وصلاحيات مستخدمي البوابات
-    match /portal_users/{userId} {
-      allow read, write: if true;
+    // ---------- إعدادات الموقع: الكل يشوف، الأدمن يعدّل ----------
+    match /site_config/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // سجل الرقابة والحوكمة اللحظية الموحد
-    match /governance_audit_logs/{logId} {
-      allow read, write: if true;
+    // ---------- البروكرز والتقييمات وحسابات البوابات: الفريق بس لحد ما البوابات تتبني صح ----------
+    match /brokers/{id}              { allow read, write: if isStaff(); }
+    match /viewing_feedbacks/{id}    { allow read, write: if isStaff(); }
+    match /portal_users/{id}         { allow read, write: if isAdmin(); }
+    match /governance_audit_logs/{id} {
+      allow create: if isStaff();
+      allow read: if isAdmin();
+    }
+
+    // أي حاجة تانية مقفولة
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
-

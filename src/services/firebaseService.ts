@@ -90,29 +90,29 @@ export async function testFirestoreConnection(): Promise<boolean> {
 // ==========================================
 
 export async function signInStaff(email: string, password: string): Promise<FirebaseUser> {
-  const cleanEmail = email.trim().toLowerCase();
-  const cleanPass = password.trim();
+  // دخول حقيقي بس: الحسابات بتتعمل من Firebase Console، مفيش إنشاء تلقائي
+  const userCredential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
+  return userCredential.user;
+}
 
+/** دور الموظف من staff_access/{email}: 'admin' أو 'sales' أو null */
+export async function getStaffRole(email?: string | null): Promise<'admin' | 'sales' | null> {
+  if (!email) return null;
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
-    return userCredential.user;
-  } catch (error: any) {
-    // If account does not exist in Firebase Auth yet (first-time setup or newly invited),
-    // and this is a registered staff/admin email, automatically provision it
-    if (
-      error?.code === 'auth/user-not-found' || 
-      error?.code === 'auth/invalid-credential' ||
-      error?.code === 'auth/invalid-email'
-    ) {
-      try {
-        const newUserCredential = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
-        return newUserCredential.user;
-      } catch (createErr) {
-        throw error;
-      }
-    }
-    throw error;
+    const snap = await getDoc(doc(db, 'staff_access', email.trim().toLowerCase()));
+    if (!snap.exists()) return null;
+    const role = (snap.data() as any).role;
+    return role === 'admin' || role === 'sales' ? role : null;
+  } catch (err) {
+    console.warn('[Auth] role lookup failed:', err);
+    return null;
   }
+}
+
+/** بيرجّع الزائر لحالة "مجهول" بعد خروج الموظف */
+export async function signOutToGuest(): Promise<void> {
+  await signOut(auth);
+  await ensureAuth().catch(() => {});
 }
 
 export async function createStaffAuthAccount(email: string, password: string): Promise<FirebaseUser> {
@@ -401,6 +401,19 @@ export async function saveSalesAgentToDb(agent: SalesAgent): Promise<void> {
     delete (agentData as any).password;
     const sanitized = cleanFirestoreData(agentData);
     await setDoc(agentDoc, sanitized, { merge: true });
+    // صلاحية الدخول: أي موظف مبيعات مضاف من الأدمن بياخد دور sales
+    if (agent.email) {
+      // بتنجح بس لو اللي بيحفظ أدمن، ولو موظف بيحدّث إحصائياته بتتجاهل بهدوء
+      try {
+        const key = agent.email.trim().toLowerCase();
+        const existing = await getDoc(doc(db, 'staff_access', key));
+        if (!existing.exists() || (existing.data() as any).role !== 'admin') {
+          await setDoc(doc(db, 'staff_access', key), { role: agent.isActive === false ? 'disabled' : 'sales', name: agent.name || '' }, { merge: true });
+        }
+      } catch {
+        /* مش أدمن */
+      }
+    }
   } catch (error) {
     console.warn('[Firebase] Notice saving sales agent to cloud database:', error);
     // Cache locally
