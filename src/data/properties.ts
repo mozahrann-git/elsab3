@@ -16,7 +16,7 @@ export const HADABA_WOSTA_NEIGHBORHOODS: HadabaWostaNeighborhood[] = [
 
 export const DEFAULT_ADMIN_CREDENTIALS = {
   email: 'admin@lion-estates.com',
-  password: 'lion2025'
+  password: ''
 };
 
 export interface DistrictInfo {

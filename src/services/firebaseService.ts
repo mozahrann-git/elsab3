@@ -19,6 +19,8 @@ import {
   signInAnonymously,
   signOut, 
   onAuthStateChanged,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   User as FirebaseUser
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -116,6 +118,18 @@ export async function getStaffRole(email?: string | null): Promise<'admin' | 'sa
 export async function signOutToGuest(): Promise<void> {
   await signOut(auth);
   await ensureAuth().catch(() => {});
+}
+
+/** تأكيد باسوورد الأدمن الحالي من Firebase قبل العمليات الخطيرة (زي مسح كل الشقق) */
+export async function verifyCurrentPassword(password: string): Promise<boolean> {
+  const user = auth.currentUser;
+  if (!user || !user.email || user.isAnonymous) return false;
+  try {
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password.trim()));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function createStaffAuthAccount(email: string, password: string): Promise<FirebaseUser> {

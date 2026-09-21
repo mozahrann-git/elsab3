@@ -862,7 +862,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const handleUpdateCredentialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (onUpdateCredentials) {
-      onUpdateCredentials(newEmail, newPassword || (adminCredentials?.password || 'admin123'));
+      onUpdateCredentials(newEmail, newPassword || (adminCredentials?.password || ''));
       showToast('تم تحديث بيانات دخول الإدارة بنجاح');
     }
   };
@@ -3744,7 +3744,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           }}
           onClearAllProperties={onClearAllProperties}
           onRestoreDemoProperties={onRestoreDemoProperties}
-          adminPassword={adminCredentials?.password || 'admin123'}
+          adminPassword={adminCredentials?.password || ''}
         />
 
         {/* IN-APP CONFIRMATION MODAL FOR CLEARING ALL PROPERTIES */}

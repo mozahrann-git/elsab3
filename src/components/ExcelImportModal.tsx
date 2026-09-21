@@ -1,3 +1,4 @@
+import { verifyCurrentPassword } from '../services/firebaseService';
 import React, { useState, useRef } from 'react';
 import { 
   FileSpreadsheet, 
@@ -158,8 +159,9 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
     e.preventDefault();
     setPasswordError(null);
 
-    const validPass = (adminPassword || 'admin123').trim();
-    if (passwordInput.trim() !== validPass && passwordInput.trim() !== 'admin' && passwordInput.trim() !== 'admin123') {
+    // التأكيد بباسوورد حساب الأدمن الحقيقي في Firebase، مش باسوورد مكتوب في الكود
+    const ok = await verifyCurrentPassword(passwordInput);
+    if (!ok) {
       setPasswordError('كلمة مرور الأدمن غير صحيحة! يرجى إدخال باسورد الأدمن الصحيح لإتمام مسح البيانات.');
       return;
     }
