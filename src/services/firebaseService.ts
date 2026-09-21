@@ -40,6 +40,7 @@ export const auth = getAuth(app);
 
 // Ensure a valid authenticated Firebase Auth session exists at all times
 export async function ensureAuth(): Promise<FirebaseUser | null> {
+  await auth.authStateReady();
   if (auth.currentUser) return auth.currentUser;
   try {
     const cred = await signInAnonymously(auth);
