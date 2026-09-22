@@ -47,77 +47,40 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
   const [searchQuery, setSearchQuery] = useState('');
 
   // Generate alerts dynamically from leads data
+  // التنبيهات من الوقت الحقيقي بس: ميعاد الأكشن (nextActionAt) قصاد الساعة دلوقتي
+  const [nowTick, setNowTick] = useState(Date.now());
+  React.useEffect(() => { const t = setInterval(() => setNowTick(Date.now()), 30000); return () => clearInterval(t); }, []);
   const alerts: FollowUpAlert[] = useMemo(() => {
+    const now = nowTick;
+    const endOfDay = new Date(); endOfDay.setHours(23, 59, 59, 999);
+    const fmt = (at: number) => {
+      const d = new Date(at), t = d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+      const m = Math.round((at - now) / 60000), a = Math.abs(m);
+      const rel = a < 60 ? `${a} د` : a < 1440 ? `${Math.round(a / 60)} س` : `${Math.round(a / 1440)} يوم`;
+      return { t: at <= endOfDay.getTime() ? `النهارده ${t}` : d.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'short' }) + ` ${t}`, rel: m < 0 ? `متأخر ${rel}` : `بعد ${rel}` };
+    };
     const list: FollowUpAlert[] = [];
-
     leads.forEach((lead) => {
-      // 1. Scheduled follow-up that is not completed
-      if (lead.followUpScheduledAt && lead.followUpStatus !== 'completed') {
-        const isUrgent = lead.followUpUrgency === 'urgent' || lead.followUpScheduledAt.includes('الآن') || lead.followUpScheduledAt.includes('متأخر');
-        const isToday = lead.followUpUrgency === 'today' || lead.followUpScheduledAt.includes('اليوم');
-
+      const at = lead.nextActionAt || 0;
+      if (at && lead.followUpStatus !== 'completed') {
+        const f = fmt(at);
         list.push({
-          id: `followup_${lead.id}`,
-          leadId: lead.id,
-          leadName: lead.name,
-          leadPhone: lead.phone,
-          leadStatus: lead.status,
-          assignedAgentId: lead.assignedAgentId,
-          assignedAgentName: lead.assignedAgentName,
-          type: 'follow_up',
-          title: `متابعة هاتفية مجدولة مع ${lead.name}`,
-          dueTime: lead.followUpScheduledAt,
-          note: lead.followUpNote || 'متابعة تفاصيل رغبة العميل واقتراح الشقق المتاحة',
-          urgency: isUrgent ? 'urgent' : isToday ? 'today' : 'upcoming',
-          relativeTimeText: lead.followUpScheduledAt,
-          isOverdue: isUrgent
+          id: `followup_${lead.id}`, leadId: lead.id, leadName: lead.name, leadPhone: lead.phone, leadStatus: lead.status,
+          assignedAgentId: lead.assignedAgentId, assignedAgentName: lead.assignedAgentName, type: 'follow_up',
+          title: `متابعة ${lead.name}`, dueTime: f.t, note: lead.followUpNote || '',
+          urgency: at <= now ? 'urgent' : at <= endOfDay.getTime() ? 'today' : 'upcoming',
+          relativeTimeText: f.rel, isOverdue: at <= now,
         });
-      }
-
-      // 2. Scheduled site visit alert
-      if (lead.visitScheduledAt && (lead.status === 'visit_booked')) {
-        const isToday = lead.visitScheduledAt.includes('اليوم') || lead.visitScheduledAt.includes('2026-03-07');
+      } else if (lead.status === 'new' && !at) {
         list.push({
-          id: `visit_${lead.id}`,
-          leadId: lead.id,
-          leadName: lead.name,
-          leadPhone: lead.phone,
-          leadStatus: lead.status,
-          assignedAgentId: lead.assignedAgentId,
-          assignedAgentName: lead.assignedAgentName,
-          type: 'visit',
-          title: `معاينة ميدانية لشقة ${lead.interestedPropertyCode || 'بالهضبة'}`,
-          dueTime: lead.visitScheduledAt,
-          note: lead.visitLocation ? `نقطة اللقاء: ${lead.visitLocation}` : 'معاينة ميدانية مع العميل',
-          urgency: isToday ? 'urgent' : 'today',
-          relativeTimeText: lead.visitScheduledAt,
-          isOverdue: false
-        });
-      }
-
-      // 3. New leads requiring rapid response (< 1 hour)
-      if (lead.status === 'new' && !lead.followUpScheduledAt) {
-        list.push({
-          id: `newlead_${lead.id}`,
-          leadId: lead.id,
-          leadName: lead.name,
-          leadPhone: lead.phone,
-          leadStatus: lead.status,
-          assignedAgentId: lead.assignedAgentId,
-          assignedAgentName: lead.assignedAgentName,
-          type: 'urgent_lead',
-          title: `عميل جديد وارد يحتاج تواصل أول (+50 XP)`,
-          dueTime: 'مستحق الآن',
-          note: `مصدر الليد: ${lead.source === 'facebook_group' ? 'جروب فيسبوك' : 'واتساب المنصة'} - يفضل الاتصال فوراً`,
-          urgency: 'urgent',
-          relativeTimeText: 'الآن',
-          isOverdue: true
+          id: `newlead_${lead.id}`, leadId: lead.id, leadName: lead.name, leadPhone: lead.phone, leadStatus: lead.status,
+          assignedAgentId: lead.assignedAgentId, assignedAgentName: lead.assignedAgentName, type: 'urgent_lead',
+          title: `عميل جديد محتاج أول تواصل`, dueTime: 'دلوقتي', note: '', urgency: 'urgent', relativeTimeText: 'دلوقتي', isOverdue: true,
         });
       }
     });
-
-    return list;
-  }, [leads]);
+    return list.sort((x, y) => (leads.find((l) => l.id === x.leadId)?.nextActionAt || 0) - (leads.find((l) => l.id === y.leadId)?.nextActionAt || 0));
+  }, [leads, nowTick]);
 
   // Filter alerts by agent scope, urgency, and search
   const filteredAlerts = useMemo(() => {
@@ -129,7 +92,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
       const matchesUrgency = 
         filterType === 'all' || 
         (filterType === 'urgent' && alert.urgency === 'urgent') ||
-        (filterType === 'today' && (alert.urgency === 'today' || alert.urgency === 'urgent')) ||
+        (filterType === 'today' && alert.urgency === 'today') ||
         (filterType === 'upcoming' && alert.urgency === 'upcoming');
 
       // Search filter
@@ -211,7 +174,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
   };
 
   const urgentCount = alerts.filter(a => a.urgency === 'urgent' && (filterScope === 'all_team' || a.assignedAgentId === currentAgent.id)).length;
-  const todayCount = alerts.filter(a => (a.urgency === 'today' || a.urgency === 'urgent') && (filterScope === 'all_team' || a.assignedAgentId === currentAgent.id)).length;
+  const todayCount = alerts.filter(a => a.urgency === 'today' && (filterScope === 'all_team' || a.assignedAgentId === currentAgent.id)).length;
 
   return (
     <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-hidden text-right font-ibm animate-in fade-in duration-150" dir="rtl">
@@ -271,7 +234,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                     : 'bg-[#F6F4EF] text-[#6B665C] hover:text-[#141414]'
                 }`}
               >
-                الكل ({alerts.length})
+                الكل ({alerts.filter(a => filterScope === 'all_team' || a.assignedAgentId === currentAgent.id).length})
               </button>
 
               <button

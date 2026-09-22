@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Lead, 
   SalesAgent, 
@@ -46,6 +46,8 @@ import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { INITIAL_DAILY_QUESTS } from '../data/crmData';
+import { DailyQuest } from '../types';
+import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb } from '../services/crmBoardService';
 
 interface SalesCrmModalProps {
   isOpen: boolean;
@@ -61,6 +63,7 @@ interface SalesCrmModalProps {
   onOpenAffiliateModal?: (property: Property) => void;
   onSelectProperty?: (property: Property) => void;
   isAdmin?: boolean;
+  onDeleteLead?: (id: string) => void;
   currentAgentId?: string;
   onLogout?: () => void;
 }
@@ -100,6 +103,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   onOpenAffiliateModal,
   onSelectProperty,
   isAdmin = false,
+  onDeleteLead,
   currentAgentId,
   onLogout
 }) => {
@@ -184,7 +188,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   // Pending Follow-ups Count
   const pendingFollowUpsCount = useMemo(() => {
-    return scopedLeads.filter((l) => l.followUpStatus === 'pending' || l.followUpUrgency === 'urgent').length;
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+    return scopedLeads.filter((l) => (l.nextActionAt && l.nextActionAt <= end.getTime() && l.followUpStatus !== 'completed') || (l.status === 'new' && !l.nextActionAt)).length;
   }, [scopedLeads]);
 
   // Selected Lead for Smart Matching
@@ -242,20 +247,33 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
   };
 
+  const [moveTarget, setMoveTarget] = useState<LeadStatus | null>(null);
+  const [board, setBoard] = useState<CrmBoard>({});
+  const [editBoard, setEditBoard] = useState<null | 'banner' | 'quests'>(null);
+  const [draftBoard, setDraftBoard] = useState<CrmBoard>({});
+  useEffect(() => subscribeCrmBoard(setBoard), []);
+  const questTemplate: DailyQuest[] = board.quests?.length ? board.quests : INITIAL_DAILY_QUESTS;
+  const agentQuests: DailyQuest[] = questTemplate.map((t) => { const mine = (currentAgent?.activeQuests || []).find((q) => q.id === t.id); return { ...t, currentCount: mine?.currentCount || 0, isCompleted: (mine?.currentCount || 0) >= t.targetCount }; });
+  const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م' };
+  const deleteRequests = isAdmin ? leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved) : [];
+  const [moveComment, setMoveComment] = useState('');
+
   if (!isOpen) return null;
 
   // Quick Move Status Handler
-  const handleMoveStatus = (lead: Lead, newStatus: LeadStatus) => {
+  const handleMoveStatus = (lead: Lead, newStatus: LeadStatus, comment = '') => {
     const timestamp = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) + ' - ' + new Date().toLocaleDateString('ar-EG');
     const stageLabel = CRM_PIPELINE_STAGES.find((s) => s.id === newStatus)?.label || newStatus;
-    const noteText = `[${timestamp}] تم نقل المرحلة إلى: ${stageLabel}`;
+    const noteText = `[${timestamp}] تم نقل المرحلة إلى: ${stageLabel}${comment ? ' · ' + comment : ''}`;
 
     const updatedLead: Lead = {
       ...lead,
       status: newStatus,
-      lastContactDate: 'الآن',
-      notes: [noteText, ...(lead.notes || [])]
+      lastContactDate: new Date().toISOString(),
+      notes: [noteText, ...(lead.notes || [])],
+      activity: [{ at: Date.now(), by: currentAgent?.name || 'الفريق', outcome: `نقل إلى: ${stageLabel}`, comment }, ...(lead.activity || [])].slice(0, 80),
     };
+    setMoveTarget(null); setMoveComment('');
 
     onUpdateLead(updatedLead);
     setLeadToChangeStatus(null);
@@ -317,7 +335,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   // Quests Increment
   const handleIncrementQuest = (questId: string) => {
     if (!currentAgent) return;
-    const quests = currentAgent.activeQuests || INITIAL_DAILY_QUESTS;
+    const quests = agentQuests;
     const updated = quests.map((q) => {
       if (q.id === questId) {
         const newCount = q.currentCount + 1;
@@ -608,22 +626,51 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           <div className="space-y-4 sm:space-y-5 flex-1 flex flex-col pt-1">
             
             {/* Urgent Broadcast Banner */}
+            {/* طلبات مسح الليدز (للأدمن) */}
+            {deleteRequests.length > 0 && (
+              <div className="bg-[#FBEDEA] border border-[#E9B8AE] rounded-2xl p-4 space-y-2">
+                <p className="font-bold text-sm text-[#9A2E1F]">طلبات مسح عملاء ({deleteRequests.length})</p>
+                {deleteRequests.map((l: any) => (
+                  <div key={l.id} className="flex flex-wrap justify-between items-center gap-2 bg-white rounded-xl p-3">
+                    <div className="text-xs"><b className="text-sm">{l.name}</b> · {l.phone}<br />طلب {l.deleteRequest.by}: {l.deleteRequest.reason}</div>
+                    <div className="flex gap-2">
+                      <button onClick={async () => { if (!confirm(`مسح ${l.name} نهائياً؟`)) return; await deleteLeadFromDb(l.id); onDeleteLead?.(l.id); }} className="px-3 py-2 rounded-xl bg-[#C2412D] text-white text-xs font-bold">موافقة ومسح</button>
+                      <button onClick={() => onUpdateLead({ ...l, deleteRequest: { ...l.deleteRequest, resolved: true, rejected: true } })} className="px-3 py-2 rounded-xl bg-[#F6F4EF] text-xs font-bold">رفض</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isAdmin && editBoard === 'banner' && (
+              <div className="bg-white border-2 border-[#A07A26] rounded-2xl p-4 space-y-2">
+                <input value={draftBoard.banner?.title || ''} onChange={(e) => setDraftBoard({ banner: { ...(draftBoard.banner as CrmBanner), title: e.target.value } })} placeholder="العنوان" className="w-full p-2.5 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-sm font-bold" />
+                <input value={draftBoard.banner?.subtitle || ''} onChange={(e) => setDraftBoard({ banner: { ...(draftBoard.banner as CrmBanner), subtitle: e.target.value } })} placeholder="التفاصيل" className="w-full p-2.5 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-sm" />
+                <input value={draftBoard.banner?.bonus || ''} onChange={(e) => setDraftBoard({ banner: { ...(draftBoard.banner as CrmBanner), bonus: e.target.value } })} placeholder="البونص (اختياري)" className="w-full p-2.5 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-sm" />
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draftBoard.banner?.active !== false} onChange={(e) => setDraftBoard({ banner: { ...(draftBoard.banner as CrmBanner), active: e.target.checked } })} />ظاهر للسيلز</label>
+                <div className="flex gap-2"><button onClick={async () => { await saveCrmBoard({ banner: draftBoard.banner }); setEditBoard(null); }} className="flex-1 py-2.5 rounded-xl bg-[#141414] text-white text-sm font-bold">حفظ</button><button onClick={() => setEditBoard(null)} className="px-4 py-2.5 rounded-xl bg-[#F6F4EF] text-sm font-bold">إلغاء</button></div>
+              </div>
+            )}
+            {isAdmin && editBoard !== 'banner' && (
+              <button onClick={() => { setDraftBoard({ banner }); setEditBoard('banner'); }} className="self-start text-xs font-bold text-[#A07A26]">✎ تعديل الطلب العاجل</button>
+            )}
+            {banner.active !== false && (
             <div className="bg-white border-2 border-[#E9DFCA] rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shadow-2xs">
               <div className="flex items-start sm:items-center gap-2.5 sm:gap-3">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 mt-1 sm:mt-0 animate-ping" />
                 <div>
                   <h3 className="font-readex font-bold text-xs sm:text-sm text-[#141414]">
-                    طلب عاجل من الإدارة: عميل كاش جاد
+                    {banner.title}
                   </h3>
                   <p className="text-[11px] sm:text-xs text-[#6B665C] mt-0.5 leading-relaxed">
-                    دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون
+                    {banner.subtitle}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 sm:gap-2.5 self-end sm:self-auto shrink-0">
                 <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-[#FAF4E5] border border-[#E9DFCA] text-[#9E7A26] font-bold text-[11px] sm:text-xs rounded-xl">
-                  بونص 1,500 ج.م
+                  {banner.bonus}
                 </span>
                 <button
                   onClick={() => setActiveTab('matching')}
@@ -633,6 +680,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 </button>
               </div>
             </div>
+            )}
 
             {/* Stage Selector Chips (All 9 Stages with Counters) */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar shrink-0">
@@ -1173,7 +1221,28 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
               {/* Quest Items List */}
               <div className="space-y-3.5">
-                {(currentAgent?.activeQuests || INITIAL_DAILY_QUESTS).map((quest) => {
+                {isAdmin && editBoard !== 'quests' && (
+                  <button onClick={() => { setDraftBoard({ quests: questTemplate.map((q) => ({ ...q })) }); setEditBoard('quests'); }} className="text-xs font-bold text-[#A07A26]">✎ تعديل تحديات اليوم</button>
+                )}
+                {isAdmin && editBoard === 'quests' && (
+                  <div className="rounded-2xl border-2 border-[#A07A26] bg-white p-4 space-y-3">
+                    {(draftBoard.quests || []).map((q, qi) => (
+                      <div key={q.id} className="grid gap-2 sm:grid-cols-12 border-b border-[#F0ECE4] pb-3">
+                        <input value={q.title} onChange={(e) => { const n = [...(draftBoard.quests || [])]; n[qi] = { ...q, title: e.target.value }; setDraftBoard({ quests: n }); }} placeholder="اسم التحدي" className="sm:col-span-5 p-2.5 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-sm font-bold" />
+                        <input value={q.description} onChange={(e) => { const n = [...(draftBoard.quests || [])]; n[qi] = { ...q, description: e.target.value }; setDraftBoard({ quests: n }); }} placeholder="الوصف" className="sm:col-span-4 p-2.5 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-sm" />
+                        <label className="sm:col-span-1 text-[10px]">العدد<input type="number" min={1} value={q.targetCount} onChange={(e) => { const n = [...(draftBoard.quests || [])]; n[qi] = { ...q, targetCount: Number(e.target.value) || 1 }; setDraftBoard({ quests: n }); }} className="w-full p-2 rounded-lg bg-[#F6F4EF] border border-[#ECE8DF] text-sm" /></label>
+                        <label className="sm:col-span-1 text-[10px]">XP<input type="number" min={0} value={q.xpReward} onChange={(e) => { const n = [...(draftBoard.quests || [])]; n[qi] = { ...q, xpReward: Number(e.target.value) || 0 }; setDraftBoard({ quests: n }); }} className="w-full p-2 rounded-lg bg-[#F6F4EF] border border-[#ECE8DF] text-sm" /></label>
+                        <button onClick={() => setDraftBoard({ quests: (draftBoard.quests || []).filter((_, j) => j !== qi) })} className="sm:col-span-1 text-xs font-bold text-[#C2412D]">مسح</button>
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => setDraftBoard({ quests: [...(draftBoard.quests || []), { id: `q_${Date.now()}`, title: '', description: '', xpReward: 50, targetCount: 1, currentCount: 0, isCompleted: false, category: 'calls' }] })} className="px-3 py-2 rounded-xl bg-[#F6F4EF] text-sm font-bold">+ تحدي جديد</button>
+                      <button onClick={async () => { await saveCrmBoard({ quests: (draftBoard.quests || []).filter((q) => q.title.trim()) }); setEditBoard(null); }} className="px-4 py-2 rounded-xl bg-[#141414] text-white text-sm font-bold">حفظ التحديات</button>
+                      <button onClick={() => setEditBoard(null)} className="px-4 py-2 rounded-xl bg-[#F6F4EF] text-sm font-bold">إلغاء</button>
+                    </div>
+                  </div>
+                )}
+                {agentQuests.map((quest) => {
                   const isDone = quest.isCompleted || quest.currentCount >= quest.targetCount;
                   const progressPct = Math.min(100, Math.round((quest.currentCount / quest.targetCount) * 100));
 
@@ -1317,8 +1386,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   <button
                     key={stage.id}
                     type="button"
-                    onClick={() => handleMoveStatus(leadToChangeStatus, stage.id)}
-                    className={`w-full p-3 rounded-2xl flex items-center justify-between text-right transition-all cursor-pointer ${
+                    onClick={() => setMoveTarget(stage.id)}
+ className={`w-full p-3 rounded-2xl flex items-center justify-between text-right transition-all cursor-pointer ${moveTarget === stage.id ? 'ring-2 ring-[#D9B864] ' : ''}${
                       isCurrent 
                         ? 'bg-[#1E3A5F] text-white font-bold border border-sky-400/50 shadow-md' 
                         : 'bg-[#191B1F] hover:bg-[#2A2E35] text-stone-200 border border-white/5'
@@ -1341,6 +1410,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 );
               })}
             </div>
+            {/* كومنت إجباري قبل النقل */}
+            {moveTarget && (
+              <div className="space-y-2 pt-2 border-t border-white/10">
+                <textarea value={moveComment} onChange={(e) => setMoveComment(e.target.value)} rows={2} autoFocus
+                  placeholder="اكتب اللي حصل مع العميل (إجباري)" className="w-full rounded-xl bg-[#191B1F] border border-white/10 p-3 text-sm text-white" />
+                <button type="button" disabled={!moveComment.trim()} onClick={() => handleMoveStatus(leadToChangeStatus, moveTarget, moveComment.trim())}
+                  className="w-full py-3 rounded-xl bg-[#D9B864] text-[#141414] font-bold disabled:opacity-40">
+                  نقل إلى {CRM_PIPELINE_STAGES.find((x) => x.id === moveTarget)?.label}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

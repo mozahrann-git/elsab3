@@ -2129,6 +2129,7 @@ export default function App() {
         agents={salesAgents}
         leads={crmLeads}
         isAdmin={isAdminLoggedIn}
+        onDeleteLead={(id) => setCrmLeads((prev) => prev.filter((l) => l.id !== id))}
         currentAgentId={currentSalesAgentId || undefined}
         onLogout={handleSalesLogout}
         onUpdateLead={handleUpdateLead}

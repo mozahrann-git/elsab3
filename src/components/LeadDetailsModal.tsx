@@ -212,49 +212,26 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
             <span>حجز معاينة</span>
           </button>
 
-          <div className="relative">
-            <select
-              value={lead.status}
-              onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
-              className="w-full h-full px-3 py-2.5 bg-white border border-[#ECE8DF] text-xs font-bold text-[#141414] rounded-xl focus:outline-none cursor-pointer"
-            >
-              {STAGES.map((st) => (
-                <option key={st.id} value={st.id}>
-                  نقل إلى: {st.label}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
         {/* Scrollable Information Body */}
         <div className="space-y-4 overflow-y-auto pr-0.5 flex-1">
           
           {/* الأكشن الجاي + نقل إلى */}
-          <LeadActionPanel lead={lead} agents={agents} byName={agents.find((x) => x.id === lead.assignedAgentId)?.name || 'الفريق'} onUpdateLead={onUpdateLead} />
+          <LeadActionPanel lead={lead} stages={STAGES} byName={agents.find((x) => x.id === lead.assignedAgentId)?.name || 'الفريق'} onUpdateLead={onUpdateLead} />
+
+          {/* طلب مسح الليد (السيلز) · الأدمن بيوافق من لوحة السيلز */}
+          {!isAdmin && (
+            (lead as any).deleteRequest && !(lead as any).deleteRequest.resolved
+              ? <p className="text-xs rounded-xl bg-[#FBEDEA] text-[#9A2E1F] p-3 font-bold">طلب المسح مستني موافقة الإدارة</p>
+              : <button type="button" onClick={() => {
+                  const reason = window.prompt('ليه عايز تمسح العميل ده؟ (مثلاً: متسجل بالغلط، رقم غلط، مكرر)');
+                  if (reason && reason.trim()) onUpdateLead({ ...lead, deleteRequest: { by: agents.find((x) => x.id === lead.assignedAgentId)?.name || 'السيلز', reason: reason.trim(), at: Date.now() } } as any);
+                }} className="self-start text-xs font-bold text-[#C2412D]">اطلب مسح العميل ده</button>
+          )}
 
           {/* Key Customer Requirements Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-white border border-[#ECE8DF] rounded-2xl text-xs shadow-2xs">
-            <div className="space-y-1">
-              <span className="text-[#6B665C] block text-[11px]">المستشار المسؤول:</span>
-              {isAdmin ? (
-                <select
-                  value={lead.assignedAgentId}
-                  onChange={(e) => handleAssignAgent(e.target.value)}
-                  className="bg-[#F6F4EF] border border-[#ECE8DF] text-[#141414] font-bold px-2.5 py-1.5 rounded-xl w-full focus:outline-none text-xs cursor-pointer"
-                >
-                  {agents.map((ag) => (
-                    <option key={ag.id} value={ag.id}>
-                      {ag.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <strong className="text-[#141414] font-bold block text-xs truncate">
-                  {lead.assignedAgentName || agents.find(a => a.id === lead.assignedAgentId)?.name || 'مستشار المبيعات'}
-                </strong>
-              )}
-            </div>
 
             <div className="space-y-0.5">
               <span className="text-[#6B665C] block text-[11px]">الحي المطلوب:</span>

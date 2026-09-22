@@ -85,13 +85,7 @@ export const WhenPicker: React.FC<Props> = ({ value, onChange, quick = true, lab
           min={new Date(base).toISOString().slice(0, 10)}
           onChange={(e) => { if (!e.target.value) return; const d = new Date(e.target.value + 'T00:00:00'); const off = Math.round((d.getTime() - base.getTime()) / 86400000); setDayOffset(off); emit(off, slot); }} />
       </div>
-      <select value={slot} onChange={(e) => { setSlot(e.target.value); emit(dayOffset, e.target.value); }} aria-label="الساعة"
-        className="w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm">
-        <option value="">اختار الساعة</option>
-        {SLOTS.filter(([h, m]) => dayOffset > 0 || h > now.getHours() || (h === now.getHours() && m > now.getMinutes())).map(([h, m]) => (
-          <option key={`${h}:${m}`} value={`${h}:${m}`}>{timeLabel(h, m)}</option>
-        ))}
-      </select>
+      <ClockDial slot={slot} onPick={(v) => { setSlot(v); emit(dayOffset, v); }} />
       {value?.at ? <p className="text-sm font-bold text-[#1E7A45]">✓ {formatWhen(value.at)} · {relTime(value.at)}</p> : null}
     </div>
   );
@@ -113,6 +107,49 @@ export const BudgetRange: React.FC<{ min: number; max: number; onChange: (min: n
       <style>{`.dual-range{-webkit-appearance:none;appearance:none;background:transparent;pointer-events:none;height:32px;margin:0}
 .dual-range::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:24px;height:24px;border-radius:99px;background:#141414;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer}
 .dual-range::-moz-range-thumb{pointer-events:auto;width:22px;height:22px;border-radius:99px;background:#141414;border:3px solid #fff;cursor:pointer}`}</style>
+    </div>
+  );
+};
+
+/* ساعة بعقارب: تختار الساعة من الدائرة، وص/م، والدقايق */
+const ClockDial: React.FC<{ slot: string; onPick: (s: string) => void }> = ({ slot, onPick }) => {
+  const [h0, m0] = slot ? slot.split(':').map(Number) : [NaN, 0];
+  const [pm, setPm] = useState<boolean>(isNaN(h0) ? new Date().getHours() >= 12 : h0 >= 12);
+  const [min, setMin] = useState<number>(m0 || 0);
+  const hour12 = isNaN(h0) ? null : h0 % 12 === 0 ? 12 : h0 % 12;
+  const pick = (h12: number, isPm = pm, mm = min) => onPick(`${(h12 % 12) + (isPm ? 12 : 0)}:${mm}`);
+  const R = 88, C = 110;
+  const ang = hour12 ? ((hour12 % 12) / 12) * 2 * Math.PI - Math.PI / 2 : 0;
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-2xl bg-white border border-[#E4DFD4] p-3">
+      <svg viewBox="0 0 220 220" className="w-52 h-52 select-none" role="group" aria-label="اختار الساعة">
+        <circle cx={C} cy={C} r={104} fill="#F6F4EF" />
+        {hour12 && <line x1={C} y1={C} x2={C + (R - 16) * Math.cos(ang)} y2={C + (R - 16) * Math.sin(ang)} stroke="#A07A26" strokeWidth={3} strokeLinecap="round" />}
+        <circle cx={C} cy={C} r={5} fill="#141414" />
+        {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => {
+          const a = (h / 12) * 2 * Math.PI - Math.PI / 2;
+          const x = C + R * Math.cos(a), y = C + R * Math.sin(a);
+          const on = hour12 === h;
+          return (
+            <g key={h} onClick={() => pick(h)} style={{ cursor: 'pointer' }}>
+              <circle cx={x} cy={y} r={17} fill={on ? '#141414' : 'transparent'} />
+              <text x={x} y={y + 5} textAnchor="middle" fontSize="15" fontWeight={700} fill={on ? '#fff' : '#141414'}>{h}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex gap-2 w-full">
+        {[false, true].map((v) => (
+          <button key={String(v)} type="button" onClick={() => { setPm(v); if (hour12) pick(hour12, v); }}
+            className={`flex-1 py-2 rounded-xl text-sm font-bold border ${pm === v ? 'bg-[#141414] text-white border-[#141414]' : 'border-[#E4DFD4]'}`}>{v ? 'مساءً' : 'صباحاً'}</button>
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-2 w-full" dir="ltr">
+        {[0, 15, 30, 45].map((mm) => (
+          <button key={mm} type="button" onClick={() => { setMin(mm); if (hour12) pick(hour12, pm, mm); }}
+            className={`py-2 rounded-xl text-sm font-bold border ${min === mm ? 'bg-[#A07A26] text-white border-[#A07A26]' : 'border-[#E4DFD4]'}`}>:{String(mm).padStart(2, '0')}</button>
+        ))}
+      </div>
     </div>
   );
 };
