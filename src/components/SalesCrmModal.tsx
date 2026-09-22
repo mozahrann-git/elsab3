@@ -1361,7 +1361,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           onClick={() => setLeadToChangeStatus(null)}
         >
           <div 
-            className="relative w-full sm:max-w-md bg-[#22252A] text-white rounded-t-3xl sm:rounded-3xl border border-white/10 shadow-2xl p-4 sm:p-5 space-y-3 animate-in slide-in-from-bottom duration-200"
+            className="relative w-full sm:max-w-md max-h-[88dvh] overflow-y-auto overscroll-contain bg-[#22252A] text-white rounded-t-3xl sm:rounded-3xl border border-white/10 shadow-2xl p-4 sm:p-5 space-y-3 animate-in slide-in-from-bottom duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}

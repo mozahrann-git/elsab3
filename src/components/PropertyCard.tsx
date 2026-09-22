@@ -181,7 +181,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
                     e.stopPropagation();
                     setShowInlineVideo(false);
                   }}
-                  className="absolute top-3 left-3 z-20 px-2 py-1 bg-black/80 hover:bg-black text-white text-[10px] font-bold rounded-lg border border-white/20 flex items-center gap-1 cursor-pointer"
+                  className="absolute bottom-3 left-3 z-20 px-2 py-1 bg-black/70 hover:bg-black text-white text-[10px] font-bold rounded-lg border border-white/20 flex items-center gap-1 cursor-pointer"
                 >
                   <ImageIcon size={12} />
                   <span>عرض الصور</span>
@@ -266,19 +266,6 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             </span>
           </div>
 
-          {/* Video Quick Play Badge / Floating Button on Image */}
-          {hasVideo && hasImages && !showInlineVideo && (
-            <button
-              type="button"
-              onClick={handleVideoClick}
-              className="absolute bottom-3 right-3 z-10 px-3 py-1.5 bg-stone-950/85 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-md backdrop-blur-md transition-all active:scale-95 group-hover:scale-105 cursor-pointer"
-              title="مشاهدة فيديو المعاينة"
-            >
-              <Play size={12} className="fill-white" />
-              <span>معاينة فيديو</span>
-            </button>
-          )}
-
           {/* Quick Action Overlay (Favorite & Compare) */}
           <div className="absolute bottom-3 left-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <button
@@ -358,15 +345,6 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             {bathsText && <span>{bathsText}</span>}
             {bathsText && finishingText && <span className="text-stone-300">•</span>}
             {finishingText && <span>{finishingText}</span>}
-            {hasVideo && (
-              <>
-                <span className="text-stone-300">•</span>
-                <span className="inline-flex items-center gap-1 font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/70 text-[10.5px]">
-                  <Video size={11} className="shrink-0" />
-                  <span>فيديو</span>
-                </span>
-              </>
-            )}
           </div>
 
           {/* Price & Price per meter */}
@@ -382,27 +360,32 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             )}
           </div>
 
-          {/* Fair Price Meter Bar ("مؤشر السعر عادل؟") */}
-          {showFairPriceMeter && pricePerMeter > 0 && (
-            <div className="pt-2 space-y-1">
-              <div className="relative w-full h-1.5 bg-linear-to-r from-emerald-500 via-amber-400 to-rose-500 rounded-full">
-                <div 
-                  className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow-xs ${meterDotColor}`}
-                  style={{ left: meterDotPosition }}
-                />
-              </div>
-              <div className="flex justify-between items-center text-[10px] text-[#6B665C] font-medium">
-                <span>{meterText}</span>
-              </div>
+          {/* مميزات سريعة */}
+          {(property.features || []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-2">
+              {(property.features || []).slice(0, 3).map((f, i) => (
+                <span key={i} className="text-[10.5px] font-semibold bg-[#F6F4EF] text-[#4A463F] border border-[#ECE8DF] px-2 py-1 rounded-lg">{f.length > 26 ? f.slice(0, 26) + '…' : f}</span>
+              ))}
             </div>
           )}
+
+          {/* الاهتمام بالوحدة */}
+          <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-[#F0ECE4] text-[11px] text-[#6B665C]">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              {((property.clicks?.whatsapp || 0) + (property.clicks?.call || 0)) > 0
+                ? <span><b className="text-[#141414]">{(property.clicks?.whatsapp || 0) + (property.clicks?.call || 0)}</b> سألوا عليها</span>
+                : <span>لسه معروضة جديد</span>}
+            </span>
+            <span>{property.clicks?.views ? `${property.clicks.views} مشاهدة` : ''}</span>
+          </div>
 
         </div>
       </div>
 
       {/* Action Buttons: Details + Direct Video Player */}
       <div className="px-5 pb-5 pt-1">
-        {hasVideo ? (
+        {!hasVideo ? (
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -414,14 +397,16 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             >
               التفاصيل
             </button>
-            <button
-              type="button"
-              onClick={handleVideoClick}
-              className="py-2.5 px-4 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+            <a
+              href={`https://wa.me/${'201021242871'}?text=${encodeURIComponent(`مساء الخير، ممكن فيديو للشقة كود ${property.code}؟`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="py-2.5 px-4 rounded-xl bg-[#1FA85D] hover:bg-[#178A4C] text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
             >
-              <Play size={13} className="fill-white" />
-              <span>فيديو</span>
-            </button>
+              <Video size={13} />
+              <span>اطلب فيديو</span>
+            </a>
           </div>
         ) : (
           <button

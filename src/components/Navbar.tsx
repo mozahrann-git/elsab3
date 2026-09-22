@@ -161,7 +161,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         ? 'bg-[#F6F4EF]/95 backdrop-blur-md shadow-xs py-3' 
         : 'bg-[#F6F4EF] py-4'
     }`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Right: Brand Logo + Text */}
         <div 
@@ -227,7 +227,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Left: Actions (Login, Cart/Favs, & Dark WhatsApp Button) */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 min-w-0 max-w-[62%] sm:max-w-none overflow-x-auto no-scrollbar [&>*]:shrink-0" style={{ scrollbarWidth: 'none' }}>
           
           {/* Comparison and Favorites small indicators if active */}
           {comparisonCount > 0 && (
