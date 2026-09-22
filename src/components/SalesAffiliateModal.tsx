@@ -1,3 +1,4 @@
+import { WhenPicker } from './common/WhenPicker';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Property, SalesAgent, Lead, ViewingRequest, ViewingFeedback } from '../types';
 import { 
@@ -898,13 +899,8 @@ ${fullShowcaseUrl}`;
 
                 <div className="sm:col-span-2">
                   <label className="text-[#141414] font-bold block mb-1.5">الموعد المقترح للمعاينة:</label>
-                  <input
-                    type="text"
-                    value={proposedTime}
-                    onChange={(e) => setProposedTime(e.target.value)}
-                    placeholder="اليوم الساعة 6:00 مساءً"
-                    className="w-full px-4 py-3 bg-[#FAF9F5] border border-[#ECE8DF] rounded-2xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
-                  />
+                  <WhenPicker quick={false} onChange={(v) => setProposedTime(v.label)} />
+                    {proposedTime && <p className="text-xs text-[#6B665C] mt-1">المختار: <b>{proposedTime}</b></p>}
                 </div>
 
                 <div className="sm:col-span-2">

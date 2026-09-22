@@ -1,3 +1,5 @@
+import { LeadActionPanel } from './LeadActionPanel';
+import { WhenPicker } from './common/WhenPicker';
 import React, { useState } from 'react';
 import { Lead, Property, SalesAgent, LeadStatus } from '../types';
 import { 
@@ -228,6 +230,9 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
         {/* Scrollable Information Body */}
         <div className="space-y-4 overflow-y-auto pr-0.5 flex-1">
           
+          {/* الأكشن الجاي + نقل إلى */}
+          <LeadActionPanel lead={lead} agents={agents} byName={agents.find((x) => x.id === lead.assignedAgentId)?.name || 'الفريق'} onUpdateLead={onUpdateLead} />
+
           {/* Key Customer Requirements Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-white border border-[#ECE8DF] rounded-2xl text-xs shadow-2xs">
             <div className="space-y-1">
@@ -303,13 +308,8 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                 <div className="space-y-2.5 text-xs">
                   <div>
                     <label className="text-[#141414] block mb-1 font-bold">تاريخ وتوقيت المعاينة:</label>
-                    <input
-                      type="text"
-                      value={visitDate}
-                      onChange={(e) => setVisitDate(e.target.value)}
-                      placeholder="مثال: غداً الثلاثاء الساعة 5:00 مساءً"
-                      className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none"
-                    />
+                    <WhenPicker quick={false} onChange={(v) => setVisitDate(v.label)} />
+                    {visitDate && <p className="text-xs text-[#6B665C] mt-1">المختار: <b>{visitDate}</b></p>}
                   </div>
                   <div>
                     <label className="text-[#141414] block mb-1 font-bold">نقطة اللقاء وموقع الشقة:</label>
@@ -399,13 +399,8 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
               <div className="space-y-2.5 text-xs">
                 <div>
                   <label className="text-[#141414] block mb-1 font-bold">توقيت المتابعة القادمة:</label>
-                  <input
-                    type="text"
-                    value={followUpTime}
-                    onChange={(e) => setFollowUpTime(e.target.value)}
-                    placeholder="مثال: اليوم 5:30 م، غداً 11:00 ص"
-                    className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none"
-                  />
+                  <WhenPicker quick={false} onChange={(v) => setFollowUpTime(v.label)} />
+                    {followUpTime && <p className="text-xs text-[#6B665C] mt-1">المختار: <b>{followUpTime}</b></p>}
                 </div>
 
                 <div>

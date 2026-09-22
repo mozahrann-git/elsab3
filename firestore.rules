@@ -25,9 +25,11 @@ service cloud.firestore {
       allow write: if isAdmin();
       // صاحب الحساب يغيّر الباسوورد بس
       allow update: if isRealUser() && staffEmail() == email && onlyKeys(['password', 'updatedAt']);
-      // مالك جديد من فورم "اعرض شقتك" بيعمل حسابه بنفسه من غير وحدات
-      allow create: if isRealUser() && staffEmail() == email
-                    && request.resource.data.role == 'owner' && request.resource.data.propertyCodes.size() == 0;
+      // المالك (@owner.com) والبروكر (@broker.com) بيعملوا حسابهم بنفسهم من غير وحدات
+      allow create: if isRealUser() && staffEmail() == email && request.resource.data.propertyCodes.size() == 0
+                    && ((request.resource.data.role == 'owner' && email.matches('.*@owner[.]com$'))
+                        || (request.resource.data.role == 'broker' && email.matches('.*@broker[.]com$')
+                            && request.resource.data.brokerId == email.split('@')[0]));
       // مسؤولة الملاك تربط وحدة بمالكها
       allow update: if isCoord() && resource.data.role == 'owner' && onlyKeys(['propertyCodes']);
     }
@@ -69,6 +71,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // دليل الأحياء: الكل يقرا، الأدمن يعدّل
+    match /district_guides/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /site_config/{id} {
       allow read: if true;
       allow write: if isAdmin();
@@ -99,6 +107,14 @@ service cloud.firestore {
                     && request.resource.data.status == 'pending'
                     && ((isOwner() && request.resource.data.propertyCode in myCodes())
                         || (isBroker() && request.resource.data.brokerId == myBrokerId()));
+    }
+
+    // ---------- فيدباك البروكر: للسيلز اللي طلب المعاينة والإدارة بس ----------
+    match /broker_feedback/{id} {
+      allow create: if isBroker() && request.resource.data.brokerId == myBrokerId();
+      allow read: if isOps()
+                  || (isBroker() && resource.data.brokerId == myBrokerId())
+                  || (isStaff() && get(/databases/$(database)/documents/sales_agents/$(resource.data.salesAgentId)).data.email.lower() == staffEmail());
     }
 
     // ---------- مندوبين المعاينات ----------

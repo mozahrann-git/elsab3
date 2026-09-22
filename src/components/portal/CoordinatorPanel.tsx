@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, Users, MessageSquareText, FilePen, Home, Plus, Phone, Send, LogOut } from 'lucide-react';
+import { CalendarClock, Users, MessageSquareText, FilePen, Home, Plus, Phone, Send, LogOut, FileSpreadsheet } from 'lucide-react';
 import { Property, OwnerSubmission } from '../../types';
-import { fetchPropertyPrivateOwner } from '../../services/firebaseService';
+import { fetchPropertyPrivateOwner, subscribeToViewingRequests, saveAccount } from '../../services/firebaseService';
+import { WhenPicker, WhenValue, formatWhen } from '../common/WhenPicker';
+import { ViewingRequest } from '../../types';
+import * as XLSX from 'xlsx';
 import {
   UnitViewing, ChangeRequest, FieldAgent, FieldTrip, FieldFeedback, TripUnit,
   subscribeAllUnitViewings, subscribeAllChangeRequests, subscribeFieldAgents, subscribeTrips, subscribeFieldFeedback,
@@ -64,6 +67,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
         { key: 'feedback', label: 'الفيدباك', icon: <MessageSquareText size={18} />, badge: pendingF },
         { key: 'changes', label: 'التعديلات', icon: <FilePen size={18} />, badge: pendingC },
         { key: 'units', label: 'شقق جديدة', icon: <Home size={18} />, badge: pendingS },
+        ...(isAdmin ? [{ key: 'excel', label: 'شيت الملاك', icon: <FileSpreadsheet size={18} /> }] : []),
       ]}
       active={tab} onTab={setTab} onClose={onClose}
       footer={<button onClick={onLogout} className="w-full px-4 py-3 rounded-xl text-sm text-[#F0776A] hover:bg-white/10 text-right flex items-center gap-2"><LogOut size={16} />خروج</button>}
@@ -72,6 +76,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       {tab === 'agents' && <AgentsTab agents={agents} trips={trips} fbs={fbs} viewings={viewings} properties={properties} isAdmin={isAdmin} />}
       {tab === 'feedback' && <FeedbackTab fbs={fbs} />}
       {tab === 'changes' && <ChangesTab changes={changes} />}
+      {tab === 'excel' && isAdmin && <OwnersExcelTab properties={properties} />}
       {tab === 'units' && <UnitsTab submissions={submissions} onApprove={onApproveSubmission} onReject={onRejectSubmission} />}
     </PortalShell>
   );
@@ -80,8 +85,20 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
 // ---------------- المعاينات ----------------
 const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; onSendToAgent: () => void }> = ({ viewings, properties, onSendToAgent }) => {
   const [code, setCode] = useState('');
-  const [time, setTime] = useState('');
+  const [time, setTime] = useState<WhenValue | null>(null);
   const [note, setNote] = useState('');
+  const [reqs, setReqs] = useState<ViewingRequest[]>([]);
+  const [fromReq, setFromReq] = useState<ViewingRequest | null>(null);
+  const [owners, setOwners] = useState<Record<string, string>>({});
+  useEffect(() => subscribeToViewingRequests(null, setReqs), []);
+  const converted = new Set(viewings.map((v) => v.sourceRequestId).filter(Boolean));
+  const openReqs = reqs.filter((r) => !converted.has(r.id) && !['cancelled', 'canceled', 'completed', 'done'].includes(String(r.status)));
+  useEffect(() => {
+    [...openReqs.map((r) => r.propertyId), ...viewings.map((v) => v.propertyId)].forEach((pid) => {
+      if (pid && owners[pid] === undefined) fetchPropertyPrivateOwner(pid).then((d) => setOwners((o) => ({ ...o, [pid]: d?.ownerName || '' })));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openReqs.length, viewings.length]);
   const [busy, setBusy] = useState(false);
   const p = properties.find((x) => x.code.toUpperCase() === code.trim().toUpperCase());
   const [phones, setPhones] = useState<Record<string, string>>({});
@@ -100,17 +117,37 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; o
         <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="كود الشقة (مثلاً H1128)" dir="ltr" className={`${input} font-mono`} list="codes" />
         <datalist id="codes">{properties.map((x) => <option key={x.id} value={x.code}>{x.title}</option>)}</datalist>
         {p ? <p className="text-sm text-[#1E7A45]">✓ {p.title}{p.brokerId ? ' · وحدة بروكر' : ''}</p> : code && <p className="text-sm text-[#C2412D]">الكود مش موجود</p>}
-        <input value={time} onChange={(e) => setTime(e.target.value)} placeholder="الميعاد: بكرة الأحد 6:00 مساءً" className={input} />
+        {fromReq && <p className="text-xs rounded-xl bg-[#FBF8F1] border border-[#E8D3A6] p-2">طلب من السيلز <b>{fromReq.requestingAgentName}</b> · العميل يفضّل: {fromReq.clientPreferredTime}</p>}
+        {p && <p className="text-xs text-[#6B665C]">المالك: <b>{owners[p.id] || '...'}</b></p>}
+        <WhenPicker value={time} onChange={setTime} quick={false} label="ميعاد المعاينة" />
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="وصف العميل (من غير اسم ولا رقم)" className={input} />
         <Btn disabled={!p || !time || busy} onClick={async () => {
           setBusy(true);
           try {
-            await createUnitViewing({ propertyId: p!.id, propertyCode: p!.code, propertyTitle: p!.title, brokerId: p!.brokerId, scheduledText: time, clientNote: note });
-            setCode(''); setTime(''); setNote('');
+            await createUnitViewing({
+              propertyId: p!.id, propertyCode: p!.code, propertyTitle: p!.title, brokerId: p!.brokerId,
+              scheduledText: time!.label, scheduledAt: time!.at, clientNote: note, ownerName: owners[p!.id] || '',
+              sourceRequestId: fromReq?.id, salesAgentId: fromReq?.requestingAgentId, salesAgentName: fromReq?.requestingAgentName,
+            });
+            setCode(''); setTime(null); setNote(''); setFromReq(null);
           } finally { setBusy(false); }
         }}>بلّغ {p?.brokerId ? 'البروكر' : 'المالك'}</Btn>
       </Card>
       <div className="lg:col-span-2 grid gap-3 content-start">
+        {openReqs.length > 0 && (
+          <Card tone="gold">
+            <p className="font-bold">طلبات معاينة من السيلز ({openReqs.length})</p>
+            {openReqs.map((r) => (
+              <div key={r.id} className="border-t border-[#E8D3A6] pt-2 flex flex-wrap justify-between items-center gap-2">
+                <div>
+                  <p className="font-bold text-sm">{r.propertyCode} · {r.propertyTitle}</p>
+                  <p className="text-xs text-[#6B665C]">السيلز: {r.requestingAgentName || '—'} · المالك: {owners[r.propertyId] || '—'} · العميل يفضّل: {r.clientPreferredTime}</p>
+                </div>
+                <Btn className="!py-2 text-xs" onClick={() => { setFromReq(r); setCode(r.propertyCode); setNote(r.clientNotes ? 'عميل من فريق السبع' : ''); window.scrollTo({ top: 0 }); }}>كلّمي المالك وحددي</Btn>
+              </div>
+            ))}
+          </Card>
+        )}
         {active.length === 0 && <p className="text-center text-sm text-[#6B665C] py-10">مفيش معاينات مفتوحة</p>}
         {active.map((v) => {
           const late = v.ownerStatus === 'pending' && Date.now() - v.lastNotifiedAt > 15 * 60000;
@@ -122,7 +159,7 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; o
                   : v.ownerStatus === 'confirmed' ? <Chip tone="green">اتأكدت {v.brokerConfirmedTime || ''}</Chip>
                   : <Chip tone="gold">طلب ميعاد تاني: {v.ownerNote}</Chip>}
               </div>
-              <p className="text-sm text-[#6B665C]">{v.propertyTitle} · اتبلّغ {v.notifyCount} مرة{late ? ' · فات ربع ساعة' : ''}</p>
+              <p className="text-sm text-[#6B665C]">{v.propertyTitle} · المالك: <b>{v.ownerName || owners[v.propertyId] || '—'}</b>{v.salesAgentName ? ` · طلب ${v.salesAgentName}` : ''} · اتبلّغ {v.notifyCount} مرة{late ? ' · فات ربع ساعة' : ''}</p>
               {v.ownerStatus === 'pending' && (
                 <div className="grid grid-cols-3 gap-2">
                   <Btn className="!px-2 text-xs" onClick={() => renotifyOwner(v)}>بلّغه تاني</Btn>
@@ -151,15 +188,17 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
   const [agentId, setAgentId] = useState('');
   const [codes, setCodes] = useState<string[]>([]);
   const [codeInput, setCodeInput] = useState('');
-  const [time, setTime] = useState('');
+  const [time, setTime] = useState<WhenValue | null>(null);
   const [edit, setEdit] = useState<Partial<FieldAgent> | null>(null);
   const confirmed = viewings.filter((v) => v.ownerStatus === 'confirmed');
   const chosen = agents.find((a) => a.id === (agentId || next?.id));
   const units: TripUnit[] = useMemo(() => codes.map((c) => properties.find((p) => p.code === c)).filter(Boolean).map((p) => ({
     propertyId: p!.id, code: p!.code, title: p!.title, link: `${window.location.origin}/?property=${p!.code}`, location: mapLink(p!), brokerId: p!.brokerId,
-  })), [codes, properties]);
+    salesAgentId: confirmed.find((v) => v.propertyCode === p!.code)?.salesAgentId,
+    salesAgentName: confirmed.find((v) => v.propertyCode === p!.code)?.salesAgentName,
+  })), [codes, properties, confirmed]);
   const add = (c: string) => { const k = c.trim().toUpperCase(); if (properties.some((p) => p.code.toUpperCase() === k) && !codes.includes(k)) setCodes((x) => [...x, properties.find((p) => p.code.toUpperCase() === k)!.code]); setCodeInput(''); };
-  const message = (a: FieldAgent) => `أهلاً ${a.name}، عندك معاينة ${time}:\n\n` + units.map((u, i) => `${i + 1}) كود ${u.code}\nالشقة: ${u.link}\nاللوكيشن: ${u.location}`).join('\n\n') + `\n\n— سارة · السبع للعقارات`;
+  const message = (a: FieldAgent) => `أهلاً ${a.name}، عندك معاينة ${time?.label || ''}:\n\n` + units.map((u, i) => `${i + 1}) كود ${u.code}\nالشقة: ${u.link}\nاللوكيشن: ${u.location}`).join('\n\n') + `\n\n— سارة · السبع للعقارات`;
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -175,13 +214,13 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
         {confirmed.length > 0 && (
           <div className="flex flex-wrap gap-2">
             <span className="text-xs text-[#6B665C] w-full">معاينات متأكدة:</span>
-            {confirmed.map((v) => <button key={v.id} onClick={() => add(v.propertyCode)} className={`px-3 py-1.5 rounded-full text-xs font-semibold ${codes.includes(v.propertyCode) ? 'bg-[#141414] text-white' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>{v.propertyCode} · {v.brokerConfirmedTime || v.scheduledText}</button>)}
+            {confirmed.map((v) => <button key={v.id} onClick={() => { add(v.propertyCode); if (!time && v.scheduledAt) setTime({ at: v.scheduledAt, label: formatWhen(v.scheduledAt) }); }} className={`px-3 py-1.5 rounded-full text-xs font-semibold ${codes.includes(v.propertyCode) ? 'bg-[#141414] text-white' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>{v.propertyCode} · {v.brokerConfirmedTime || v.scheduledText}</button>)}
           </div>
         )}
         <div className="flex gap-2"><input value={codeInput} onChange={(e) => setCodeInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add(codeInput)} placeholder="ضيف كود شقة" dir="ltr" className={`${input} font-mono`} list="codes2" /><Btn onClick={() => add(codeInput)}><Plus size={16} /></Btn></div>
         <datalist id="codes2">{properties.map((x) => <option key={x.id} value={x.code} />)}</datalist>
         {units.length > 0 && <div className="flex flex-wrap gap-2">{units.map((u) => <button key={u.code} onClick={() => setCodes((x) => x.filter((c) => c !== u.code))} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#141414] text-white">{u.code} ✕</button>)}</div>}
-        <input value={time} onChange={(e) => setTime(e.target.value)} placeholder="الميعاد: النهارده 6:00 مساءً" className={input} />
+        <WhenPicker value={time} onChange={setTime} quick={false} label="ميعاد المشوار" />
         <p className="text-sm font-bold">مين هيطلع؟</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {agents.filter((a) => a.active !== false).map((a) => (
@@ -193,8 +232,8 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
         </div>
         <Btn tone="green" disabled={!chosen || !units.length || !time} onClick={async () => {
           const a = chosen!; const txt = message(a);
-          await createTrip(a, units, time, confirmed.filter((v) => codes.includes(v.propertyCode)).map((v) => v.id));
-          window.open(wa(a.phone, txt)); setCodes([]); setTime(''); setAgentId('');
+          await createTrip(a, units, time!.label, confirmed.filter((v) => codes.includes(v.propertyCode)).map((v) => v.id));
+          window.open(wa(a.phone, txt)); setCodes([]); setTime(null); setAgentId('');
         }}><Send size={16} />ابعت لـ {chosen?.name || '...'} على واتساب</Btn>
       </Card>
 
@@ -306,6 +345,75 @@ const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; onApprove: (s: OwnerS
           </div>
         </Card>
       ))}
+    </div>
+  );
+};
+
+// ---------------- شيت الملاك القدام: تصدير ثم استيراد بالإيميلات والباسووردات ----------------
+const OwnersExcelTab: React.FC<{ properties: Property[] }> = ({ properties }) => {
+  const [busy, setBusy] = useState('');
+  const [log, setLog] = useState<string[]>([]);
+  const genPass = () => `Sb${Math.random().toString(36).slice(2, 6)}${Math.floor(10 + Math.random() * 89)}`;
+
+  const exportSheet = async () => {
+    setBusy('جاري تجميع أرقام الملاك...');
+    const rows: any[] = [];
+    for (const p of properties) {
+      const d = await fetchPropertyPrivateOwner(p.id).catch(() => null);
+      rows.push({
+        'كود الشقة': p.code, 'الحي': p.neighborhood, 'الشقة': p.title, 'السعر': p.price, 'المساحة': p.area,
+        'اسم المالك': d?.ownerName || '', 'موبايل المالك': d?.ownerPhone || '',
+        'الإيميل (اكتبه)': (p as any).ownerEmail || '', 'الباسوورد': genPass(), 'نسبة العمولة %': '', 'حالة الاتفاق': '', 'ملاحظات': '',
+      });
+    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [12, 14, 34, 12, 8, 20, 16, 28, 14, 14, 16, 30].map((w) => ({ wch: w }));
+    (ws as any)['!views'] = [{ RTL: true }];
+    const wb = XLSX.utils.book_new();
+    wb.Workbook = { Views: [{ RTL: true }] } as any;
+    XLSX.utils.book_append_sheet(wb, ws, 'الملاك');
+    XLSX.writeFile(wb, `elsab3-owners-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    setBusy('');
+  };
+
+  const importSheet = async (file: File) => {
+    setBusy('جاري عمل الحسابات...'); setLog([]);
+    const wb = XLSX.read(await file.arrayBuffer());
+    const rows: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    // نفس الإيميل ممكن يبقى عنده أكتر من شقة
+    const byEmail: Record<string, { name: string; phone: string; pass: string; codes: string[]; commission: string }> = {};
+    rows.forEach((r) => {
+      const email = String(r['الإيميل (اكتبه)'] || '').trim().toLowerCase();
+      if (!email || !email.includes('@')) return;
+      const e = byEmail[email] || { name: String(r['اسم المالك'] || ''), phone: String(r['موبايل المالك'] || ''), pass: String(r['الباسوورد'] || genPass()), codes: [], commission: String(r['نسبة العمولة %'] || '') };
+      e.codes.push(String(r['كود الشقة']).trim());
+      byEmail[email] = e;
+    });
+    const out: string[] = [];
+    for (const [email, e] of Object.entries(byEmail)) {
+      try {
+        await saveAccount({ email, role: 'owner', name: e.name, phone: e.phone, password: e.pass, propertyCodes: e.codes, commission: e.commission } as any);
+        out.push(`✓ ${email} · ${e.codes.join('، ')}`);
+      } catch (err: any) { out.push(`✗ ${email}: ${err?.message || 'خطأ'}`); }
+      setLog([...out]);
+    }
+    setBusy(''); if (!out.length) setLog(['مفيش صفوف فيها إيميل']);
+  };
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card>
+        <p className="font-bold text-lg">1. نزّل شيت الملاك</p>
+        <p className="text-sm text-[#6B665C] leading-7">كل شقة بكودها واسم المالك ورقمه، وباسوورد مقترح جاهز. املا الإيميل ونسبة العمولة بعد ما تتفق مع كل مالك.</p>
+        <Btn onClick={exportSheet} disabled={!!busy}><FileSpreadsheet size={16} />{busy && busy.includes('تجميع') ? busy : `تنزيل الشيت (${properties.length} شقة)`}</Btn>
+      </Card>
+      <Card tone="gold">
+        <p className="font-bold text-lg">2. ارفع الشيت بعد ما تملاه</p>
+        <p className="text-sm text-[#6B665C] leading-7">كل صف فيه إيميل بيتعمله حساب مالك بالباسوورد اللي في الشيت، ووحداته بتترِبط بيه لوحدها. نفس الإيميل على أكتر من شقة = حساب واحد بكل شققه.</p>
+        <input type="file" accept=".xlsx,.xls" disabled={!!busy} onChange={(e) => e.target.files?.[0] && importSheet(e.target.files[0])} className="text-sm" />
+        {busy && busy.includes('الحسابات') && <p className="text-sm font-bold">{busy}</p>}
+        {log.length > 0 && <div className="max-h-64 overflow-y-auto text-xs space-y-1 font-mono" dir="ltr">{log.map((l, i) => <p key={i} style={{ textAlign: 'right' }}>{l}</p>)}</div>}
+      </Card>
     </div>
   );
 };

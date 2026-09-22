@@ -225,6 +225,9 @@ export interface Lead {
   fieldViewingBrokerName?: string;
   fieldViewingRecordedAt?: string;
   coordinatorName?: string;
+  nextActionAt?: number | null;     // ميعاد الأكشن الجاي بالظبط (تنبيه حقيقي)
+  activity?: { at: number; by: string; outcome: string; comment: string; nextAt?: number; transferTo?: string }[];
+  transferredFrom?: string;
 }
 
 export interface FollowUpAlert {

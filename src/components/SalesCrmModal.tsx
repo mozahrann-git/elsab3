@@ -42,6 +42,8 @@ import { LionLogo } from './LionLogo';
 import { formatPrice, formatNumber, generateCallLink, generateWhatsAppLink } from '../utils/helpers';
 import { SpinWheelModal } from './SpinWheelModal';
 import { LeadDetailsModal } from './LeadDetailsModal';
+import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
+import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { INITIAL_DAILY_QUESTS } from '../data/crmData';
 
@@ -135,6 +137,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     followUpScheduledAt: 'اليوم بعد ساعتين',
     followUpUrgency: 'urgent' as 'urgent' | 'today' | 'upcoming',
     assignedAgentId: '',
+    nextAt: null as WhenValue | null,
   });
 
   // Active Sales Agent for current session
@@ -190,30 +193,30 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   }, [leads, matchingLeadId]);
 
   // Matched Properties List for the selected lead
+  const [matchTolerance, setMatchTolerance] = useState<number>(0);   // 0 = بالظبط، 0.05، 0.1
+  const [matchStrictHood, setMatchStrictHood] = useState<boolean>(true);
   const matchedProperties = useMemo(() => {
-    if (!selectedMatchingLead) return properties.slice(0, 10);
-
-    const targetHood = selectedMatchingLead.preferredNeighborhood;
-    const targetBeds = selectedMatchingLead.preferredBedrooms;
-    const maxBudget = selectedMatchingLead.budgetMax ? selectedMatchingLead.budgetMax * 1.15 : Infinity;
-    const minBudget = selectedMatchingLead.budgetMin ? selectedMatchingLead.budgetMin * 0.85 : 0;
-
-    let list = properties.filter((p) => {
-      const matchHood = !targetHood || p.neighborhood === targetHood;
-      const matchPrice = p.price >= minBudget && p.price <= maxBudget;
-      const matchBeds = !targetBeds || p.bedrooms === targetBeds || p.bedrooms === targetBeds + 1 || p.bedrooms === targetBeds - 1;
-      return matchHood && (matchPrice || !selectedMatchingLead.budgetMax);
+    if (!selectedMatchingLead) return [];
+    const L = selectedMatchingLead;
+    const tol = matchTolerance;
+    const minB = L.budgetMin ? L.budgetMin * (1 - tol) : 0;
+    const maxB = L.budgetMax ? L.budgetMax * (1 + tol) : Infinity;
+    const list = properties.filter((p) => {
+      if ((p as any).viewingsPaused) return false;
+      if (matchStrictHood && L.preferredNeighborhood && p.neighborhood !== L.preferredNeighborhood) return false;
+      if (p.price < minB || p.price > maxB) return false;
+      if (L.preferredBedrooms && p.bedrooms < L.preferredBedrooms) return false;
+      if (L.preferredFinishing && L.preferredFinishing !== 'all' && p.finishing && p.finishing !== L.preferredFinishing) return false;
+      return true;
     });
-
-    if (list.length < 3 && targetHood) {
-      const hoodList = properties.filter((p) => p.neighborhood === targetHood);
-      if (hoodList.length > 0) {
-        list = hoodList;
-      }
-    }
-
-    return list.length > 0 ? list : properties.slice(0, 10);
-  }, [selectedMatchingLead, properties]);
+    // الأقرب للميزانية والطلب الأول
+    const target = L.budgetMax ? ((L.budgetMin || L.budgetMax) + L.budgetMax) / 2 : 0;
+    return list.sort((a, b) => {
+      const sa = (a.neighborhood === L.preferredNeighborhood ? 0 : 1) * 1e9 + Math.abs(a.price - target) + Math.abs((a.bedrooms || 0) - (L.preferredBedrooms || 0)) * 1e5;
+      const sb = (b.neighborhood === L.preferredNeighborhood ? 0 : 1) * 1e9 + Math.abs(b.price - target) + Math.abs((b.bedrooms || 0) - (L.preferredBedrooms || 0)) * 1e5;
+      return sa - sb;
+    });
+  }, [selectedMatchingLead, properties, matchTolerance, matchStrictHood]);
 
   const scrollToProperty = (code: string) => {
     setHighlightedPropCode(code);
@@ -286,9 +289,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       createdAt: new Date().toISOString(),
       lastContactDate: 'الآن',
       followUpStatus: 'pending',
-      followUpScheduledAt: newLeadForm.followUpScheduledAt || 'اليوم بعد ساعتين',
+      followUpScheduledAt: newLeadForm.nextAt?.label || 'بعد ساعتين',
       followUpNote: newLeadForm.notes.trim() || 'متابعة أولية مع العميل',
-      followUpUrgency: newLeadForm.followUpUrgency || 'urgent'
+      followUpUrgency: newLeadForm.nextAt && newLeadForm.nextAt.at - Date.now() > 3 * 3600000 ? 'upcoming' : 'urgent',
+      nextActionAt: newLeadForm.nextAt?.at || Date.now() + 2 * 3600000,
     };
 
     onAddLead(newLead);
@@ -982,6 +986,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   <p className="text-xs text-[#6B665C]">
                     الطلب: <span className="font-bold text-[#141414]">{selectedMatchingLead?.preferredNeighborhood || 'الحي الثاني'}</span> · <span className="font-bold text-[#141414]">{selectedMatchingLead?.preferredBedrooms || 3} غرف</span> · ميزانية: <span className="font-bold text-[#0E7A5A]">{selectedMatchingLead?.budgetMax ? formatPrice(selectedMatchingLead.budgetMax) : '3,600,000 ج.م'}</span>
                   </p>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[[0, 'الميزانية بالظبط'], [0.05, '±5%'], [0.1, '±10%']].map(([v, t]) => (
+                      <button key={String(v)} type="button" onClick={() => setMatchTolerance(v as number)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${matchTolerance === v ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>{t}</button>
+                    ))}
+                    <button type="button" onClick={() => setMatchStrictHood(!matchStrictHood)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${matchStrictHood ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>{matchStrictHood ? 'نفس الحي بس' : 'كل الأحياء'}</button>
+                  </div>
                 </div>
 
                 {/* Matching Counter Badge */}
@@ -1383,48 +1393,44 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[#141414] block mb-1 font-bold">الحي المطلوب:</label>
-                  <input
-                    type="text"
+                  <select
                     value={newLeadForm.preferredNeighborhood}
                     onChange={(e) => setNewLeadForm({ ...newLeadForm, preferredNeighborhood: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
-                    placeholder="الحي الثاني"
-                  />
+                  >
+                    <option value="">أي حي</option>
+                    {HADABA_WOSTA_NEIGHBORHOODS.map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
                 </div>
 
                 <div>
-                  <label className="text-[#141414] block mb-1 font-bold">الحد الأقصى (ج.م):</label>
-                  <input
-                    type="number"
-                    value={newLeadForm.budgetMax}
-                    onChange={(e) => setNewLeadForm({ ...newLeadForm, budgetMax: Number(e.target.value) })}
+                  <label className="text-[#141414] block mb-1 font-bold">عدد الغرف:</label>
+                  <select
+                    value={newLeadForm.preferredBedrooms}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, preferredBedrooms: Number(e.target.value) })}
                     className="w-full px-3.5 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
-                    placeholder="3500000"
-                  />
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} {n > 2 ? 'غرف' : n === 2 ? 'أوضتين' : 'أوضة'}</option>)}
+                  </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[#141414] block mb-1 font-bold">موعد المتابعة:</label>
-                  <input
-                    type="text"
-                    value={newLeadForm.followUpScheduledAt}
-                    onChange={(e) => setNewLeadForm({ ...newLeadForm, followUpScheduledAt: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
-                    placeholder="اليوم بعد ساعتين"
-                  />
-                </div>
-
-                <div>
                   <label className="text-[#141414] block mb-1 font-bold">كود الشقة المهتم بها:</label>
-                  <input
-                    type="text"
+                  <select
                     value={newLeadForm.interestedPropertyCode}
                     onChange={(e) => setNewLeadForm({ ...newLeadForm, interestedPropertyCode: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
-                    placeholder="H1118"
-                  />
+                  >
+                    <option value="">مفيش شقة معيّنة</option>
+                    {properties.map((p) => <option key={p.id} value={p.code}>{p.code} · {p.neighborhood} · {p.area}م²</option>)}
+                  </select>
+                </div>
+
+                <div className="col-span-2 space-y-3">
+                  <BudgetRange min={newLeadForm.budgetMin} max={newLeadForm.budgetMax} onChange={(mn, mx) => setNewLeadForm({ ...newLeadForm, budgetMin: mn, budgetMax: mx })} />
+                  <WhenPicker value={newLeadForm.nextAt} onChange={(v) => setNewLeadForm({ ...newLeadForm, nextAt: v })} label="أول متابعة" />
                 </div>
               </div>
 

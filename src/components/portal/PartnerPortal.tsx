@@ -8,9 +8,11 @@ import {
   subscribeViewingsByCodes, subscribeFeedbackByCodes, subscribeViewingsByBroker, subscribeFeedbackByBroker,
   subscribeMyChangeRequests, subscribeMySubmissions, respondToViewing, createChangeRequest,
   brokerSaveOwnerPhone, brokerMarkMessaged, brokerConfirmViewing,
+  BrokerFeedback, saveBrokerFeedback, subscribeMyBrokerFeedback,
 } from '../../services/portalService';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { ChangePasswordModal } from '../ChangePasswordModal';
+import { WhenPicker, WhenValue, formatWhen } from '../common/WhenPicker';
 
 /*
   بوابة المالك والبروكر (نفس الهيكل):
@@ -40,6 +42,8 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
   const [openUnit, setOpenUnit] = useState<string | null>(null);
   const [passOpen, setPassOpen] = useState(false);
   const [nag, setNag] = useState(false);
+  const [myFb, setMyFb] = useState<BrokerFeedback[]>([]);
+  useEffect(() => (isBroker && access.brokerId ? subscribeMyBrokerFeedback(access.brokerId, setMyFb) : undefined), [isBroker, access.brokerId]);
 
   const codes = useMemo(() => (access.propertyCodes || []).map((c) => c.trim().toUpperCase()), [access.propertyCodes]);
   const mine = useMemo(() => properties.filter((p) =>
@@ -160,7 +164,7 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
       ) : tab === 'viewings' ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {viewings.length === 0 && <p className="lg:col-span-2 text-center text-sm text-[#6B665C] py-10">مفيش معاينات لسه</p>}
-          {viewings.map((v) => isBroker ? <BrokerViewing key={v.id} v={v} brokerId={access.brokerId || ''} brokerName={access.name || ''} /> : <OwnerViewing key={v.id} v={v} />)}
+          {viewings.map((v) => isBroker ? <BrokerViewing key={v.id} v={v} brokerId={access.brokerId || ''} brokerName={access.name || ''} sentFeedback={myFb.find((f) => f.viewingId === v.id)} /> : <OwnerViewing key={v.id} v={v} />)}
         </div>
       ) : tab === 'feedback' ? (
         <FeedbackList feedback={feedback} />
@@ -193,7 +197,7 @@ const Thumb: React.FC<{ p: Property }> = ({ p }) => p.images?.[0]
   : <div className="w-20 h-20 rounded-xl shrink-0" style={{ background: 'repeating-linear-gradient(135deg,#E7E2D8 0 10px,#EFEBE3 10px 20px)' }} />;
 
 const OwnerViewing: React.FC<{ v: UnitViewing }> = ({ v }) => {
-  const [note, setNote] = useState('');
+  const [alt, setAlt] = useState<WhenValue | null>(null);
   const [asking, setAsking] = useState(false);
   const tone = v.ownerStatus === 'pending' ? 'alert' : undefined;
   return (
@@ -208,8 +212,8 @@ const OwnerViewing: React.FC<{ v: UnitViewing }> = ({ v }) => {
         <>
           {asking ? (
             <div className="flex flex-col gap-2">
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اكتب الميعاد اللي يناسبك" className="rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm" />
-              <Btn tone="dark" onClick={() => respondToViewing(v.id, 'reschedule', note)}>ابعت الميعاد</Btn>
+              <WhenPicker value={alt} onChange={setAlt} quick={false} label="الميعاد اللي يناسبك" />
+              <Btn tone="dark" disabled={!alt} onClick={() => respondToViewing(v.id, 'reschedule', alt!.label)}>ابعت الميعاد</Btn>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
@@ -224,11 +228,14 @@ const OwnerViewing: React.FC<{ v: UnitViewing }> = ({ v }) => {
   );
 };
 
-const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: string }> = ({ v, brokerId, brokerName }) => {
+const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: string; sentFeedback?: BrokerFeedback }> = ({ v, brokerId, brokerName, sentFeedback }) => {
+  const [fbRating, setFbRating] = useState(0);
+  const [fbText, setFbText] = useState('');
+  const [fbBusy, setFbBusy] = useState(false);
   const [ownerName, setOwnerName] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
   const [saved, setSaved] = useState(false);
-  const [time, setTime] = useState('');
+  const [when, setWhen] = useState<WhenValue | null>(v.scheduledAt ? { at: v.scheduledAt, label: formatWhen(v.scheduledAt) } : null);
   const step = v.brokerStatus === 'confirmed' ? 4 : v.brokerStatus === 'messaged' ? 3 : saved ? 2 : 1;
   const msg = `أهلاً ${ownerName || 'أستاذنا'}، في عميل جاد عايز يعاين شقتك (${v.propertyTitle}) ${v.scheduledText}. ينفع؟ — ${brokerName} · السبع للعقارات`;
   const phone = ownerPhone.replace(/\D/g, '').replace(/^0/, '20');
@@ -245,6 +252,22 @@ const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: st
         {step < 4 ? <Chip tone="red">من {since(v.createdAt)}</Chip> : <Chip tone="green">اتأكدت {v.brokerConfirmedTime}</Chip>}
       </div>
       <p className="text-sm text-[#6B665C]">{v.propertyTitle} · العميل يفضّل: {v.scheduledText}</p>
+      {step === 4 && v.salesAgentId && (
+        sentFeedback ? (
+          <div className="rounded-xl bg-[#EEF5F0] text-[#1E7A45] p-3 text-sm">✓ فيدباكك وصل للسيلز اللي طلب المعاينة: "{sentFeedback.text}"</div>
+        ) : (
+          <div className="flex flex-col gap-2 border-t border-[#F0ECE4] pt-3">
+            <p className="text-sm font-bold">فيدباكك بعد المعاينة (بيشوفه السيلز اللي طلبها والإدارة بس)</p>
+            <div className="flex gap-1.5">{[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" onClick={() => setFbRating(n)} className="flex-1 text-2xl py-1.5 rounded-xl bg-[#F6F4EF]" style={{ color: n <= fbRating ? '#D9B864' : '#E4DFD4' }}>★</button>)}</div>
+            <textarea rows={2} value={fbText} onChange={(e) => setFbText(e.target.value)} placeholder="العميل كان عامل إزاي؟ في اتفاق؟" className="rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm" />
+            <Btn tone="green" disabled={!fbRating || !fbText.trim() || fbBusy} onClick={async () => {
+              setFbBusy(true);
+              try { await saveBrokerFeedback({ viewingId: v.id, propertyCode: v.propertyCode, propertyTitle: v.propertyTitle, brokerId, brokerName, salesAgentId: v.salesAgentId!, salesAgentName: v.salesAgentName, rating: fbRating, text: fbText.trim() }); }
+              finally { setFbBusy(false); }
+            }}>ابعت الفيدباك</Btn>
+          </div>
+        )
+      )}
       {step < 4 && (
         <div className="flex flex-col gap-3 border-t border-[#F0ECE4] pt-3">
           <Step n={1} t="سجّل رقم المالك (بيظهر للإدارة بس)" />
@@ -267,13 +290,8 @@ const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: st
           <Step n={3} t="أكّد المعاد هنا بعد ما المالك يرد" />
           {step === 3 && (
             <>
-              <div className="grid grid-cols-4 gap-2">
-                {['5:00', '6:00', '7:00', '8:00'].map((t) => (
-                  <button key={t} onClick={() => setTime(t)} className={`rounded-xl py-2.5 text-sm font-semibold ${time === t ? 'bg-[#141414] text-white' : 'bg-[#F6F4EF]'}`}>{t}</button>
-                ))}
-              </div>
-              <input value={time} onChange={(e) => setTime(e.target.value)} placeholder="أو اكتب الميعاد" className="rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm" />
-              <Btn tone="gold" disabled={!time} onClick={() => brokerConfirmViewing(v.id, time)}>تأكيد المعاد {time}</Btn>
+              <WhenPicker value={when} onChange={setWhen} quick={false} label="الميعاد اللي المالك وافق عليه" />
+              <Btn tone="gold" disabled={!when} onClick={() => brokerConfirmViewing(v.id, when!.label)}>تأكيد المعاد {when?.label || ''}</Btn>
             </>
           )}
         </div>

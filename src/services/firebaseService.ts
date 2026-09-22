@@ -958,6 +958,7 @@ export interface AccountRecord {
   brokerId?: string;
   propertyCodes?: string[] | string;
   phone?: string;
+  commission?: string;         // نسبة العمولة المتفق عليها مع المالك
   updatedAt?: string;
 }
 
@@ -1026,6 +1027,7 @@ export async function saveAccount(rec: AccountRecord, previousPassword?: string)
     brokerId: rec.role === 'broker' ? (rec.brokerId || '') : '',
     propertyCodes: rec.role === 'owner' ? codes : [],
     phone: rec.phone || '',
+    ...(rec.commission ? { commission: rec.commission } : {}),
     updatedAt: new Date().toISOString(),
   }), { merge: true });
 }

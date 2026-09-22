@@ -1,5 +1,5 @@
 import { auth, getStaffAccess, StaffAccess } from '../services/firebaseService';
-import { registerOwnerAccount } from '../services/portalService';
+import { registerPortalAccount, PORTAL_DOMAIN, cleanUsername } from '../services/portalService';
 import React, { useEffect, useState } from 'react';
 import { 
   X, 
@@ -59,7 +59,8 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
   onClose,
   onSubmit,
 }) => {
-  const [acctEmail, setAcctEmail] = useState('');
+  const [acctEmail, setAcctEmail] = useState('');   // اسم المستخدم (من غير الدومين)
+  const [acctRole, setAcctRole] = useState<'owner' | 'broker'>('owner');
   const [acctPass, setAcctPass] = useState('');
   const [acctError, setAcctError] = useState('');
   const [portalAcct, setPortalAcct] = useState<StaffAccess | null>(null);
@@ -175,13 +176,16 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
     // حساب البوابة: لو داخل بالفعل كمالك/بروكر نستخدم حسابه، غير كده نعمله حساب جديد
     let ownerEmail = portalAcct?.email;
     let brokerId = portalAcct?.role === 'broker' ? portalAcct.brokerId : undefined;
-    if (!ownerEmail && acctEmail.trim()) {
+    if (!ownerEmail) {
+      if (!acctEmail.trim()) { setAcctError('اعمل حسابك عشان تتابع شقتك'); return; }
       if (acctPass.trim().length < 6) { setAcctError('الباسوورد لازم 6 حروف أو أكتر'); return; }
       try {
-        await registerOwnerAccount(acctEmail, acctPass, formData.ownerName, formData.phone);
-        ownerEmail = acctEmail.trim().toLowerCase();
+        const r = await registerPortalAccount(acctRole, acctEmail, acctPass, formData.ownerName, formData.phone);
+        ownerEmail = r.email;
+        brokerId = r.brokerId;
       } catch (err: any) {
-        setAcctError(String(err?.code || '').includes('email-already-in-use') ? 'الإيميل ده عنده حساب. سجّل دخول الأول وبعدين اعرض الشقة.' : 'مقدرناش نعمل الحساب. جرّب تاني.');
+        const code = String(err?.code || '');
+        setAcctError(code.includes('email-already-in-use') ? 'اسم المستخدم ده محجوز. اختار اسم تاني، أو سجّل دخول لو ده حسابك.' : code.includes('admin-restricted') || code.includes('operation-not-allowed') ? 'التسجيل مقفول حالياً. كلّم الإدارة.' : (err?.message || 'مقدرناش نعمل الحساب. جرّب تاني.'));
         return;
       }
     }
@@ -724,11 +728,19 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
                 {portalAcct ? (
                   <div className="p-4 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] text-sm">الشقة هتتضاف لحسابك <b dir="ltr">{portalAcct.email}</b> وتتابعها من بوابتك.</div>
                 ) : (
-                  <div className="p-4 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] space-y-2">
-                    <p className="font-bold text-sm text-[#141414]">حسابك في بوابة الملاك (تتابع بيه شقتك)</p>
-                    <p className="text-xs text-[#6B665C]">هتشوف المشاهدات والمعاينات ورأي كل عميل. اختياري.</p>
-                    <input type="email" value={acctEmail} onChange={(e) => setAcctEmail(e.target.value)} placeholder="الإيميل" dir="ltr" className="w-full p-3 rounded-xl bg-white border border-[#ECE8DF] text-sm" />
+                  <div className="p-4 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] space-y-3">
+                    <p className="font-bold text-sm text-[#141414]">اعمل حسابك عشان تتابع شقتك</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([['owner', 'أنا المالك'], ['broker', 'أنا بروكر']] as const).map(([k, t]) => (
+                        <button key={k} type="button" onClick={() => setAcctRole(k)} className={`py-2.5 rounded-xl text-sm font-bold border ${acctRole === k ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#ECE8DF] text-[#6B665C]'}`}>{t}</button>
+                      ))}
+                    </div>
+                    <div className="flex items-stretch rounded-xl overflow-hidden border border-[#ECE8DF] bg-white" dir="ltr">
+                      <input value={acctEmail} onChange={(e) => setAcctEmail(cleanUsername(e.target.value))} placeholder="username" autoCapitalize="none" autoCorrect="off" className="flex-1 min-w-0 p-3 text-sm outline-none" />
+                      <span className="px-3 flex items-center bg-[#F6F4EF] text-sm text-[#6B665C] font-mono">@{PORTAL_DOMAIN[acctRole]}</span>
+                    </div>
                     <input type="password" value={acctPass} onChange={(e) => setAcctPass(e.target.value)} placeholder="باسوورد (6 حروف أو أكتر)" dir="ltr" className="w-full p-3 rounded-xl bg-white border border-[#ECE8DF] text-sm" />
+                    <p className="text-[11px] text-[#6B665C]">هتدخل بـ <b dir="ltr">{(acctEmail || 'username')}@{PORTAL_DOMAIN[acctRole]}</b> والباسوورد ده، من زرار الدخول فوق.</p>
                     {acctError && <p className="text-xs text-rose-700">{acctError}</p>}
                   </div>
                 )}

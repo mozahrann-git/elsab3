@@ -32,6 +32,10 @@ export interface UnitViewing {
   brokerConfirmedTime?: string;
   brokerConfirmedAt?: number;
   sourceRequestId?: string;
+  scheduledAt?: number;            // الوقت بالظبط
+  salesAgentId?: string;           // السيلز اللي طلب المعاينة (الفيدباك يرجعله)
+  salesAgentName?: string;
+  ownerName?: string;
   createdAt: number;
 }
 
@@ -134,14 +138,39 @@ export async function createChangeRequest(r: Omit<ChangeRequest, 'id' | 'status'
   await setDoc(doc(db, 'change_requests', id), cleanFirestoreData({ ...r, id, requesterEmail: me(), status: 'pending', createdAt: Date.now() }));
 }
 
-/** حساب مالك جديد من فورم "اعرض شقتك": بيسجّل دخول على طول */
-export async function registerOwnerAccount(email: string, password: string, name: string, phone: string) {
-  const clean = email.trim().toLowerCase();
-  const cred = await createUserWithEmailAndPassword(auth, clean, password.trim());
-  await setDoc(doc(db, 'staff_access', clean), {
-    role: 'owner', name, phone, password: password.trim(), propertyCodes: [], updatedAt: new Date().toISOString(),
-  });
-  return cred.user;
+/** حساب جديد من فورم "اعرض شقتك": المالك تحت @owner.com والبروكر تحت @broker.com، وبيسجّل دخول على طول */
+export const PORTAL_DOMAIN = { owner: 'owner.com', broker: 'broker.com' } as const;
+export const cleanUsername = (u: string) => u.trim().toLowerCase().replace(/@.*$/, '').replace(/[^a-z0-9._-]/g, '');
+
+export async function registerPortalAccount(role: 'owner' | 'broker', username: string, password: string, name: string, phone: string) {
+  const user = cleanUsername(username);
+  if (user.length < 3) throw new Error('اسم المستخدم لازم 3 حروف إنجليزي أو أرقام على الأقل');
+  const email = `${user}@${PORTAL_DOMAIN[role]}`;
+  const cred = await createUserWithEmailAndPassword(auth, email, password.trim());
+  await setDoc(doc(db, 'staff_access', email), cleanFirestoreData({
+    role, name, phone, password: password.trim(), propertyCodes: [],
+    ...(role === 'broker' ? { brokerId: user } : {}),
+    selfRegistered: true, updatedAt: new Date().toISOString(),
+  }));
+  return { user: cred.user, email, brokerId: role === 'broker' ? user : undefined };
+}
+
+// ---------- فيدباك البروكر: بيشوفه السيلز اللي طلب المعاينة والأدمن بس ----------
+export interface BrokerFeedback {
+  id: string; viewingId: string; propertyCode: string; propertyTitle: string;
+  brokerId: string; brokerName: string; salesAgentId: string; salesAgentName?: string;
+  rating: number; text: string; createdAt: number;
+}
+export async function saveBrokerFeedback(f: Omit<BrokerFeedback, 'id' | 'createdAt'>) {
+  const id = `bf-${f.viewingId}`;
+  await setDoc(doc(db, 'broker_feedback', id), cleanFirestoreData({ ...f, id, createdAt: Date.now() }));
+}
+export function subscribeBrokerFeedbackForSales(agentId: string | null, all: boolean, cb: (l: BrokerFeedback[]) => void) {
+  const q = all ? collection(db, 'broker_feedback') : query(collection(db, 'broker_feedback'), where('salesAgentId', '==', agentId || '-'));
+  return listen<BrokerFeedback>(q, cb);
+}
+export function subscribeMyBrokerFeedback(brokerId: string, cb: (l: BrokerFeedback[]) => void) {
+  return listen<BrokerFeedback>(query(collection(db, 'broker_feedback'), where('brokerId', '==', brokerId)), cb);
 }
 
 // ---------- البروكر ----------
@@ -204,7 +233,7 @@ export interface FieldAgent {
   id: string; name: string; phone: string; active: boolean;
   viewingsCount: number; feedbackCount: number; lastAssignedAt: number; createdAt: number;
 }
-export interface TripUnit { propertyId: string; code: string; title: string; link: string; location?: string; brokerId?: string }
+export interface TripUnit { propertyId: string; code: string; title: string; link: string; location?: string; brokerId?: string; salesAgentId?: string; salesAgentName?: string }
 export interface FieldTrip {
   id: string;                       // نفس الـ id هو التوكن في لينك الفيدباك
   agentId: string; agentName: string; agentPhone: string;
@@ -217,6 +246,7 @@ export interface FieldFeedback {
   propertyId: string; code: string; title: string; brokerId?: string;
   text: string; voiceUrl?: string; rating: number; positives: string[]; negatives: string[];
   stage: FeedbackStage; createdAt: number; saraAt?: number; salesAt?: number; salesBy?: string;
+  salesAgentId?: string; salesAgentName?: string;
 }
 
 export function subscribeFieldAgents(cb: (l: FieldAgent[]) => void) {
@@ -256,7 +286,7 @@ export async function submitFieldFeedback(trip: FieldTrip, u: TripUnit, data: { 
   const id = `ff-${trip.id}-${u.code}`.replace(/[^\w-]/g, '_');
   await setDoc(doc(db, 'field_feedback', id), cleanFirestoreData({
     id, tripId: trip.id, agentId: trip.agentId, agentName: trip.agentName, propertyId: u.propertyId, code: u.code, title: u.title,
-    brokerId: u.brokerId, ...data, stage: 'submitted', createdAt: Date.now(),
+    brokerId: u.brokerId, salesAgentId: u.salesAgentId, salesAgentName: u.salesAgentName, ...data, stage: 'submitted', createdAt: Date.now(),
   }));
 }
 export function subscribeFieldFeedback(cb: (l: FieldFeedback[]) => void) { return listen<FieldFeedback>(collection(db, 'field_feedback'), cb); }

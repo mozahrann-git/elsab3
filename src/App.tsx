@@ -1,5 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { PartnerPortal } from './components/portal/PartnerPortal';
+import { HADABA_WOSTA_NEIGHBORHOODS } from './data/properties';
+import { DistrictGuideSection } from './components/districts/DistrictGuideSection';
+import { DistrictPage } from './components/districts/DistrictPage';
+import { SmartFilterDock } from './components/SmartFilterDock';
+import { subscribeDistrictContent, computeDistrictStats, DistrictContent } from './services/districtService';
 import { OwnerPortalPromo } from './components/OwnerPortalPromo';
 import { CoordinatorPanel } from './components/portal/CoordinatorPanel';
 import { FieldFeedbackPage } from './components/portal/FieldFeedbackPage';
@@ -521,6 +526,10 @@ export default function App() {
 
   // 4. Filters State
   const [filter, setFilter] = useState<FilterState>(INITIAL_FILTER);
+  // دليل الأحياء
+  const [districtContent, setDistrictContent] = useState<Record<string, DistrictContent>>({});
+  const [openDistrict, setOpenDistrict] = useState<string | null>(null);
+  useEffect(() => subscribeDistrictContent(setDistrictContent), []);
 
   // 5. Modals State
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -1192,7 +1201,34 @@ export default function App() {
     toastTimerRef.current = setTimeout(() => {
       setToastMessage(null);
     }, 3200);
-  };
+  }
+
+  // تنبيهات حقيقية لمواعيد متابعة العملاء (كل 30 ثانية)
+  useEffect(() => {
+    if (!isSalesLoggedIn && !isAdminLoggedIn) return;
+    try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch { /* */ }
+    const check = () => {
+      const now = Date.now();
+      let seen: Record<string, number> = {};
+      try { seen = JSON.parse(localStorage.getItem('lion_followup_seen') || '{}'); } catch { /* */ }
+      crmLeads.forEach((l: any) => {
+        const at = l.nextActionAt as number | undefined;
+        if (!at || at > now || now - at > 12 * 3600000) return;
+        if (!isAdminLoggedIn && currentSalesAgentId && l.assignedAgentId !== currentSalesAgentId) return;
+        if (seen[l.id] === at) return;
+        seen[l.id] = at;
+        const msg = `⏰ ميعاد متابعة ${l.name}: ${l.followUpNote || 'كلّمه دلوقتي'}`;
+        showToast(msg);
+        try { if ('Notification' in window && Notification.permission === 'granted') new Notification('السبع · متابعة عميل', { body: msg }); } catch { /* */ }
+      });
+      try { localStorage.setItem('lion_followup_seen', JSON.stringify(seen)); } catch { /* */ }
+    };
+    check();
+    const t = setInterval(check, 30000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [crmLeads, isSalesLoggedIn, isAdminLoggedIn, currentSalesAgentId]);
+;
 
   // Click tracking function (WhatsApp, Calls, Views, Favorites)
   const handleTrackClick = (propertyId: string, type: 'whatsapp' | 'call' | 'views' | 'favorites') => {
@@ -1573,6 +1609,7 @@ export default function App() {
       return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
     });
   }, [properties, filter]);
+  const districtStats = useMemo(() => computeDistrictStats(HADABA_WOSTA_NEIGHBORHOODS as unknown as string[], properties), [properties]);
 
   // Favorites list computation
   const favoriteProperties = useMemo(() => {
@@ -1926,14 +1963,7 @@ export default function App() {
         />
 
         {/* Dark "دليل الأحياء" Section */}
-        <NeighborhoodsGuideSection
-          onSelectDistrict={(district) => {
-            setFilter({ ...filter, neighborhood: district });
-            const el = document.getElementById('properties-grid');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }}
-          onOpenFullGuide={() => setIsDistrictGuideOpen(true)}
-        />
+        <DistrictGuideSection stats={districtStats} content={districtContent} onOpen={(n) => setOpenDistrict(n)} />
 
       </main>
 
@@ -2168,7 +2198,15 @@ export default function App() {
           onApproveSubmission={(s) => handleApproveSubmission(s)} onRejectSubmission={handleRejectSubmission}
           onClose={() => setActivePortal(null)} onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }} />
       )}
-      <SalesFeedbackInbox isOpen={activePortal === 'sales_feedback'} onClose={() => setActivePortal(null)} />
+      {openDistrict && (
+        <DistrictPage name={openDistrict} stats={districtStats} content={districtContent[openDistrict]} properties={properties} isAdmin={isAdminLoggedIn}
+          onClose={() => setOpenDistrict(null)}
+          onOpenDistrict={(n) => setOpenDistrict(n)}
+          onOpenProperty={(p) => { setOpenDistrict(null); setSelectedProperty(p); }}
+          onShowUnits={(n) => { setOpenDistrict(null); setFilter({ ...filter, category: 'all', neighborhood: n }); setTimeout(() => document.getElementById('properties-grid')?.scrollIntoView({ behavior: 'smooth' }), 80); }} />
+      )}
+      <SmartFilterDock filter={filter} setFilter={setFilter} properties={properties} neighborhoods={HADABA_WOSTA_NEIGHBORHOODS as unknown as string[]} resultCount={filteredProperties.length} />
+      <SalesFeedbackInbox isOpen={activePortal === 'sales_feedback'} onClose={() => setActivePortal(null)} agentId={currentSalesAgentId} isAdmin={isAdminLoggedIn} />
       {showFieldFeedback && feedbackTripId && <FieldFeedbackPage tripId={feedbackTripId} onClose={() => { setShowFieldFeedback(false); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }} />}
 
       <ClientAuthModal
