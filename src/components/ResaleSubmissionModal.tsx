@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import { auth, getStaffAccess, StaffAccess } from '../services/firebaseService';
+import { registerOwnerAccount } from '../services/portalService';
+import React, { useEffect, useState } from 'react';
 import { 
   X, 
   Send, 
@@ -57,6 +59,17 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
   onClose,
   onSubmit,
 }) => {
+  const [acctEmail, setAcctEmail] = useState('');
+  const [acctPass, setAcctPass] = useState('');
+  const [acctError, setAcctError] = useState('');
+  const [portalAcct, setPortalAcct] = useState<StaffAccess | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const u = auth.currentUser;
+    if (u && !u.isAnonymous) getStaffAccess(u.email).then((a) => setPortalAcct(a && (a.role === 'owner' || a.role === 'broker') ? a : null));
+    else setPortalAcct(null);
+  }, [isOpen]);
+
   const [formData, setFormData] = useState({
     ownerName: '',
     phone: '',
@@ -156,12 +169,24 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAcctError('');
+    // حساب البوابة: لو داخل بالفعل كمالك/بروكر نستخدم حسابه، غير كده نعمله حساب جديد
+    let ownerEmail = portalAcct?.email;
+    let brokerId = portalAcct?.role === 'broker' ? portalAcct.brokerId : undefined;
+    if (!ownerEmail && acctEmail.trim()) {
+      if (acctPass.trim().length < 6) { setAcctError('الباسوورد لازم 6 حروف أو أكتر'); return; }
+      try {
+        await registerOwnerAccount(acctEmail, acctPass, formData.ownerName, formData.phone);
+        ownerEmail = acctEmail.trim().toLowerCase();
+      } catch (err: any) {
+        setAcctError(String(err?.code || '').includes('email-already-in-use') ? 'الإيميل ده عنده حساب. سجّل دخول الأول وبعدين اعرض الشقة.' : 'مقدرناش نعمل الحساب. جرّب تاني.');
+        return;
+      }
+    }
 
-    const finalImages = formData.images.length > 0 
-      ? formData.images 
-      : [DEFAULT_SUBMISSION_PHOTOS[0]];
+    const finalImages = formData.images;
 
     const newSub: OwnerSubmission = {
       id: `sub-${Date.now()}`,
@@ -187,6 +212,9 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
       inspectionContactRole: formData.inspectionContactRole.trim() || undefined,
       images: finalImages,
       status: 'pending',
+      ownerEmail,
+      brokerId,
+      submittedAtMs: Date.now(),
       submittedAt: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })
     };
 
@@ -692,7 +720,19 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
 
                 {/* Submit Action Button */}
                 <div className="pt-2">
-                  <button
+                  {/* حساب بوابة الملاك */}
+                {portalAcct ? (
+                  <div className="p-4 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] text-sm">الشقة هتتضاف لحسابك <b dir="ltr">{portalAcct.email}</b> وتتابعها من بوابتك.</div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] space-y-2">
+                    <p className="font-bold text-sm text-[#141414]">حسابك في بوابة الملاك (تتابع بيه شقتك)</p>
+                    <p className="text-xs text-[#6B665C]">هتشوف المشاهدات والمعاينات ورأي كل عميل. اختياري.</p>
+                    <input type="email" value={acctEmail} onChange={(e) => setAcctEmail(e.target.value)} placeholder="الإيميل" dir="ltr" className="w-full p-3 rounded-xl bg-white border border-[#ECE8DF] text-sm" />
+                    <input type="password" value={acctPass} onChange={(e) => setAcctPass(e.target.value)} placeholder="باسوورد (6 حروف أو أكتر)" dir="ltr" className="w-full p-3 rounded-xl bg-white border border-[#ECE8DF] text-sm" />
+                    {acctError && <p className="text-xs text-rose-700">{acctError}</p>}
+                  </div>
+                )}
+                <button
                     type="submit"
                     className="w-full py-4 px-6 bg-stone-900 hover:bg-black text-white text-sm sm:text-base font-black rounded-2xl transition-all flex items-center justify-center gap-2.5 shadow-xl shadow-stone-950/20 active:scale-98 cursor-pointer"
                   >

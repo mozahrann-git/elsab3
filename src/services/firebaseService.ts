@@ -10,7 +10,8 @@ import {
   setDoc, 
   deleteDoc, 
   onSnapshot, 
-  writeBatch
+  writeBatch,
+  updateDoc
 } from 'firebase/firestore';
 import { 
   getAuth, 
@@ -21,6 +22,9 @@ import {
   onAuthStateChanged,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  updatePassword,
+  initializeAuth,
+  inMemoryPersistence,
   User as FirebaseUser
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -117,7 +121,7 @@ export async function getStaffRole(email?: string | null): Promise<'admin' | 'sa
 /** بيانات الحساب كاملة من staff_access: الدور + ربطه بالبروكر أو بوحدات المالك */
 export interface StaffAccess {
   email: string;
-  role: 'admin' | 'sales' | 'broker' | 'owner' | 'disabled' | null;
+  role: 'admin' | 'sales' | 'broker' | 'owner' | 'coordinator' | 'disabled' | null;
   name?: string;
   brokerId?: string;          // للبروكر: ID ملفه في brokers
   propertyCodes?: string[];   // للمالك: أكواد وحداته
@@ -938,4 +942,110 @@ export async function fetchPropertyPrivateOwner(
     console.warn('[Firebase] Notice fetching private owner details:', error);
     return null;
   }
+}
+
+// ==========================================
+// إدارة الحسابات (الأدمن بيعمل الحساب ويحدد الباسوورد، وصاحبه يقدر يغيّره)
+// ==========================================
+
+export type AccountRole = 'admin' | 'sales' | 'broker' | 'owner' | 'coordinator' | 'disabled';
+
+export interface AccountRecord {
+  email: string;
+  role: AccountRole;
+  name?: string;
+  password?: string;          // بيشوفه الأدمن وصاحب الحساب بس (قواعد Firestore)
+  brokerId?: string;
+  propertyCodes?: string[] | string;
+  phone?: string;
+  updatedAt?: string;
+}
+
+/* تطبيق Firebase تاني في الخلفية: بيعمل/يعدّل حسابات الناس من غير ما يطلّع الأدمن من حسابه */
+let _secondaryAuth: ReturnType<typeof getAuth> | null = null;
+function secondaryAuth() {
+  if (_secondaryAuth) return _secondaryAuth;
+  const secondary = getApps().find((a) => a.name === 'accounts-manager') || initializeApp(firebaseConfig, 'accounts-manager');
+  try {
+    _secondaryAuth = initializeAuth(secondary, { persistence: inMemoryPersistence });
+  } catch {
+    _secondaryAuth = getAuth(secondary);
+  }
+  return _secondaryAuth;
+}
+
+export function subscribeToAccounts(onUpdate: (list: AccountRecord[]) => void, onError?: (e: unknown) => void): () => void {
+  return onSnapshot(collection(db, 'staff_access'), (snap) => {
+    const list: AccountRecord[] = [];
+    snap.forEach((d) => list.push({ email: d.id, ...(d.data() as any) }));
+    list.sort((a, b) => (a.role || '').localeCompare(b.role || '') || a.email.localeCompare(b.email));
+    onUpdate(list);
+  }, (e) => onError?.(e));
+}
+
+/**
+ * يعمل حساب جديد أو يغيّر باسوورد حساب موجود، ويحفظ الدور والربط في staff_access.
+ * لتغيير باسوورد حساب موجود لازم الباسوورد القديم يكون محفوظ عندنا.
+ */
+export async function saveAccount(rec: AccountRecord, previousPassword?: string): Promise<void> {
+  const email = rec.email.trim().toLowerCase();
+  const password = (rec.password || '').trim();
+  if (!email) throw new Error('اكتب الإيميل');
+  if (password && password.length < 6) throw new Error('الباسوورد لازم 6 حروف أو أكتر');
+
+  if (password && password !== (previousPassword || '')) {
+    const sAuth = secondaryAuth();
+    try {
+      await createUserWithEmailAndPassword(sAuth, email, password);
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (!code.includes('email-already-in-use')) {
+        if (code.includes('operation-not-allowed') || code.includes('admin-restricted')) {
+          throw new Error('فعّل "Enable create (sign-up)" من Firebase ← Authentication ← Settings');
+        }
+        throw err;
+      }
+      // الحساب موجود: نغيّر الباسوورد بالقديم المحفوظ
+      if (!previousPassword) {
+        throw new Error('الحساب موجود في Firebase ومش معانا باسووردُه القديم. امسحه من Authentication واعمله تاني من هنا.');
+      }
+      const cred = await signInWithEmailAndPassword(sAuth, email, previousPassword);
+      await updatePassword(cred.user, password);
+    } finally {
+      await signOut(sAuth).catch(() => {});
+    }
+  }
+
+  const codes = Array.isArray(rec.propertyCodes)
+    ? rec.propertyCodes
+    : (rec.propertyCodes || '').split(',').map((c) => c.trim()).filter(Boolean);
+  await setDoc(doc(db, 'staff_access', email), cleanFirestoreData({
+    role: rec.role,
+    name: rec.name || '',
+    password: password || previousPassword || '',
+    brokerId: rec.role === 'broker' ? (rec.brokerId || '') : '',
+    propertyCodes: rec.role === 'owner' ? codes : [],
+    phone: rec.phone || '',
+    updatedAt: new Date().toISOString(),
+  }), { merge: true });
+}
+
+/** إيقاف الحساب (مش بيمسحه من Firebase، بس بيشيل صلاحياته) */
+export async function disableAccount(email: string): Promise<void> {
+  await setDoc(doc(db, 'staff_access', email.trim().toLowerCase()), { role: 'disabled', updatedAt: new Date().toISOString() }, { merge: true });
+}
+
+/** صاحب الحساب بيغيّر باسووردُه بنفسه */
+export async function changeMyPassword(currentPassword: string, newPassword: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user || !user.email || user.isAnonymous) throw new Error('لازم تكون داخل بحسابك');
+  if (newPassword.trim().length < 6) throw new Error('الباسوورد الجديد لازم 6 حروف أو أكتر');
+  try {
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword.trim()));
+  } catch {
+    throw new Error('الباسوورد الحالي غلط');
+  }
+  await updatePassword(user, newPassword.trim());
+  // نحدّث النسخة اللي الأدمن بيشوفها
+  await updateDoc(doc(db, 'staff_access', user.email.toLowerCase()), { password: newPassword.trim(), updatedAt: new Date().toISOString() }).catch(() => {});
 }

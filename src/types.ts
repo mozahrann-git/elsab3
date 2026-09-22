@@ -99,6 +99,8 @@ export interface Property {
   ownerName?: string;
   ownerPhone?: string;
   brokerId?: string;                // مسند لبروكر معين
+  ownerEmail?: string;              // حساب المالك في البوابة
+  viewingsPaused?: boolean;         // المالك طلب إيقاف المعاينات
   note?: string;
   location?: string;
   sales?: string;
@@ -163,6 +165,9 @@ export interface OwnerSubmission {
   status: 'pending' | 'approved' | 'rejected';
   submittedAt: string;
   notes?: string;
+  ownerEmail?: string;              // حساب المالك/البروكر في البوابة
+  brokerId?: string;                // لو اللي عارضها بروكر
+  submittedAtMs?: number;
 }
 
 export interface AdminCredentials {

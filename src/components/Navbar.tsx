@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { ChangePasswordModal } from './ChangePasswordModal';
+import { subscribeToStaffAuth } from '../services/firebaseService';
 import { LionLogo } from './LionLogo';
 import { 
   Heart, 
@@ -39,6 +41,8 @@ interface NavbarProps {
   onOpenPartnerPortals?: () => void;
   onOpenBrokerPortal?: () => void;
   onOpenLandlordPortal?: () => void;
+  onOpenMyPortal?: () => void;
+  myPortalLabel?: string;
   onOpenClosedDeals?: () => void;
   onOpenAdmin: () => void;
   onOpenCrm: () => void;
@@ -74,6 +78,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenPartnerPortals,
   onOpenBrokerPortal,
   onOpenLandlordPortal,
+  onOpenMyPortal,
+  myPortalLabel,
   onOpenClosedDeals,
   onOpenAdmin,
   onOpenCrm,
@@ -92,6 +98,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectResale,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [changePassOpen, setChangePassOpen] = useState(false);
+  const [staffSignedIn, setStaffSignedIn] = useState(false);
+  useEffect(() => subscribeToStaffAuth((u) => setStaffSignedIn(!!u && !u.isAnonymous)), []);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -372,6 +381,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <User size={13} />
               <span>حسابي</span>
+            </button>
+          )}
+
+          {/* بوابة الشخص الداخل (مالك/بروكر/مسؤولة الملاك/سيلز) */}
+          {onOpenMyPortal && myPortalLabel && (
+            <button onClick={onOpenMyPortal} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-[#A07A26] rounded-xl shadow-2xs">
+              <Building2 size={14} />
+              <span className="hidden sm:inline">{myPortalLabel}</span>
             </button>
           )}
 
@@ -693,6 +710,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </span>
                   </button>
 
+                  {onOpenMyPortal && myPortalLabel && (
+                    <button
+                      onClick={() => { setMobileMenuOpen(false); onOpenMyPortal(); }}
+                      className="w-full p-3 mb-2 rounded-xl bg-[#A07A26] text-white text-right flex items-center justify-between text-sm font-bold"
+                    >
+                      <span>{myPortalLabel}</span>
+                      <ChevronLeft size={14} />
+                    </button>
+                  )}
+                  {staffSignedIn && (
+                    <button
+                      onClick={() => { setMobileMenuOpen(false); setChangePassOpen(true); }}
+                      className="w-full p-2.5 mb-2 rounded-xl bg-white text-[#141414] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold"
+                    >
+                      <span>تغيير كلمة المرور</span>
+                      <ChevronLeft size={14} />
+                    </button>
+                  )}
                   {isAdminLoggedIn ? (
                     <button
                       onClick={() => {
@@ -739,6 +774,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
       )}
+      <ChangePasswordModal isOpen={changePassOpen} onClose={() => setChangePassOpen(false)} />
     </header>
   );
 };

@@ -18,7 +18,7 @@ import {
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { formatPrice } from '../utils/helpers';
 import { safeLocalStorageSet, safeSessionStorageSet } from '../utils/storageHelper';
-import { signInStaff, getStaffRole, signOutToGuest } from '../services/firebaseService';
+import { signInStaff, getStaffRole, signOutToGuest, getStaffAccess, StaffAccess } from '../services/firebaseService';
 
 interface ClientAuthModalProps {
   isOpen: boolean;
@@ -27,6 +27,7 @@ interface ClientAuthModalProps {
   onSaveClient: (client: ClientProfile) => void;
   onLoginAdminSuccess?: () => void;
   onLoginSalesSuccess?: (agent: SalesAgent) => void;
+  onPortalLogin?: (access: StaffAccess) => void;
   salesAgents?: SalesAgent[];
   adminCredentials?: {
     email: string;
@@ -41,6 +42,7 @@ export const ClientAuthModal: React.FC<ClientAuthModalProps> = ({
   onSaveClient,
   onLoginAdminSuccess,
   onLoginSalesSuccess,
+  onPortalLogin,
   salesAgents = [],
   adminCredentials
 }) => {
@@ -130,7 +132,8 @@ export const ClientAuthModal: React.FC<ClientAuthModalProps> = ({
 
     // 1+2. الأدمن والموظفين: دخول حقيقي من Firebase بالإيميل، والدور من staff_access
     if (identifier.includes('@')) {
-      const isKnownStaffEmail =
+      // أي إيميل مع باسوورد بيتجرب كحساب (أدمن/سيلز/مالك/بروكر)
+      const isKnownStaffEmail = !!pass ||
         identifier.startsWith('admin') ||
         salesAgents.some((a) => (a.email || '').toLowerCase().trim() === identifier);
       if (!pass) {
@@ -141,6 +144,12 @@ export const ClientAuthModal: React.FC<ClientAuthModalProps> = ({
       } else {
         try {
           const user = await signInStaff(identifier, pass);
+          const acc = await getStaffAccess(user.email);
+          if (acc && (acc.role === 'owner' || acc.role === 'broker' || acc.role === 'coordinator')) {
+            setSuccessMsg('أهلاً بيك! جاري فتح بوابتك...');
+            setTimeout(() => { onPortalLogin?.(acc); onClose(); }, 400);
+            return;
+          }
           const role = await getStaffRole(user.email);
           if (role === 'admin') {
             try { localStorage.removeItem('hadaba_current_client'); } catch { /* ignore */ }

@@ -6,7 +6,7 @@
 */
 
 // ======= إعدادات Cloudinary =======
-export const CLOUDINARY_CLOUD_NAME = 'x7ls7cua';   // من Dashboard ← Cloud name
+export const CLOUDINARY_CLOUD_NAME = 'اكتب_اسم_الحساب_هنا';   // من Dashboard ← Cloud name
 export const CLOUDINARY_UPLOAD_PRESET = 'elsab3_unsigned';      // من Settings ← Upload ← Upload presets
 // ===================================
 
@@ -32,7 +32,7 @@ async function send(payload: Blob | string, folder: string, id: string, kind: 'i
 
 /** رفع ملف (صورة أو فيديو) والرجوع برابط مباشر */
 export async function uploadFile(file: File, folder: string, id: string): Promise<string> {
-  const kind = file.type.startsWith('video') ? 'video' : 'image';
+  const kind = file.type.startsWith('video') || file.type.startsWith('audio') ? 'video' : 'image';
   return send(file, folder, id, kind);
 }
 

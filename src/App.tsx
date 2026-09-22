@@ -1,4 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { PartnerPortal } from './components/portal/PartnerPortal';
+import { OwnerPortalPromo } from './components/OwnerPortalPromo';
+import { CoordinatorPanel } from './components/portal/CoordinatorPanel';
+import { FieldFeedbackPage } from './components/portal/FieldFeedbackPage';
+import { SalesFeedbackInbox } from './components/portal/SalesFeedbackInbox';
+import { getStaffAccess, StaffAccess } from './services/firebaseService';
+import { linkPropertyToOwner } from './services/portalService';
 import { 
   Property, 
   FilterState, 
@@ -172,6 +179,21 @@ export default function App() {
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
   const [isQuotaBannerDismissed, setIsQuotaBannerDismissed] = useState<boolean>(false);
+
+  // حساب الشخص الداخل (مالك/بروكر/مسؤولة ملاك/سيلز/أدمن) والبوابة المفتوحة
+  const [staffAccess, setStaffAccess] = useState<StaffAccess | null>(null);
+  const [activePortal, setActivePortal] = useState<null | 'owner' | 'broker' | 'coordinator' | 'sales_feedback'>(null);
+  const [feedbackTripId] = useState<string | null>(() => { try { return new URLSearchParams(window.location.search).get('fb'); } catch { return null; } });
+  const [showFieldFeedback, setShowFieldFeedback] = useState<boolean>(!!feedbackTripId);
+  const myPortalLabel = staffAccess?.role === 'owner' ? 'بوابة المالك'
+    : staffAccess?.role === 'broker' ? 'بوابة البروكر'
+    : staffAccess?.role === 'coordinator' ? 'الملاك والمعاينات'
+    : staffAccess?.role === 'admin' ? 'الملاك والمعاينات'
+    : staffAccess?.role === 'sales' ? 'فيدباك المعاينات' : undefined;
+  const openMyPortal = () => {
+    const r = staffAccess?.role;
+    setActivePortal(r === 'owner' ? 'owner' : r === 'broker' ? 'broker' : r === 'sales' ? 'sales_feedback' : r === 'coordinator' || r === 'admin' ? 'coordinator' : null);
+  };
 
   // بيتغير مع كل تسجيل دخول/خروج، عشان الاشتراكات تتعمل من جديد بصلاحيات الحساب الحالي
   const [authKey, setAuthKey] = useState<string>('init');
@@ -363,6 +385,7 @@ export default function App() {
   useEffect(() => {
     const unsub = subscribeToStaffAuth(async (user) => {
       setAuthKey(user && !user.isAnonymous ? user.uid : 'guest');
+      setStaffAccess(user && !user.isAnonymous ? await getStaffAccess(user.email) : null);
       if (!user || user.isAnonymous) {
         setIsAdminLoggedIn(false);
         setIsSalesLoggedIn(false);
@@ -1354,11 +1377,9 @@ export default function App() {
       view: 'إطلالة مفتوحة على الشارع الرئيسي',
       deliveryDate: 'استلام فوري',
       paymentMethod: sub.paymentMethod || 'cash',
-      images: sub.images && sub.images.length > 0 ? sub.images : [
-        'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
-        'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=80',
-        'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80'
-      ],
+      images: sub.images || [],
+      ownerEmail: sub.ownerEmail,
+      brokerId: sub.brokerId,
       videoUrl: sub.videoUrl,
       features: [
         'معاينة فورية واستلام فوري',
@@ -1385,6 +1406,8 @@ export default function App() {
       return updated;
     });
     savePropertyToDb(newProperty).catch(err => console.error(err));
+    // ربط الوحدة بحساب المالك في البوابة
+    if (sub.ownerEmail && !sub.brokerId) linkPropertyToOwner(sub.ownerEmail, newProperty.code).catch(err => console.error(err));
 
     const approvedSub = { ...sub, status: 'approved' as const };
     setOwnerSubmissions((prev) =>
@@ -1627,15 +1650,8 @@ export default function App() {
         onOpenGuide={() => setIsDistrictGuideOpen(true)}
         onOpenPriceMap={() => setIsPriceMapOpen(true)}
         onOpenValuation={() => setIsValuationOpen(true)}
-        onOpenPartnerPortals={() => {
-          setPartnerPortalInitialTab('landlord');
-          setIsPartnerPortalsOpen(true);
-        }}
-        onOpenLandlordPortal={() => {
-          setPartnerPortalInitialTab('landlord');
-          setIsPartnerPortalsOpen(true);
-        }}
-        onOpenBrokerPortal={() => setIsBrokerPortalOpen(true)}
+        myPortalLabel={myPortalLabel}
+        onOpenMyPortal={myPortalLabel ? openMyPortal : undefined}
         onOpenClosedDeals={() => {
           const el = document.getElementById('closed-deals-section');
           if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -1893,6 +1909,7 @@ export default function App() {
         )}
 
         {/* Recently Closed Deals Section (صفقات حقيقية اتقفلت) */}
+        <OwnerPortalPromo onSubmit={() => setIsResaleSubmitOpen(true)} onLogin={() => setIsClientAuthOpen(true)} />
         <RecentlyClosedDealsSection
           closedDeals={closedDeals}
           onSelectNeighborhood={(n) => {
@@ -2136,6 +2153,24 @@ export default function App() {
       )}
 
       {/* 11. Client Registration & Preferences Modal (Smart Unified Login) */}
+      {activePortal === 'owner' && staffAccess && (
+        <PartnerPortal mode="owner" access={staffAccess} properties={properties} logoUrl={customLogoUrl}
+          onClose={() => setActivePortal(null)} onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
+          onAddUnit={() => setIsResaleSubmitOpen(true)} />
+      )}
+      {activePortal === 'broker' && staffAccess && (
+        <PartnerPortal mode="broker" access={staffAccess} properties={properties} logoUrl={customLogoUrl}
+          onClose={() => setActivePortal(null)} onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
+          onAddUnit={() => setIsResaleSubmitOpen(true)} />
+      )}
+      {activePortal === 'coordinator' && staffAccess && (
+        <CoordinatorPanel name={staffAccess.name || ''} isAdmin={staffAccess.role === 'admin'} properties={properties} submissions={ownerSubmissions} logoUrl={customLogoUrl}
+          onApproveSubmission={(s) => handleApproveSubmission(s)} onRejectSubmission={handleRejectSubmission}
+          onClose={() => setActivePortal(null)} onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }} />
+      )}
+      <SalesFeedbackInbox isOpen={activePortal === 'sales_feedback'} onClose={() => setActivePortal(null)} />
+      {showFieldFeedback && feedbackTripId && <FieldFeedbackPage tripId={feedbackTripId} onClose={() => { setShowFieldFeedback(false); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }} />}
+
       <ClientAuthModal
         isOpen={isClientAuthOpen}
         onClose={() => setIsClientAuthOpen(false)}
@@ -2149,6 +2184,11 @@ export default function App() {
         onLoginSalesSuccess={(agent) => {
           handleSalesLoginSuccess(agent);
           setIsClientAuthOpen(false);
+        }}
+        onPortalLogin={(acc) => {
+          setStaffAccess(acc);
+          setIsClientAuthOpen(false);
+          setActivePortal(acc.role === 'owner' ? 'owner' : acc.role === 'broker' ? 'broker' : 'coordinator');
         }}
         salesAgents={salesAgents}
         adminCredentials={adminCredentials}

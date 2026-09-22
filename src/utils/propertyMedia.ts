@@ -57,58 +57,14 @@ ALL_HADABA_PROPERTIES.forEach(p => {
  * 3. Master catalog original photos matching this ID or Code
  * 4. Deterministic luxury fallback gallery matching property ID/title
  */
-export function hydratePropertyMedia(property: Property, cachedProperty?: Property): Property {
+export function hydratePropertyMedia(property: Property, _cachedProperty?: Property): Property {
+  // الصور الحقيقية اللي على السيرفر بس: مفيش صور بديلة ولا صور قديمة من ذاكرة المتصفح
   const currentImages = Array.isArray(property.images)
-    ? property.images.filter(img => typeof img === 'string' && img.trim().length > 0)
+    ? property.images.filter(img => typeof img === 'string' && img.trim().length > 0 && !img.includes('images.unsplash.com'))
     : [];
-
-  const cachedImages = cachedProperty && Array.isArray(cachedProperty.images)
-    ? cachedProperty.images.filter(img => typeof img === 'string' && img.trim().length > 0)
-    : [];
-
-  // Check if current property already has valid photos
-  if (currentImages.length > 0) {
-    return {
-      ...property,
-      images: currentImages,
-      videoUrl: property.videoUrl || cachedProperty?.videoUrl || ''
-    };
-  }
-
-  // Check if locally cached version has user uploaded photos
-  if (cachedImages.length > 0) {
-    return {
-      ...property,
-      images: cachedImages,
-      videoUrl: property.videoUrl || cachedProperty?.videoUrl || ''
-    };
-  }
-
-  // Look up in original master catalog
-  const fromMaster = (property.id && masterById.get(property.id)) ||
-                     (property.code && masterByCode.get(property.code.toUpperCase()));
-
-  if (fromMaster && Array.isArray(fromMaster.images) && fromMaster.images.length > 0) {
-    return {
-      ...property,
-      images: [...fromMaster.images],
-      videoUrl: property.videoUrl || fromMaster.videoUrl || ''
-    };
-  }
-
-  // Fallback to deterministic gallery based on property code/id hash
-  const hashStr = property.id || property.code || property.title || '1';
-  let hash = 0;
-  for (let i = 0; i < hashStr.length; i++) {
-    hash = (hash << 5) - hash + hashStr.charCodeAt(i);
-    hash |= 0;
-  }
-  const galleryIndex = Math.abs(hash) % LUXURY_FALLBACK_GALLERIES.length;
-  const fallbackGallery = LUXURY_FALLBACK_GALLERIES[galleryIndex];
-
   return {
     ...property,
-    images: [...fallbackGallery],
+    images: currentImages,
     videoUrl: property.videoUrl || ''
   };
 }
