@@ -257,11 +257,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م' };
   const deleteRequests = isAdmin ? leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved) : [];
   const [moveComment, setMoveComment] = useState('');
+  const [moveNext, setMoveNext] = useState<WhenValue | null>(null);
 
   if (!isOpen) return null;
 
   // Quick Move Status Handler
-  const handleMoveStatus = (lead: Lead, newStatus: LeadStatus, comment = '') => {
+  const handleMoveStatus = (lead: Lead, newStatus: LeadStatus, comment = '', next: WhenValue | null = null) => {
     const timestamp = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) + ' - ' + new Date().toLocaleDateString('ar-EG');
     const stageLabel = CRM_PIPELINE_STAGES.find((s) => s.id === newStatus)?.label || newStatus;
     const noteText = `[${timestamp}] تم نقل المرحلة إلى: ${stageLabel}${comment ? ' · ' + comment : ''}`;
@@ -271,9 +272,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       status: newStatus,
       lastContactDate: new Date().toISOString(),
       notes: [noteText, ...(lead.notes || [])],
-      activity: [{ at: Date.now(), by: currentAgent?.name || 'الفريق', outcome: `نقل إلى: ${stageLabel}`, comment }, ...(lead.activity || [])].slice(0, 80),
+      activity: [{ at: Date.now(), by: currentAgent?.name || 'الفريق', outcome: `نقل إلى: ${stageLabel}`, comment, nextAt: next?.at }, ...(lead.activity || [])].slice(0, 80),
+      nextActionAt: newStatus === 'closed' || newStatus === 'lost' ? null : next?.at ?? null,
+      followUpScheduledAt: next?.label || lead.followUpScheduledAt,
+      followUpNote: comment,
+      followUpStatus: newStatus === 'closed' || newStatus === 'lost' ? 'completed' : 'pending',
     };
-    setMoveTarget(null); setMoveComment('');
+    setMoveTarget(null); setMoveComment(''); setMoveNext(null);
 
     onUpdateLead(updatedLead);
     setLeadToChangeStatus(null);
@@ -1415,7 +1420,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               <div className="space-y-2 pt-2 border-t border-white/10">
                 <textarea value={moveComment} onChange={(e) => setMoveComment(e.target.value)} rows={2} autoFocus
                   placeholder="اكتب اللي حصل مع العميل (إجباري)" className="w-full rounded-xl bg-[#191B1F] border border-white/10 p-3 text-sm text-white" />
-                <button type="button" disabled={!moveComment.trim()} onClick={() => handleMoveStatus(leadToChangeStatus, moveTarget, moveComment.trim())}
+                {moveTarget !== 'closed' && moveTarget !== 'lost' && (
+                  <div className="rounded-2xl bg-white p-3 text-[#141414]"><WhenPicker value={moveNext} onChange={setMoveNext} label="ميعاد المتابعة الجاية (إجباري)" /></div>
+                )}
+                <button type="button" disabled={!moveComment.trim() || (moveTarget !== 'closed' && moveTarget !== 'lost' && !moveNext)} onClick={() => handleMoveStatus(leadToChangeStatus, moveTarget, moveComment.trim(), moveNext)}
                   className="w-full py-3 rounded-xl bg-[#D9B864] text-[#141414] font-bold disabled:opacity-40">
                   نقل إلى {CRM_PIPELINE_STAGES.find((x) => x.id === moveTarget)?.label}
                 </button>

@@ -21,7 +21,9 @@ export const LeadActionPanel: React.FC<{
   const act = (lead.activity || []) as LeadActivity[];
   const nextAt = lead.nextActionAt || undefined;
   const label = (id: string) => stages.find((s) => s.id === id)?.label || id;
-  const closing = stage === ('closed_won' as LeadStatus) || stage === ('lost' as LeadStatus) || /مغلقة|غير مهتم/.test(label(stage));
+  // الصفقة المغلقة والمؤجل/غير مهتم بس هما اللي مش محتاجين ميعاد جاي
+  const closing = stage === ('closed' as LeadStatus) || stage === ('lost' as LeadStatus);
+  const canSave = !!comment.trim() && (closing || !!next);
 
   const save = () => {
     const moved = stage !== lead.status;
@@ -51,11 +53,11 @@ export const LeadActionPanel: React.FC<{
         {stages.map((s) => <option key={s.id} value={s.id}>{s.id === lead.status ? `${s.label} (الحالية)` : `نقل إلى: ${s.label}`}</option>)}
       </select>
       <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="اكتب اللي حصل (إجباري)" className="w-full rounded-xl bg-white border border-[#E4DFD4] p-3 text-sm" />
-      {!closing && <WhenPicker value={next} onChange={setNext} label="ميعاد الأكشن الجاي (اختياري)" />}
-      <button type="button" disabled={!comment.trim()} onClick={save} className="w-full rounded-xl py-3 bg-[#141414] text-white font-bold disabled:opacity-40">
+      {!closing && <WhenPicker value={next} onChange={setNext} label="ميعاد المتابعة الجاية (إجباري)" />}
+      <button type="button" disabled={!canSave} onClick={save} className="w-full rounded-xl py-3 bg-[#141414] text-white font-bold disabled:opacity-40">
         {stage !== lead.status ? `نقل إلى ${label(stage)} وحفظ` : 'حفظ الكومنت'}
       </button>
-      {!comment.trim() && <p className="text-[11px] text-[#8C877D]">مينفعش تنقل أو تحفظ من غير كومنت</p>}
+      {!canSave && <p className="text-[11px] text-[#C2412D]">{!comment.trim() ? 'اكتب اللي حصل الأول' : 'حدد ميعاد المتابعة الجاية'}{closing ? '' : ' · (الصفقة المغلقة والمؤجل بس من غير ميعاد)'}</p>}
       {saved && <p className="text-sm font-bold text-[#1E7A45]">✓ {saved}</p>}
       {act.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-[#E8D3A6]">
