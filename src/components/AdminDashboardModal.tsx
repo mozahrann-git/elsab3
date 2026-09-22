@@ -75,6 +75,8 @@ import {
 } from 'lucide-react';
 import { formatPrice, formatNumber, generateWhatsAppLink, generateCallLink, compressImage } from '../utils/helpers';
 import { uploadFile, uploadDataUrl } from '../services/mediaStorage';
+import { AccountsManagerModal } from './AccountsManagerModal';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { LionLogo } from './LionLogo';
 import { ExcelImportModal } from './ExcelImportModal';
 import { downloadExcelTemplate, exportPropertiesToExcel } from '../utils/excelHelper';
@@ -170,6 +172,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onUpdateBrokersList,
   onInspectBroker,
 }) => {
+  const [isAccountsOpen, setIsAccountsOpen] = useState(false);
+  const [isChangePassOpen, setIsChangePassOpen] = useState(false);
+
   const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings'>('manage');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterNeighborhood, setFilterNeighborhood] = useState<string>('all');
@@ -521,7 +526,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   }, [initialEditingProperty]);
 
   // Settings State
-  const [newEmail, setNewEmail] = useState(adminCredentials?.email || 'admin@lion-estates.com');
+  const [newEmail, setNewEmail] = useState(adminCredentials?.email || 'admin@elsaba.com');
   const [newPassword, setNewPassword] = useState('');
   const [bannerUrlInput, setBannerUrlInput] = useState('');
   const [logoUrlInput, setLogoUrlInput] = useState('');
@@ -1274,6 +1279,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <span>إكسيل</span>
               </button>
 
+              <button
+                onClick={() => setIsAccountsOpen(true)}
+                className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 bg-[#FAF4E5] border border-[#E9DFCA] text-[#A07A26] text-xs"
+                title="الإيميلات والباسووردات لكل الفريق والملاك والبروكرز"
+              >
+                <span>الحسابات</span>
+              </button>
+              <button
+                onClick={() => setIsChangePassOpen(true)}
+                className="hidden sm:flex px-3 py-1.5 rounded-xl font-bold items-center gap-1.5 bg-[#F6F4EF] border border-[#ECE8DF] text-[#141414] text-xs"
+              >
+                <span>باسووردي</span>
+              </button>
               <button
                 onClick={onClose}
                 className="px-3.5 py-1.5 bg-[#141414] hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
@@ -3802,6 +3820,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
         </div>
       </div>
+      <AccountsManagerModal isOpen={isAccountsOpen} onClose={() => setIsAccountsOpen(false)} showToast={showToast} />
+      <ChangePasswordModal isOpen={isChangePassOpen} onClose={() => setIsChangePassOpen(false)} />
     </div>
   );
 };

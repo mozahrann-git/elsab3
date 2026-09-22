@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { X, Mail, Lock, LogIn, AlertCircle, Eye, EyeOff, LogOut } from 'lucide-react';
 import { auth, signInStaff, getStaffAccess, signOutToGuest, StaffAccess } from '../services/firebaseService';
 
@@ -140,14 +141,23 @@ export const PortalAuthGate: React.FC<Props> = ({ isOpen, role, onClose, childre
 };
 
 /** شريط صغير فوق البوابة: مين داخل + خروج */
-export const PortalSessionBar: React.FC<{ access: StaffAccess; onLogout: () => void }> = ({ access, onLogout }) => (
+export const PortalSessionBar: React.FC<{ access: StaffAccess; onLogout: () => void }> = ({ access, onLogout }) => {
+  const [passOpen, setPassOpen] = useState(false);
+  return (
+  <>
+  <ChangePasswordModal isOpen={passOpen} onClose={() => setPassOpen(false)} />
   <div className="fixed top-0 inset-x-0 z-[70] flex items-center justify-between gap-3 px-4 py-2 bg-[#141414] text-white text-xs" dir="rtl">
     <span>
       داخل كـ <b>{access.name || access.email}</b>
       {access.role === 'admin' && <span className="mr-2 px-2 py-0.5 rounded bg-[#C9A04A] text-[#141414] font-bold">أدمن · مراجعة</span>}
     </span>
-    <button onClick={onLogout} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
-      <LogOut size={13} />خروج
-    </button>
+    <span className="flex gap-2">
+      <button onClick={() => setPassOpen(true)} className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">تغيير الباسوورد</button>
+      <button onClick={onLogout} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
+        <LogOut size={13} />خروج
+      </button>
+    </span>
   </div>
-);
+  </>
+  );
+};
