@@ -106,10 +106,10 @@ export function calculatePropertyValuation(
   // Floor adjustment
   if (params.floorType === 'ground_garden') {
     baseMeterPrice *= 1.08;
-  } else if (params.floorType === 'floor_1_3') {
-    baseMeterPrice *= 1.05; // prime floors
-  } else if (params.floorType === 'higher') {
-    baseMeterPrice *= 0.94; // high floor without roof
+  } else if (params.floorType === 'floor_1_4') {
+    baseMeterPrice *= 1.05; // الأدوار المتكررة المرخّصة
+  } else if (params.floorType === 'floor_5_7') {
+    baseMeterPrice -= 3000; // أدوار مخالفة للترخيص: أقل 3000 للمتر
   }
 
   // Features adjustment
@@ -118,6 +118,7 @@ export function calculatePropertyValuation(
   if (params.features.includes('registered_contract')) baseMeterPrice += 500;
   if (params.features.includes('facade')) baseMeterPrice += 300;
 
+  if (baseMeterPrice < 5000) baseMeterPrice = 5000;
   const estimatedTotal = Math.round(baseMeterPrice * params.area);
   const minPrice = Math.round((estimatedTotal * 0.95) / 50000) * 50000;
   const maxPrice = Math.round((estimatedTotal * 1.06) / 50000) * 50000;

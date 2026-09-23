@@ -398,29 +398,19 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                       )}
                     </div>
 
-                    {/* Right Mark as Done & Snooze */}
+                    {/* الأكشن بيتفتح في ميعاده بس، وبيفتح ملف العميل عشان يكتب ويحدد الجاي */}
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleSnooze(alert, '+1h')}
-                        className="px-2.5 py-1.5 bg-white border border-[#ECE8DF] hover:bg-[#FAF9F5] text-[#6B665C] rounded-lg text-xs font-medium cursor-pointer"
-                        title="تأجيل ساعة"
-                      >
-                        +ساعة
-                      </button>
-                      <button
-                        onClick={() => handleSnooze(alert, '+tomorrow')}
-                        className="px-2.5 py-1.5 bg-white border border-[#ECE8DF] hover:bg-[#FAF9F5] text-[#6B665C] rounded-lg text-xs font-medium cursor-pointer"
-                        title="تأجيل لغداً"
-                      >
-                        +غداً
-                      </button>
-                      <button
-                        onClick={() => handleMarkAsDone(alert)}
-                        className="px-4 py-2 bg-[#A07A26] hover:bg-[#8B681D] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                      >
-                        <Check size={14} />
-                        <span>تمت بنجاح</span>
-                      </button>
+                      {alert.isOverdue || alert.urgency === 'urgent' ? (
+                        <button
+                          onClick={() => { const l = leads.find((x) => x.id === alert.leadId); if (l) { onSelectLead(l); onClose(); } }}
+                          className="px-4 py-2 bg-[#A07A26] hover:bg-[#8B681D] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                        >
+                          <Check size={14} />
+                          <span>سجّل النتيجة والأكشن الجاي</span>
+                        </button>
+                      ) : (
+                        <span className="px-3 py-2 rounded-xl bg-[#F6F4EF] text-[#8C877D] text-xs font-bold">يفتح في ميعاده · {alert.relativeTimeText}</span>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -173,6 +173,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onInspectBroker,
 }) => {
   const [isAccountsOpen, setIsAccountsOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [isChangePassOpen, setIsChangePassOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings'>('manage');
@@ -1014,7 +1015,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         {/* ================================================================ */}
         {/* DESKTOP & TABLET SIDEBAR (Hidden on mobile)                       */}
         {/* ================================================================ */}
-        <aside className="hidden md:flex flex-col justify-between w-64 lg:w-72 bg-white border-l border-[#ECE8DF] shrink-0 h-full z-20 shadow-sm">
+        {mobileNavOpen && <button aria-label="إغلاق القائمة" className="md:hidden fixed inset-0 z-30 bg-black/50" onClick={() => setMobileNavOpen(false)} />}
+        <aside onClick={() => setMobileNavOpen(false)} className={`${mobileNavOpen ? 'fixed inset-y-0 right-0 z-40 flex w-72 shadow-2xl' : 'hidden'} md:relative md:flex md:w-64 lg:w-72 flex-col justify-between bg-white border-l border-[#ECE8DF] shrink-0 h-full shadow-sm`}>
           {/* Top Brand Info */}
           <div className="p-5 border-b border-[#ECE8DF]/80">
             <div className="flex items-center gap-3">
@@ -1279,6 +1281,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <span>إكسيل</span>
               </button>
 
+              <button
+                onClick={() => setMobileNavOpen(true)}
+                className="md:hidden px-3 py-1.5 rounded-xl font-bold bg-[#141414] text-white text-xs"
+                aria-label="القائمة"
+              >
+                ☰ القائمة
+              </button>
               <button
                 onClick={() => setIsAccountsOpen(true)}
                 className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 bg-[#FAF4E5] border border-[#E9DFCA] text-[#A07A26] text-xs"

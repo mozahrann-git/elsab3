@@ -1751,7 +1751,7 @@ export default function App() {
               if (el) el.scrollIntoView({ behavior: 'smooth' });
             }}
             onSelectSell={() => setIsResaleSubmitOpen(true)}
-            onSelectPriceMap={() => setIsPriceMapOpen(true)}
+            onSelectPriceMap={() => document.getElementById('districts-guide-section')?.scrollIntoView({ behavior: 'smooth' })}
           />
         </div>
       </div>
@@ -2187,12 +2187,12 @@ export default function App() {
       {activePortal === 'owner' && staffAccess && (
         <PartnerPortal mode="owner" access={staffAccess} properties={properties} logoUrl={customLogoUrl}
           onClose={() => setActivePortal(null)} onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
-          onAddUnit={() => setIsResaleSubmitOpen(true)} />
+          onAddUnit={() => { setActivePortal(null); setIsResaleSubmitOpen(true); }} />
       )}
       {activePortal === 'broker' && staffAccess && (
         <PartnerPortal mode="broker" access={staffAccess} properties={properties} logoUrl={customLogoUrl}
           onClose={() => setActivePortal(null)} onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
-          onAddUnit={() => setIsResaleSubmitOpen(true)} />
+          onAddUnit={() => { setActivePortal(null); setIsResaleSubmitOpen(true); }} />
       )}
       {activePortal === 'coordinator' && staffAccess && (
         <CoordinatorPanel name={staffAccess.name || ''} isAdmin={staffAccess.role === 'admin'} properties={properties} submissions={ownerSubmissions} logoUrl={customLogoUrl}

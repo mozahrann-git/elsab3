@@ -109,7 +109,7 @@ export const DistrictPage: React.FC<Props> = ({ name, stats, content, properties
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-8 -mt-6 pb-28 space-y-6 relative">
+      <main className="max-w-6xl mx-auto px-4 sm:px-8 -mt-6 pb-28 space-y-6 relative overflow-x-hidden">
         {/* الأرقام */}
         {s && s.count > 0 ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -137,7 +137,7 @@ export const DistrictPage: React.FC<Props> = ({ name, stats, content, properties
           </button>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-3 min-w-0">
           <div className="lg:col-span-2 space-y-6">
             {/* عن الحي */}
             {(edit || c.about) ? (
@@ -184,12 +184,12 @@ export const DistrictPage: React.FC<Props> = ({ name, stats, content, properties
           </div>
 
           {/* الجنب: مكان الحي بين الأحياء */}
-          <aside className="space-y-4 lg:sticky lg:top-6 self-start">
+          <aside className="space-y-4 lg:sticky lg:top-6 self-start min-w-0">
             <div className="rounded-2xl bg-white border border-[#ECE8DF] p-5 space-y-3">
               <p className="font-bold">مكانه بين الأحياء</p>
               {ladder.map((x) => (
                 <button key={x.name} onClick={() => x.name !== name && onOpenDistrict(x.name)} className={`w-full text-right space-y-1 ${x.name === name ? '' : 'opacity-70 hover:opacity-100'}`}>
-                  <div className="flex justify-between text-xs"><span className={x.name === name ? 'font-bold' : ''}>{x.name}</span><span className="font-mono">{f(x.avgPpm)}</span></div>
+                  <div className="flex justify-between items-baseline gap-2 text-xs"><span className={`truncate ${x.name === name ? 'font-bold' : ''}`}>{x.name}</span><span className="font-mono shrink-0">{f(x.avgPpm)}</span></div>
                   <div className="h-1.5 rounded-full bg-[#F0ECE4]"><div className="h-full rounded-full" style={{ width: `${(x.avgPpm / top) * 100}%`, background: x.name === name ? '#A07A26' : '#C9C4BA' }} /></div>
                 </button>
               ))}

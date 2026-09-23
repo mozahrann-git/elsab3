@@ -309,7 +309,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               {userDropdownOpen && (
-                <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-xl border border-[#ECE8DF] p-2 z-50 text-right">
+                <button aria-label="إغلاق" className="fixed inset-0 z-40 cursor-default" onClick={() => setUserDropdownOpen(false)} />
+              )}
+              {userDropdownOpen && (
+                <div className="absolute left-0 top-full mt-2 w-60 max-w-[86vw] bg-white rounded-2xl shadow-xl border border-[#ECE8DF] p-2 z-50 text-right">
                   {isAdminLoggedIn && (
                     <button
                       onClick={() => {

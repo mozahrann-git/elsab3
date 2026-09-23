@@ -25,7 +25,7 @@ export const PropertyValuationModal: React.FC<PropertyValuationModalProps> = ({
 }) => {
   const [neighborhood, setNeighborhood] = useState<HadabaWostaNeighborhood>('الحي الأول');
   const [area, setArea] = useState<number>(150);
-  const [floorType, setFloorType] = useState<'ground_garden' | 'floor_1_3' | 'floor_4_6' | 'higher'>('floor_1_3');
+  const [floorType, setFloorType] = useState<'ground_garden' | 'floor_1_4' | 'floor_5_7' | 'floor_5_7'>('floor_1_4');
   const [finishing, setFinishing] = useState<'super_lux' | 'semi_finished'>('super_lux');
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>(['elevator']);
   const [phone, setPhone] = useState<string>('');
@@ -152,12 +152,11 @@ export const PropertyValuationModal: React.FC<PropertyValuationModalProps> = ({
             {/* Floor selector */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-[#4A463F]">الدور</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {[
                   { key: 'ground_garden', label: 'أرضي بجاردن' },
-                  { key: 'floor_1_3', label: '1 - 3' },
-                  { key: 'floor_4_6', label: '4 - 6' },
-                  { key: 'higher', label: 'أعلى' }
+                  { key: 'floor_1_4', label: '1 - 4 (متكرر)' },
+                  { key: 'floor_5_7', label: '5 - 7 (مخالف)' }
                 ].map((item) => (
                   <button
                     key={item.key}
@@ -173,6 +172,9 @@ export const PropertyValuationModal: React.FC<PropertyValuationModalProps> = ({
                   </button>
                 ))}
               </div>
+              {floorType === 'floor_5_7' && (
+                <p className="text-[11px] text-[#9A2E1F] font-semibold">الأدوار 5 - 7 مخالفة للترخيص، فبتتحسب أقل بـ 3,000 ج.م للمتر.</p>
+              )}
             </div>
 
             {/* Finishing selector */}
