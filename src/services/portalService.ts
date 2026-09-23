@@ -82,7 +82,7 @@ function listen<T>(q: any, cb: (list: T[]) => void, sortKey: keyof T = 'createdA
     snap.forEach((d: any) => list.push({ id: d.id, ...d.data() } as T));
     list.sort((a: any, b: any) => (b[sortKey] || 0) - (a[sortKey] || 0));
     cb(list);
-  }, (err: any) => { console.warn('[Portal] listen error:', err?.code || err); cb([]); });
+  }, (err: any) => { console.warn('[Portal] listen error:', err?.code || err); /* بنسيب البيانات القديمة مكانها بدل ما تختفي */ });
 }
 
 /** المالك: معايناته وآراؤه بأكواد وحداته */

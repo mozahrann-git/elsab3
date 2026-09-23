@@ -185,12 +185,12 @@ export const DistrictPage: React.FC<Props> = ({ name, stats, content, properties
 
           {/* الجنب: مكان الحي بين الأحياء */}
           <aside className="space-y-4 lg:sticky lg:top-6 self-start min-w-0">
-            <div className="rounded-2xl bg-white border border-[#ECE8DF] p-5 space-y-3">
+            <div className="rounded-2xl bg-white border border-[#ECE8DF] p-5 space-y-3 overflow-hidden">
               <p className="font-bold">مكانه بين الأحياء</p>
               {ladder.map((x) => (
-                <button key={x.name} onClick={() => x.name !== name && onOpenDistrict(x.name)} className={`w-full text-right space-y-1 ${x.name === name ? '' : 'opacity-70 hover:opacity-100'}`}>
+                <button key={x.name} onClick={() => x.name !== name && onOpenDistrict(x.name)} className={`w-full max-w-full text-right space-y-1 overflow-hidden ${x.name === name ? '' : 'opacity-70 hover:opacity-100'}`}>
                   <div className="flex justify-between items-baseline gap-2 text-xs"><span className={`truncate ${x.name === name ? 'font-bold' : ''}`}>{x.name}</span><span className="font-mono shrink-0">{f(x.avgPpm)}</span></div>
-                  <div className="h-1.5 rounded-full bg-[#F0ECE4]"><div className="h-full rounded-full" style={{ width: `${(x.avgPpm / top) * 100}%`, background: x.name === name ? '#A07A26' : '#C9C4BA' }} /></div>
+                  <div className="h-1.5 w-full rounded-full bg-[#F0ECE4] overflow-hidden"><div className="h-full rounded-full" style={{ width: `${(x.avgPpm / top) * 100}%`, background: x.name === name ? '#A07A26' : '#C9C4BA' }} /></div>
                 </button>
               ))}
             </div>

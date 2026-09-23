@@ -97,8 +97,8 @@ export const Card: React.FC<{ className?: string; children: React.ReactNode; ton
   return <section className={`rounded-2xl border p-4 lg:p-5 flex flex-col gap-3 ${toneCls} ${className}`}>{children}</section>;
 };
 
-export const Chip: React.FC<{ tone: 'green' | 'red' | 'gold' | 'grey' | 'dark'; children: React.ReactNode }> = ({ tone, children }) => {
-  const c = { green: ['#EEF5F0', '#1E7A45'], red: ['#FBEDEA', '#C2412D'], gold: ['#EFE6D2', '#6E5418'], grey: ['#F0ECE4', '#6B665C'], dark: ['#141414', '#FFFFFF'] }[tone];
+export const Chip: React.FC<{ tone: 'green' | 'red' | 'gold' | 'grey' | 'dark' | 'blue'; children: React.ReactNode }> = ({ tone, children }) => {
+  const c = { green: ['#EEF5F0', '#1E7A45'], red: ['#FBEDEA', '#C2412D'], gold: ['#EFE6D2', '#6E5418'], grey: ['#F0ECE4', '#6B665C'], dark: ['#141414', '#FFFFFF'], blue: ['#E7EEF9', '#1F4E9C'] }[tone];
   return <span className="text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: c[0], color: c[1] }}>{children}</span>;
 };
 

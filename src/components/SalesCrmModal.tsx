@@ -48,6 +48,7 @@ import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { DailyQuest } from '../types';
 import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb } from '../services/crmBoardService';
+import { subscribeAllUnitViewings } from '../services/portalService';
 
 interface SalesCrmModalProps {
   isOpen: boolean;
@@ -252,6 +253,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [editBoard, setEditBoard] = useState<null | 'banner' | 'quests'>(null);
   const [draftBoard, setDraftBoard] = useState<CrmBoard>({});
   useEffect(() => subscribeCrmBoard(setBoard), []);
+  const [myViewings, setMyViewings] = useState<any[]>([]);
+  useEffect(() => subscribeAllUnitViewings(setMyViewings), []);
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const todayViewings = myViewings.filter((v) => (isAdmin || v.salesAgentId === currentAgent?.id) && v.createdAt >= startOfToday.getTime()).length;
+  const todayNewLeads = scopedLeads.filter((l) => {
+    const t = new Date(l.createdAt || l.lastContactDate || 0).getTime();
+    return t >= startOfToday.getTime();
+  }).length;
+  const todayDone = scopedLeads.filter((l) => (l.activity || []).some((a: any) => a.at >= startOfToday.getTime())).length;
   const questTemplate: DailyQuest[] = board.quests?.length ? board.quests : INITIAL_DAILY_QUESTS;
   const agentQuests: DailyQuest[] = questTemplate.map((t) => { const mine = (currentAgent?.activeQuests || []).find((q) => q.id === t.id); return { ...t, currentCount: mine?.currentCount || 0, isCompleted: (mine?.currentCount || 0) >= t.targetCount }; });
   const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م' };
@@ -631,6 +641,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           <div className="space-y-4 sm:space-y-5 flex-1 flex flex-col pt-1">
             
             {/* Urgent Broadcast Banner */}
+            {/* عدّاد النهارده */}
+            <div className="grid grid-cols-3 gap-2">
+              {[['ريكويست جديد النهارده', todayNewLeads, '#1F4E9C'], ['أكشن اتسجّل النهارده', todayDone, '#141414'], ['معايناتك النهارده', todayViewings, '#1E7A45']].map(([t, v, c]) => (
+                <div key={t as string} className="rounded-2xl bg-white border border-[#ECE8DF] p-3 text-center">
+                  <p className="text-2xl font-readex font-bold" style={{ color: c as string }}>{v as number}</p>
+                  <p className="text-[11px] text-[#6B665C]">{t as string}</p>
+                </div>
+              ))}
+            </div>
+
             {/* طلبات مسح الليدز (للأدمن) */}
             {deleteRequests.length > 0 && (
               <div className="bg-[#FBEDEA] border border-[#E9B8AE] rounded-2xl p-4 space-y-2">

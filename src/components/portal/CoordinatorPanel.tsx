@@ -139,20 +139,18 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; o
         }}>بلّغ {p?.brokerId ? 'البروكر' : 'المالك'}</Btn>
       </Card>
       <div className="lg:col-span-2 grid gap-3 content-start">
-        {openReqs.length > 0 && (
-          <Card tone="gold">
-            <p className="font-bold">طلبات معاينة من السيلز ({openReqs.length})</p>
-            {openReqs.map((r) => (
-              <div key={r.id} className="border-t border-[#E8D3A6] pt-2 flex flex-wrap justify-between items-center gap-2">
-                <div>
-                  <p className="font-bold text-sm">{r.propertyCode} · {r.propertyTitle}</p>
-                  <p className="text-xs text-[#6B665C]">السيلز: {r.requestingAgentName || '—'} · المالك: {owners[r.propertyId] || '—'} · العميل يفضّل: {r.clientPreferredTime}</p>
-                </div>
-                <Btn className="!py-2 text-xs" onClick={() => { setFromReq(r); setCode(r.propertyCode); setNote(r.clientNotes ? 'عميل من فريق السبع' : ''); window.scrollTo({ top: 0 }); }}>كلّمي المالك وحددي</Btn>
-              </div>
-            ))}
+        {openReqs.map((r) => (
+          <Card key={r.id} tone="gold">
+            <div className="flex flex-wrap justify-between items-center gap-2">
+              <span className="font-bold">{r.propertyCode} · {r.clientPreferredTime || 'من غير ميعاد'}</span>
+              <Chip tone="gold">طلب من السيلز · {since((r as any).createdAtTimestamp || Date.now())}</Chip>
+            </div>
+            <p className="text-sm text-[#6B665C]">
+              {r.propertyTitle} · السيلز: <b>{r.requestingAgentName || '—'}</b> · المالك: <b>{owners[r.propertyId] || '—'}</b>
+            </p>
+            <Btn onClick={() => { setFromReq(r); setCode(r.propertyCode); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>كلّمي المالك وحددي الميعاد</Btn>
           </Card>
-        )}
+        ))}
         {active.length === 0 && <p className="text-center text-sm text-[#6B665C] py-10">مفيش معاينات مفتوحة</p>}
         {active.map((v) => {
           const late = v.ownerStatus === 'pending' && Date.now() - v.lastNotifiedAt > 15 * 60000;
@@ -340,8 +338,8 @@ const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; onApprove: (s: OwnerS
       {!pend.length && <p className="lg:col-span-2 text-center text-sm text-[#6B665C] py-10">مفيش شقق جديدة</p>}
       {pend.map((s) => (
         <Card key={s.id}>
-          <div className="flex justify-between"><span className="font-bold">{s.area} م² · {s.neighborhood}</span><Chip tone="gold">{(s as any).brokerId ? 'من بروكر' : 'من مالك'}</Chip></div>
-          <p className="text-sm">{fmt(s.askingPrice)} ج.م · {s.ownerName}</p>
+          <div className="flex justify-between"><span className="font-bold">{s.area} م² · {s.neighborhood}</span><Chip tone={(s as any).brokerId ? 'blue' as any : 'gold'}>{(s as any).brokerId ? `بروكر: ${(s as any).brokerId}` : 'من مالك'}</Chip></div>
+          <p className="text-sm">{fmt(s.askingPrice)} ج.م · {(s as any).brokerId ? 'بعتها البروكر' : 'المالك'}: {s.ownerName}</p>
           {s.images?.length > 0 && <div className="flex gap-2 overflow-x-auto">{s.images.slice(0, 5).map((u) => <img key={u} src={u} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />)}</div>}
           <div className="grid grid-cols-3 gap-2">
             <Btn onClick={() => onApprove(s)} className="text-xs !px-2">انشر بكود</Btn>
