@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 import {
   UnitViewing, ChangeRequest, FieldAgent, FieldTrip, FieldFeedback, TripUnit,
   subscribeAllUnitViewings, subscribeAllChangeRequests, subscribeFieldAgents, subscribeTrips, subscribeFieldFeedback,
-  createUnitViewing, renotifyOwner, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
+  createUnitViewing, renotifyOwner, findBrokerContact, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
   saraConfirmFeedback, rejectFeedback,
 } from '../../services/portalService';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
@@ -129,6 +129,11 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; o
               scheduledText: time!.label, scheduledAt: time!.at, clientNote: note, ownerName: owners[p!.id] || '',
               sourceRequestId: fromReq?.id, salesAgentId: fromReq?.requestingAgentId, salesAgentName: fromReq?.requestingAgentName,
             });
+            // تبليغ فوري بالواتساب للمالك أو البروكر
+            const link = p!.brokerId
+              ? await findBrokerContact(p!.brokerId).then((b) => b?.phone ? wa(b.phone, `أهلاً ${b.name}، في طلب معاينة على وحدتك ${p!.code} ${time!.label}. ادخل بوابة البروكر على elsab3.com وأكّدها مع المالك. — سارة · السبع للعقارات`) : '')
+              : (owners[p!.id] !== undefined ? await fetchPropertyPrivateOwner(p!.id).then((d) => d?.ownerPhone ? wa(d.ownerPhone, `أهلاً ${d.ownerName || ''}، في معاينة على شقتك ${p!.code} ${time!.label}. أكّدها من بوابة الملاك على elsab3.com أو رد هنا. — سارة · السبع للعقارات`) : '') : '');
+            if (link) window.open(link, '_blank');
             setCode(''); setTime(null); setNote(''); setFromReq(null);
           } finally { setBusy(false); }
         }}>بلّغ {p?.brokerId ? 'البروكر' : 'المالك'}</Btn>

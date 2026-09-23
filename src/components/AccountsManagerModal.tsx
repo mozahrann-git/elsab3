@@ -122,7 +122,7 @@ export const AccountsManagerModal: React.FC<Props> = ({ isOpen, onClose, showToa
                     )}
                   </p>
                   {a.role === 'owner' && <p className="text-[11px] text-[#6B665C]">الوحدات: {codes || '—'}</p>}
-                  {a.role === 'broker' && <p className="text-[11px] text-[#6B665C]">رقم البروكر: {a.brokerId || '—'}</p>}
+                  {a.role === 'broker' && <p className="text-[11px] text-[#6B665C]">رقم البروكر: {a.brokerId || '—'}{(a as any).commission ? ` · عمولة ${(a as any).commission}%` : ''}</p>}
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => openEdit(a)} className="px-3 py-2 rounded-xl bg-[#F6F4EF] text-sm font-bold">تعديل</button>
@@ -153,6 +153,9 @@ export const AccountsManagerModal: React.FC<Props> = ({ isOpen, onClose, showToa
             <label className="block text-xs font-bold space-y-1">الموبايل<input className={input} dir="ltr" value={editing.phone || ''} onChange={(e) => f('phone', e.target.value)} /></label>
             {editing.role === 'owner' && (
               <label className="block text-xs font-bold space-y-1">أكواد وحداته (افصل بفاصلة)<input className={`${input} font-mono`} dir="ltr" value={(editing.propertyCodes as string) || ''} onChange={(e) => f('propertyCodes', e.target.value)} placeholder="H1128, H1622" /></label>
+            )}
+            {(editing.role === 'broker' || editing.role === 'owner') && (
+              <label className="block text-xs font-bold space-y-1">نسبة العمولة % (اختياري)<input className={input} dir="ltr" value={(editing as any).commission || ''} onChange={(e) => setEditing({ ...editing, commission: e.target.value } as any)} placeholder="2.5" /></label>
             )}
             {editing.role === 'broker' && (
               <label className="block text-xs font-bold space-y-1">رقم البروكر (brokerId)<input className={`${input} font-mono`} dir="ltr" value={editing.brokerId || ''} onChange={(e) => f('brokerId', e.target.value)} placeholder="broker_ahmed" /></label>

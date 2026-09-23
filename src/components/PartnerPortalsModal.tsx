@@ -1,37 +1,25 @@
 import React from 'react';
-import { LandlordPortalPage } from './LandlordPortalPage';
-import { PortalAuthGate, PortalSessionBar } from './PortalAuthGate';
 import { Property } from '../types';
+import { PortalAuthGate } from './PortalAuthGate';
+import { PartnerPortal } from './portal/PartnerPortal';
+import { signOutToGuest } from '../services/firebaseService';
 
-interface PartnerPortalsModalProps {
+/* بوابة المالك */
+interface Props {
   isOpen: boolean;
   onClose: () => void;
   properties: Property[];
-  onUpdatePropertyPrice?: (propertyId: string, newPrice: number) => void;
-  onTogglePropertyStatus?: (propertyId: string, isPaused: boolean) => void;
-  onAddNewProperty?: (newProp: Property) => void;
-  initialTab?: 'landlord' | 'broker';
-  onOpenSubmitUnit?: () => void;
-  onOpenValuation?: () => void;
+  logoUrl?: string;
+  onAddUnit?: () => void;
 }
 
-/* المالك بيدخل بإيميله، وبيشوف الوحدات المربوطة بيه في staff_access بس */
-export const PartnerPortalsModal: React.FC<PartnerPortalsModalProps> = (props) => (
-  <PortalAuthGate isOpen={props.isOpen} role="owner" onClose={props.onClose}>
-    {(access, logout) => {
-      const codes = (access.propertyCodes || []).map((c) => c.toUpperCase());
-      const mine =
-        access.role === 'admin'
-          ? props.properties
-          : props.properties.filter((p) => codes.includes(String((p as any).code || p.id).toUpperCase()) || codes.includes(String(p.id).toUpperCase()));
-      return (
-        <>
-          <PortalSessionBar access={access} onLogout={logout} />
-          <LandlordPortalPage {...props} properties={mine} />
-        </>
-      );
-    }}
+export const PartnerPortalsModal: React.FC<Props> = ({ isOpen, onClose, properties, logoUrl, onAddUnit }) => (
+  <PortalAuthGate isOpen={isOpen} role="owner" onClose={onClose}>
+    {(access) => (
+      <PartnerPortal mode="owner" access={access} properties={properties} logoUrl={logoUrl}
+        onClose={onClose}
+        onLogout={() => { signOutToGuest().catch(() => {}); onClose(); }}
+        onAddUnit={() => onAddUnit?.()} />
+    )}
   </PortalAuthGate>
 );
-
-export { LandlordPortalPage };

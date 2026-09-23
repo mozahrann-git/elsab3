@@ -2292,24 +2292,12 @@ export default function App() {
       {/* 16. Mobile-First Broker Portal Modal (Matching Screenshots) */}
       <BrokerPortalModal
         isOpen={isBrokerPortalOpen}
-        onClose={() => {
-          setIsBrokerPortalOpen(false);
-          setInspectingBrokerId(null);
-        }}
+        onClose={() => { setIsBrokerPortalOpen(false); setInspectingBrokerId(null); }}
         properties={properties}
-        onNotifyAdmin={(msg) => {
-          showToast(msg);
-        }}
-        showToast={showToast}
+        logoUrl={customLogoUrl}
+        onAddUnit={() => { setIsBrokerPortalOpen(false); setIsResaleSubmitOpen(true); }}
         inspectBrokerId={inspectingBrokerId}
-        onExitInspection={() => {
-          setInspectingBrokerId(null);
-          setIsBrokerPortalOpen(false);
-          setIsAdminDashboardOpen(true);
-        }}
-        brokersList={brokersList}
-        onUpdateBrokersList={handleUpdateBrokersList}
-        onViewingCompleted={handleViewingCompleted}
+        onExitInspection={() => { setInspectingBrokerId(null); setIsBrokerPortalOpen(false); }}
       />
 
       {/* 17. Landlord & Partner Portals Modal (Pricing Index & Viewing Feedbacks) */}
@@ -2317,15 +2305,8 @@ export default function App() {
         isOpen={isPartnerPortalsOpen}
         onClose={() => setIsPartnerPortalsOpen(false)}
         properties={properties}
-        initialTab={partnerPortalInitialTab}
-        onOpenSubmitUnit={() => {
-          setIsPartnerPortalsOpen(false);
-          setIsResaleSubmitOpen(true);
-        }}
-        onOpenValuation={() => {
-          setIsPartnerPortalsOpen(false);
-          setIsValuationOpen(true);
-        }}
+        logoUrl={customLogoUrl}
+        onAddUnit={() => { setIsPartnerPortalsOpen(false); setIsResaleSubmitOpen(true); }}
       />
 
       {/* Floating Toast Notification for Immediate User Feedback */}

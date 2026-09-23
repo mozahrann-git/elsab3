@@ -8,7 +8,7 @@
   change_requests/{id} طلب تعديل سعر/صور/إيقاف من المالك أو البروكر
 */
 import {
-  collection, doc, setDoc, updateDoc, onSnapshot, query, where, arrayUnion, getDoc,
+  collection, doc, setDoc, updateDoc, onSnapshot, query, where, arrayUnion, getDoc, getDocs,
 } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { db, auth, cleanFirestoreData, savePropertyPrivateOwner } from './firebaseService';
@@ -303,4 +303,18 @@ export async function salesConfirmFeedback(f: FieldFeedback, agents: FieldAgent[
   });
   const a = agents.find((x) => x.id === f.agentId);
   if (a) await updateDoc(doc(db, 'field_agents', a.id), { feedbackCount: (a.feedbackCount || 0) + 1 });
+}
+
+/** رقم البروكر من حسابه (للتبليغ بالواتساب) */
+export async function findBrokerContact(brokerId: string): Promise<{ name: string; phone: string } | null> {
+  try {
+    const snap = await getDocs(query(collection(db, 'staff_access'), where('brokerId', '==', brokerId)));
+    const d = snap.docs[0]?.data() as any;
+    return d ? { name: d.name || '', phone: d.phone || '' } : null;
+  } catch { return null; }
+}
+
+/** البروكر بيحدّث صور وحدته مباشرة من غير مراجعة */
+export async function brokerUpdateUnitImages(propertyId: string, images: string[]) {
+  await updateDoc(doc(db, 'properties', propertyId), { images });
 }

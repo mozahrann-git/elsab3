@@ -1,79 +1,42 @@
 import React from 'react';
-import { BrokerPortalPage } from './BrokerPortalPage';
-import { PortalAuthGate, PortalSessionBar } from './PortalAuthGate';
-import { Property, BrokerProfile, ViewingRequest } from '../types';
+import { Property } from '../types';
+import { PortalAuthGate } from './PortalAuthGate';
+import { PartnerPortal } from './portal/PartnerPortal';
+import { StaffAccess, signOutToGuest } from '../services/firebaseService';
 
-interface BrokerPortalModalProps {
+/* بوابة البروكر: نفس هيكل بوابة المالك، بأوامر البروكر */
+interface Props {
   isOpen: boolean;
   onClose: () => void;
-  properties?: Property[];
-  onNotifyAdmin?: (message: string) => void;
-  showToast?: (msg: string) => void;
-  inspectBrokerId?: string | null;
+  properties: Property[];
+  logoUrl?: string;
+  onAddUnit?: () => void;
+  inspectBrokerId?: string | null;   // الأدمن بيراجع بروكر معيّن
   onExitInspection?: () => void;
-  brokersList?: BrokerProfile[];
-  onUpdateBrokersList?: (brokers: BrokerProfile[]) => void;
-  onViewingCompleted?: (request: ViewingRequest, outcomeFeedback: string, viewingOutcome: string) => void;
 }
 
-export const BrokerPortalModal: React.FC<BrokerPortalModalProps> = ({
-  isOpen,
-  onClose,
-  properties = [],
-  onNotifyAdmin,
-  showToast,
-  inspectBrokerId,
-  onExitInspection,
-  brokersList,
-  onUpdateBrokersList,
-  onViewingCompleted
-}) => {
-  // الأدمن وهو بيراجع بروكر معيّن من لوحة الإدارة مش محتاج بوابة الدخول
+export const BrokerPortalModal: React.FC<Props> = ({ isOpen, onClose, properties, logoUrl, onAddUnit, inspectBrokerId, onExitInspection }) => {
+  if (!isOpen) return null;
+
+  // مراجعة الإدارة: بتدخل على بوابة البروكر من غير تسجيل دخول تاني
   if (inspectBrokerId) {
+    const access: StaffAccess = { email: '', role: 'admin', name: `مراجعة الإدارة · ${inspectBrokerId}`, brokerId: inspectBrokerId, propertyCodes: [] };
     return (
-      <BrokerPortalPage
-        isOpen={isOpen}
-        onClose={onClose}
-        properties={properties}
-        onNotifyAdmin={onNotifyAdmin}
-        showToast={showToast}
-        inspectBrokerId={inspectBrokerId}
-        onExitInspection={onExitInspection}
-        brokersList={brokersList}
-        onUpdateBrokersList={onUpdateBrokersList}
-        onViewingCompleted={onViewingCompleted}
-      />
+      <PartnerPortal mode="broker" access={access} properties={properties} logoUrl={logoUrl}
+        onClose={() => { onExitInspection?.(); onClose(); }}
+        onLogout={() => { onExitInspection?.(); onClose(); }}
+        onAddUnit={() => onAddUnit?.()} />
     );
   }
 
-  // البروكر بيدخل بإيميله، وبيشوف الوحدات المربوطة برقم البروكر بتاعه بس
   return (
     <PortalAuthGate isOpen={isOpen} role="broker" onClose={onClose}>
-      {(access, logout) => {
-        const mine =
-          access.role === 'admin' || !access.brokerId
-            ? properties
-            : properties.filter((p) => (p as any).brokerId === access.brokerId);
-        return (
-          <>
-            <PortalSessionBar access={access} onLogout={logout} />
-            <BrokerPortalPage
-              isOpen={isOpen}
-              onClose={onClose}
-              properties={mine}
-              onNotifyAdmin={onNotifyAdmin}
-              showToast={showToast}
-              inspectBrokerId={access.brokerId || null}
-              onExitInspection={onExitInspection}
-              brokersList={brokersList}
-              onUpdateBrokersList={onUpdateBrokersList}
-              onViewingCompleted={onViewingCompleted}
-            />
-          </>
-        );
-      }}
+      {(access) => (
+        <PartnerPortal mode="broker" access={access} properties={properties} logoUrl={logoUrl}
+          onClose={onClose}
+          onLogout={() => { signOutToGuest().catch(() => {}); onClose(); }}
+          onAddUnit={() => onAddUnit?.()} />
+      )}
     </PortalAuthGate>
   );
 };
-
-export { BrokerPortalPage };

@@ -8,7 +8,7 @@ import {
   subscribeViewingsByCodes, subscribeFeedbackByCodes, subscribeViewingsByBroker, subscribeFeedbackByBroker,
   subscribeMyChangeRequests, subscribeMySubmissions, respondToViewing, createChangeRequest,
   brokerSaveOwnerPhone, brokerMarkMessaged, brokerConfirmViewing,
-  BrokerFeedback, saveBrokerFeedback, subscribeMyBrokerFeedback,
+  BrokerFeedback, saveBrokerFeedback, subscribeMyBrokerFeedback, brokerUpdateUnitImages,
 } from '../../services/portalService';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { ChangePasswordModal } from '../ChangePasswordModal';
@@ -31,6 +31,7 @@ interface Props {
 }
 
 const REMIND_MS = 15 * 60 * 1000;
+const rateOf = (a: StaffAccess) => { const n = parseFloat(String((a as any).commission || '').replace('%', '')); return isFinite(n) && n > 0 ? n / 100 : 0.025; };
 
 export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoUrl, onClose, onLogout, onAddUnit }) => {
   const isBroker = mode === 'broker';
@@ -80,7 +81,8 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
     ...(isBroker ? [{ key: 'viewings', label: 'الطلبات', icon: <CalendarClock size={18} />, badge: pending.length }] : []),
     { key: 'units', label: 'وحداتي', icon: <Home size={18} />, badge: isBroker ? 0 : pending.length },
     ...(!isBroker ? [{ key: 'viewings', label: 'المعاينات', icon: <CalendarClock size={18} /> }] : []),
-    { key: 'feedback', label: 'الآراء', icon: <MessageSquareText size={18} /> },
+    { key: 'feedback', label: isBroker ? 'الفيدباك' : 'الآراء', icon: <MessageSquareText size={18} /> },
+    ...(isBroker ? [{ key: 'money', label: 'العمولات', icon: <BadgeDollarSign size={18} /> }] : []),
     { key: 'account', label: 'حسابي', icon: <UserRound size={18} /> },
   ];
 
@@ -116,11 +118,16 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
       ) : tab === 'units' ? (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card tone="dark" className="lg:col-span-3">
-            <span className="text-sm text-[#D9B864]">على وحداتك لحد النهارده</span>
+            <span className="text-sm text-[#D9B864]">{isBroker ? 'شغلك لحد النهارده' : 'على وحداتك لحد النهارده'}</span>
             <div className="grid grid-cols-3 gap-2">
               <Stat n={fmt(weekViews)} l="مشاهدة" light />
               <Stat n={fmt(weekAsks)} l="طلب تفاصيل" color="#7ED3A0" light />
               <Stat n={String(viewings.length)} l="معاينة" color="#D9B864" light />
+              {isBroker && (() => {
+                const done = viewings.filter((v) => v.brokerConfirmedAt);
+                const avg = done.length ? Math.round(done.reduce((s2, v) => s2 + ((v.brokerConfirmedAt || 0) - v.createdAt), 0) / done.length / 60000) : 0;
+                return <Stat n={avg ? (avg < 60 ? `${avg} د` : `${Math.round(avg / 60)} س`) : '—'} l="متوسط ردّك" color="#7ED3A0" light />;
+              })()}
             </div>
           </Card>
           {mine.map((p) => {
@@ -166,8 +173,46 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
           {viewings.length === 0 && <p className="lg:col-span-2 text-center text-sm text-[#6B665C] py-10">مفيش معاينات لسه</p>}
           {viewings.map((v) => isBroker ? <BrokerViewing key={v.id} v={v} brokerId={access.brokerId || ''} brokerName={access.name || ''} sentFeedback={myFb.find((f) => f.viewingId === v.id)} /> : <OwnerViewing key={v.id} v={v} />)}
         </div>
+      ) : tab === 'money' ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card tone="dark" className="lg:col-span-3">
+            <span className="text-sm text-[#D9B864]">عمولتك المتوقعة لو كل وحداتك اتباعت</span>
+            <p className="text-4xl font-bold" style={{ fontFamily: "'Readex Pro', sans-serif" }}>{fmt(mine.reduce((s2, p) => s2 + p.price * rateOf(access), 0))} <span className="text-sm font-normal">ج.م</span></p>
+            <span className="text-xs text-[#A3A09A]">محسوبة {(rateOf(access) * 100).toFixed(2).replace(/\.?0+$/, '')}% من سعر الوحدة{(access as any).commission ? ' (نسبتك المتفق عليها)' : ' · النسبة الافتراضية لحد ما الإدارة تحدد نسبتك'}</span>
+          </Card>
+          {mine.map((p) => (
+            <Card key={p.id}>
+              <div className="flex justify-between items-center gap-2">
+                <span className="font-mono text-xs bg-[#141414] text-white px-2 py-1 rounded-md">{p.code}</span>
+                <Chip tone={(p as any).viewingsPaused ? 'grey' : 'green'}>{(p as any).viewingsPaused ? 'موقوفة' : 'معروضة'}</Chip>
+              </div>
+              <p className="font-bold text-sm">{p.title}</p>
+              <div className="flex justify-between text-sm"><span className="text-[#6B665C]">سعر الوحدة</span><span className="font-bold">{fmt(p.price)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-[#6B665C]">عمولتك المتوقعة</span><span className="font-bold text-[#1E7A45]">{fmt(p.price * rateOf(access))}</span></div>
+              <div className="flex justify-between text-xs text-[#6B665C]"><span>معايناتها</span><span>{viewings.filter((v) => v.propertyCode === p.code).length}</span></div>
+            </Card>
+          ))}
+          {!mine.length && <p className="lg:col-span-3 text-center text-sm text-[#6B665C] py-10">لسه مفيش وحدات مربوطة بيك</p>}
+        </div>
       ) : tab === 'feedback' ? (
-        <FeedbackList feedback={feedback} />
+        <div className="space-y-6">
+          {isBroker && (
+            <div className="space-y-3">
+              <p className="font-bold">فيدباكك للسيلز ({myFb.length})</p>
+              <div className="grid gap-3 lg:grid-cols-2">
+                {myFb.map((b) => (
+                  <Card key={b.id}>
+                    <div className="flex justify-between"><span className="font-bold">{b.propertyCode}</span><span className="text-[#D9B864]">{'★'.repeat(b.rating)}</span></div>
+                    <p className="leading-7 text-sm">"{b.text}"</p>
+                    <span className="text-[11px] text-[#8C877D]">بيشوفه السيلز اللي طلب المعاينة والإدارة بس</span>
+                  </Card>
+                ))}
+                {!myFb.length && <p className="text-sm text-[#6B665C]">لسه مبعتّش فيدباك. بعد ما تأكد أي معاينة هتلاقي خانة الفيدباك.</p>}
+              </div>
+            </div>
+          )}
+          <FeedbackList feedback={feedback} />
+        </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
@@ -402,10 +447,19 @@ const UnitDetail: React.FC<{
                 try { const urls = await Promise.all(list.map((f) => uploadFile(f, 'properties', unit.id))); setFiles((x) => [...x, ...urls]); } finally { setBusy(false); }
               }} className="text-sm" />
               {files.length > 0 && <div className="flex gap-2 flex-wrap">{files.map((u) => <img key={u} src={u} alt="" className="w-14 h-14 rounded-lg object-cover" />)}</div>}
-              <Btn disabled={busy || !files.length} onClick={() => send('photos')}>{busy ? 'جاري الرفع...' : `ابعت ${files.length} صورة للمراجعة`}</Btn>
+              {isBroker ? (
+                <Btn tone="green" disabled={busy || !files.length} onClick={async () => {
+                  setBusy(true);
+                  try { await brokerUpdateUnitImages(unit.id, [...files, ...(unit.images || [])]); setDone('اتحدّثت صور الوحدة على الموقع على طول'); setFiles([]); setMode(''); }
+                  catch { setDone('مقدرناش نحدّث الصور. جرّب تاني.'); }
+                  finally { setBusy(false); }
+                }}>{busy ? 'جاري الرفع...' : `انشر ${files.length} صورة على طول`}</Btn>
+              ) : (
+                <Btn disabled={busy || !files.length} onClick={() => send('photos')}>{busy ? 'جاري الرفع...' : `ابعت ${files.length} صورة للمراجعة`}</Btn>
+              )}
             </div>
           )}
-          <p className="text-xs text-[#6B665C]">أي تعديل بيتراجع من الإدارة قبل ما يظهر للزوار</p>
+          <p className="text-xs text-[#6B665C]">{isBroker ? 'الصور بتتنشر على طول، والسعر والإيقاف بيتراجعوا من الإدارة' : 'أي تعديل بيتراجع من الإدارة قبل ما يظهر للزوار'}</p>
           {changes.map((c) => (
             <div key={c.id} className="flex justify-between text-sm border-t border-[#F0ECE4] pt-2">
               <span>{c.type === 'price' ? `سعر ${fmt(c.newPrice)}` : c.type === 'photos' ? 'صور جديدة' : c.type === 'pause' ? 'إيقاف المعاينات' : 'تشغيل المعاينات'}</span>

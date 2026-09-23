@@ -39,6 +39,8 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isStaff() || isCoord();
       allow delete: if isAdmin();
+      // البروكر بيحدّث صور وحدته بس
+      allow update: if isBroker() && resource.data.brokerId == myBrokerId() && onlyKeys(['images']);
       match /private/{docId} {
         allow read, write: if isStaff() || isCoord();
         // البروكر يسجّل رقم المالك (ميقدرش يقراه تاني)
