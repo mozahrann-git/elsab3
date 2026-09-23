@@ -14,6 +14,7 @@ const ROLES: { key: AccountRole; label: string; color: string }[] = [
   { key: 'owner', label: 'مالك', color: '#A07A26' },
   { key: 'broker', label: 'بروكر', color: '#1F4E9C' },
   { key: 'coordinator' as AccountRole, label: 'مسؤولة الملاك', color: '#7A3E9C' },
+  { key: 'company_owner' as AccountRole, label: 'أونر الشركة', color: '#0F5C63' },
   { key: 'admin', label: 'أدمن', color: '#141414' },
   { key: 'disabled', label: 'موقوف', color: '#B8352A' },
 ];

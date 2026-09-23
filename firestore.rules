@@ -14,6 +14,7 @@ service cloud.firestore {
     function isCoord()    { return roleIs('coordinator'); }
     function isOps()      { return hasAccess() && acc().role in ['admin', 'coordinator']; }
     function isBroker()   { return roleIs('broker'); }
+    function isBoss()     { return roleIs('company_owner'); }   // أونر الشركة: عرض بس
     function isOwner()    { return roleIs('owner'); }
     function myBrokerId() { return acc().brokerId; }
     function myCodes()    { return acc().propertyCodes; }
@@ -21,7 +22,7 @@ service cloud.firestore {
 
     // ---------- الحسابات ----------
     match /staff_access/{email} {
-      allow read: if isRealUser() && (staffEmail() == email || isAdmin() || isCoord());
+      allow read: if isRealUser() && (staffEmail() == email || isAdmin() || isCoord() || isBoss());
       allow write: if isAdmin();
       // صاحب الحساب يغيّر الباسوورد بس
       allow update: if isRealUser() && staffEmail() == email && onlyKeys(['password', 'updatedAt']);
@@ -55,12 +56,14 @@ service cloud.firestore {
     }
 
     match /crm_leads/{leadId} {
+      allow read: if isBoss();
       allow create: if true;
       allow read, update: if isStaff();
       allow delete: if isAdmin();
     }
 
     match /owner_submissions/{id} {
+      allow read: if isBoss();
       allow create: if true;
       allow read: if isStaff() || isCoord() || (isRealUser() && resource.data.ownerEmail == staffEmail());
       allow update: if isStaff() || isCoord();
@@ -68,6 +71,7 @@ service cloud.firestore {
     }
 
     match /viewing_requests/{id} {
+      allow read: if isBoss();
       allow create: if true;
       allow read, update: if isStaff() || isCoord();
       allow delete: if isAdmin();
@@ -86,6 +90,7 @@ service cloud.firestore {
 
     // ---------- بوابات الملاك والبروكرز ----------
     match /unit_viewings/{id} {
+      allow read: if isBoss();
       allow read, create, update, delete: if isOps();
       allow read: if isStaff()
                   || (isOwner() && resource.data.propertyCode in myCodes())
@@ -97,12 +102,14 @@ service cloud.firestore {
     }
 
     match /owner_feedback/{id} {
+      allow read: if isBoss();
       allow read, write: if isOps() || isStaff();
       allow read: if (isOwner() && resource.data.propertyCode in myCodes())
                   || (isBroker() && resource.data.brokerId == myBrokerId());
     }
 
     match /change_requests/{id} {
+      allow read: if isBoss();
       allow read, update: if isOps();
       allow read: if isRealUser() && resource.data.requesterEmail == staffEmail();
       allow create: if isRealUser() && request.resource.data.requesterEmail == staffEmail()
@@ -113,6 +120,7 @@ service cloud.firestore {
 
     // ---------- فيدباك البروكر: للسيلز اللي طلب المعاينة والإدارة بس ----------
     match /broker_feedback/{id} {
+      allow read: if isBoss();
       allow create: if isBroker() && request.resource.data.brokerId == myBrokerId();
       allow read: if isOps()
                   || (isBroker() && resource.data.brokerId == myBrokerId())
@@ -121,15 +129,18 @@ service cloud.firestore {
 
     // ---------- مندوبين المعاينات ----------
     match /field_agents/{id} {
+      allow read: if isBoss();
       allow read: if isOps() || isStaff();
       allow write: if isAdmin();
       allow update: if isOps() || isStaff();   // الدور والعدادات
     }
     match /field_trips/{id} {
+      allow read: if isBoss();
       allow get: if true;                      // الـ id نفسه هو لينك الفيدباك
       allow list, create, update, delete: if isOps();
     }
     match /field_feedback/{id} {
+      allow read: if isBoss();
       allow read, update: if isOps() || isStaff();
       allow create: if exists(/databases/$(database)/documents/field_trips/$(request.resource.data.tripId))
                     && request.resource.data.stage == 'submitted';
@@ -137,10 +148,12 @@ service cloud.firestore {
 
     // ---------- قديم ----------
     match /brokers/{id} {
+      allow read: if isBoss();
       allow read: if isStaff() || isCoord() || (isBroker() && id == myBrokerId());
       allow write: if isStaff();
     }
     match /viewing_feedbacks/{id} {
+      allow read: if isBoss();
       allow read, write: if isStaff() || isCoord();
     }
     match /portal_users/{id}         { allow read, write: if isAdmin(); }

@@ -7,6 +7,7 @@ import { SmartFilterDock } from './components/SmartFilterDock';
 import { subscribeDistrictContent, computeDistrictStats, DistrictContent } from './services/districtService';
 import { OwnerPortalPromo } from './components/OwnerPortalPromo';
 import { CoordinatorPanel } from './components/portal/CoordinatorPanel';
+import { CompanyOwnerPanel } from './components/portal/CompanyOwnerPanel';
 import { FieldFeedbackPage } from './components/portal/FieldFeedbackPage';
 import { SalesFeedbackInbox } from './components/portal/SalesFeedbackInbox';
 import { getStaffAccess, StaffAccess } from './services/firebaseService';
@@ -187,17 +188,18 @@ export default function App() {
 
   // حساب الشخص الداخل (مالك/بروكر/مسؤولة ملاك/سيلز/أدمن) والبوابة المفتوحة
   const [staffAccess, setStaffAccess] = useState<StaffAccess | null>(null);
-  const [activePortal, setActivePortal] = useState<null | 'owner' | 'broker' | 'coordinator' | 'sales_feedback'>(null);
+  const [activePortal, setActivePortal] = useState<null | 'owner' | 'broker' | 'coordinator' | 'company' | 'sales_feedback'>(null);
   const [feedbackTripId] = useState<string | null>(() => { try { return new URLSearchParams(window.location.search).get('fb'); } catch { return null; } });
   const [showFieldFeedback, setShowFieldFeedback] = useState<boolean>(!!feedbackTripId);
   const myPortalLabel = staffAccess?.role === 'owner' ? 'بوابة المالك'
     : staffAccess?.role === 'broker' ? 'بوابة البروكر'
     : staffAccess?.role === 'coordinator' ? 'الملاك والمعاينات'
     : staffAccess?.role === 'admin' ? 'الملاك والمعاينات'
+    : staffAccess?.role === 'company_owner' ? 'لوحة الأونر'
     : staffAccess?.role === 'sales' ? 'فيدباك المعاينات' : undefined;
   const openMyPortal = () => {
     const r = staffAccess?.role;
-    setActivePortal(r === 'owner' ? 'owner' : r === 'broker' ? 'broker' : r === 'sales' ? 'sales_feedback' : r === 'coordinator' || r === 'admin' ? 'coordinator' : null);
+    setActivePortal(r === 'owner' ? 'owner' : r === 'broker' ? 'broker' : r === 'company_owner' ? 'company' : r === 'sales' ? 'sales_feedback' : r === 'coordinator' || r === 'admin' ? 'coordinator' : null);
   };
 
   // بيتغير مع كل تسجيل دخول/خروج، عشان الاشتراكات تتعمل من جديد بصلاحيات الحساب الحالي
@@ -1688,6 +1690,7 @@ export default function App() {
         onOpenPriceMap={() => setIsPriceMapOpen(true)}
         onOpenValuation={() => setIsValuationOpen(true)}
         myPortalLabel={myPortalLabel}
+        onLogout={() => { setStaffAccess(null); setActivePortal(null); handleAdminLogout(); handleSalesLogout(); }}
         onOpenMyPortal={myPortalLabel ? openMyPortal : undefined}
         onOpenClosedDeals={() => {
           const el = document.getElementById('closed-deals-section');
@@ -2194,6 +2197,12 @@ export default function App() {
           onClose={() => setActivePortal(null)} onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
           onAddUnit={() => { setActivePortal(null); setIsResaleSubmitOpen(true); }} />
       )}
+      {activePortal === 'company' && staffAccess && (
+        <CompanyOwnerPanel access={staffAccess} properties={properties} leads={crmLeads} agents={salesAgents} submissions={ownerSubmissions} logoUrl={customLogoUrl}
+          onClose={() => setActivePortal(null)}
+          onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
+          onAddUnit={() => { setActivePortal(null); setIsResaleSubmitOpen(true); }} />
+      )}
       {activePortal === 'coordinator' && staffAccess && (
         <CoordinatorPanel name={staffAccess.name || ''} isAdmin={staffAccess.role === 'admin'} properties={properties} submissions={ownerSubmissions} logoUrl={customLogoUrl}
           onApproveSubmission={(s) => handleApproveSubmission(s)} onRejectSubmission={handleRejectSubmission}
@@ -2227,7 +2236,7 @@ export default function App() {
         onPortalLogin={(acc) => {
           setStaffAccess(acc);
           setIsClientAuthOpen(false);
-          setActivePortal(acc.role === 'owner' ? 'owner' : acc.role === 'broker' ? 'broker' : 'coordinator');
+          setActivePortal(acc.role === 'owner' ? 'owner' : acc.role === 'broker' ? 'broker' : acc.role === 'company_owner' ? 'company' : 'coordinator');
         }}
         salesAgents={salesAgents}
         adminCredentials={adminCredentials}

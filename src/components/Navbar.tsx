@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import { subscribeToStaffAuth } from '../services/firebaseService';
+import { subscribeToStaffAuth, signOutToGuest } from '../services/firebaseService';
 import { LionLogo } from './LionLogo';
 import { 
   Heart, 
@@ -20,8 +20,7 @@ import {
   Users,
   Building2,
   Layers,
-  ChevronLeft
-} from 'lucide-react';
+  ChevronLeft, UserRound, KeyRound, LogOut} from 'lucide-react';
 import { generateWhatsAppLink } from '../utils/helpers';
 import { ClientProfile } from '../types';
 
@@ -42,6 +41,7 @@ interface NavbarProps {
   onOpenBrokerPortal?: () => void;
   onOpenLandlordPortal?: () => void;
   onOpenMyPortal?: () => void;
+  onLogout?: () => void;
   myPortalLabel?: string;
   onOpenClosedDeals?: () => void;
   onOpenAdmin: () => void;
@@ -79,6 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenBrokerPortal,
   onOpenLandlordPortal,
   onOpenMyPortal,
+  onLogout,
   myPortalLabel,
   onOpenClosedDeals,
   onOpenAdmin,
@@ -287,151 +288,74 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* User / Login Trigger */}
-          {isAdminLoggedIn || isSalesLoggedIn ? (
-            <div className="relative">
-              <button
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-white text-[#141414] border border-[#ECE8DF] rounded-xl hover:border-stone-400 transition-all cursor-pointer shadow-2xs"
-              >
-                {isAdminLoggedIn ? (
-                  <>
-                    <Shield size={14} className="text-[#A07A26]" />
-                    <span>الإدارة</span>
-                  </>
-                ) : (
-                  <>
-                    <Flame size={14} className="text-[#A07A26]" />
-                    <span>CRM: {currentSalesAgentName}</span>
-                  </>
-                )}
-                <ChevronDown size={13} />
-              </button>
+          {/* حساب واحد للكل: أدمن، سيلز، مالك، بروكر، عميل */}
+          <div className="relative">
+            <button
+              onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+              aria-label="حسابي"
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-2xs ${staffSignedIn ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white text-[#141414] border-[#ECE8DF] hover:border-stone-400'}`}
+            >
+              <UserRound size={15} className={staffSignedIn ? 'text-[#D9B864]' : 'text-[#A07A26]'} />
+              <span className="hidden sm:inline">{staffSignedIn ? (myPortalLabel ? 'حسابي' : 'حسابي') : 'تسجيل الدخول'}</span>
+              <ChevronDown size={12} />
+            </button>
 
-              {userDropdownOpen && (
+            {userDropdownOpen && (
+              <>
                 <button aria-label="إغلاق" className="fixed inset-0 z-40 cursor-default" onClick={() => setUserDropdownOpen(false)} />
-              )}
-              {userDropdownOpen && (
-                <div className="absolute left-0 top-full mt-2 w-60 max-w-[86vw] bg-white rounded-2xl shadow-xl border border-[#ECE8DF] p-2 z-50 text-right">
-                  {isAdminLoggedIn && (
-                    <button
-                      onClick={() => {
-                        setUserDropdownOpen(false);
-                        onOpenAdmin();
-                      }}
-                      className="w-full text-right px-3 py-2 text-xs font-bold text-[#141414] hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between transition-colors"
-                    >
-                      <span>لوحة الإدارة المركزية</span>
-                      <Shield size={14} className="text-[#A07A26]" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setUserDropdownOpen(false);
-                      onOpenCrm();
-                    }}
-                    className="w-full text-right px-3 py-2 text-xs font-bold text-[#141414] hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between transition-colors"
-                  >
-                    <span>غرفة العمليات و الـ CRM</span>
-                    <Flame size={14} className="text-[#A07A26]" />
-                  </button>
-                  {(onOpenLandlordPortal || onOpenPartnerPortals) && (
-                    <button
-                      onClick={() => {
-                        setUserDropdownOpen(false);
-                        if (onOpenLandlordPortal) onOpenLandlordPortal();
-                        else if (onOpenPartnerPortals) onOpenPartnerPortals();
-                      }}
-                      className="w-full text-right px-3 py-2 text-xs font-bold text-[#141414] hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between transition-colors"
-                    >
-                      <span>بوابة المالك (متابعة الشقق والمعاينات)</span>
-                      <Building2 size={14} className="text-[#A07A26]" />
-                    </button>
-                  )}
-                  {(onOpenBrokerPortal || onOpenPartnerPortals) && (
-                    <button
-                      onClick={() => {
-                        setUserDropdownOpen(false);
-                        if (onOpenBrokerPortal) onOpenBrokerPortal();
-                        else if (onOpenPartnerPortals) onOpenPartnerPortals();
-                      }}
-                      className="w-full text-right px-3 py-2 text-xs font-bold text-[#141414] hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between transition-colors"
-                    >
-                      <span>بوابة البروكر (غرفة المعاينات)</span>
-                      <Users size={14} className="text-[#A07A26]" />
-                    </button>
+                <div className="absolute left-0 top-full mt-2 w-64 max-w-[86vw] bg-white rounded-2xl shadow-xl border border-[#ECE8DF] p-2 z-50 text-right">
+                  {staffSignedIn ? (
+                    <>
+                      {myPortalLabel && onOpenMyPortal && (
+                        <button onClick={() => { setUserDropdownOpen(false); onOpenMyPortal(); }}
+                          className="w-full text-right px-3 py-2.5 text-xs font-bold hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between">
+                          <span>{myPortalLabel}</span><Building2 size={14} className="text-[#A07A26]" />
+                        </button>
+                      )}
+                      {isAdminLoggedIn && (
+                        <button onClick={() => { setUserDropdownOpen(false); onOpenAdmin(); }}
+                          className="w-full text-right px-3 py-2.5 text-xs font-bold hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between">
+                          <span>لوحة الإدارة المركزية</span><Shield size={14} className="text-[#A07A26]" />
+                        </button>
+                      )}
+                      {(isAdminLoggedIn || isSalesLoggedIn) && (
+                        <button onClick={() => { setUserDropdownOpen(false); onOpenCrm(); }}
+                          className="w-full text-right px-3 py-2.5 text-xs font-bold hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between">
+                          <span>غرفة العمليات والـ CRM</span><Flame size={14} className="text-[#A07A26]" />
+                        </button>
+                      )}
+                      <button onClick={() => { setUserDropdownOpen(false); setChangePassOpen(true); }}
+                        className="w-full text-right px-3 py-2.5 text-xs font-bold hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between">
+                        <span>تغيير كلمة المرور</span><KeyRound size={14} className="text-[#A07A26]" />
+                      </button>
+                      <button onClick={() => { setUserDropdownOpen(false); signOutToGuest().catch(() => {}); onLogout?.(); }}
+                        className="w-full text-right px-3 py-2.5 text-xs font-bold text-[#C2412D] hover:bg-[#FBEDEA] rounded-xl flex items-center justify-between border-t border-[#F0ECE4] mt-1 pt-3">
+                        <span>تسجيل الخروج</span><LogOut size={14} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => { setUserDropdownOpen(false); onOpenClientAuth(); }}
+                        className="w-full text-right px-3 py-2.5 text-xs font-bold hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between">
+                        <span>تسجيل الدخول / إنشاء حساب</span><UserRound size={14} className="text-[#A07A26]" />
+                      </button>
+                      <p className="px-3 py-2 text-[11px] text-[#8C877D] leading-5">للملاك والبروكرز وفريق السبع · ادخل بإيميلك وكلمة المرور</p>
+                    </>
                   )}
                 </div>
-              )}
-            </div>
-          ) : clientProfile ? (
-            <button
-              onClick={onOpenClientAuth}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#FAF4E5] text-[#A07A26] border border-[#E9DFCA] rounded-xl hover:bg-[#F3EAD5] transition-all cursor-pointer shadow-2xs"
-              title="تعديل تفضيلات الحساب والإشعارات"
-            >
-              <User size={14} />
-              <span className="truncate max-w-[85px]">{clientProfile.name}</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                if (onOpenClientAuth) onOpenClientAuth();
-                else if (onOpenSalesLogin) onOpenSalesLogin();
-                else onOpenAdmin();
-              }}
-              className="hidden sm:flex text-xs font-bold text-[#141414] hover:text-[#A07A26] bg-white border border-[#ECE8DF] px-3 py-2 rounded-xl transition-colors cursor-pointer shadow-2xs items-center gap-1.5"
-            >
-              <User size={13} />
-              <span>حسابي</span>
-            </button>
-          )}
+              </>
+            )}
+          </div>
 
-          {/* بوابة الشخص الداخل (مالك/بروكر/مسؤولة الملاك/سيلز) */}
-          {onOpenMyPortal && myPortalLabel && (
-            <button onClick={onOpenMyPortal} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-[#A07A26] rounded-xl shadow-2xs">
-              <Building2 size={14} />
-              <span className="hidden sm:inline">{myPortalLabel}</span>
-            </button>
-          )}
-
-          {/* Landlord Portal Quick Link (Desktop & Tablet) */}
-          {(onOpenLandlordPortal || onOpenPartnerPortals) && (
-            <button
-              onClick={() => {
-                if (onOpenLandlordPortal) onOpenLandlordPortal();
-                else if (onOpenPartnerPortals) onOpenPartnerPortals();
-              }}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-stone-800 bg-[#FAF9F5] border border-[#ECE8DF] rounded-xl hover:border-amber-400 hover:text-amber-900 transition-all cursor-pointer shadow-2xs"
-              title="بوابة ملاك الوحدات لمتابعة الشقق وتقارير المعاينات الميدانية"
-            >
-              <Building2 size={14} className="text-[#A07A26]" />
-              <span>بوابة المالك</span>
-            </button>
-          )}
-
-          {/* Broker Portal Quick Link (Desktop & Tablet) */}
-          {(onOpenBrokerPortal || onOpenPartnerPortals) && (
-            <button
-              onClick={() => {
-                if (onOpenBrokerPortal) onOpenBrokerPortal();
-                else if (onOpenPartnerPortals) onOpenPartnerPortals();
-              }}
-              className="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-stone-800 bg-white border border-[#ECE8DF] rounded-xl hover:border-stone-400 hover:text-black transition-all cursor-pointer shadow-2xs"
-              title="بوابة الشركاء والبروكرز لتنسيق مواعيد المعاينات"
-            >
-              <Users size={14} className="text-[#A07A26]" />
-              <span>بوابة البروكر</span>
-            </button>
-          )}
-
-          {/* WhatsApp Dark Button */}
+          {/* واتساب للزوار بس */}
+          {!staffSignedIn && (
           <button
             onClick={handleWhatsAppClick}
             className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#141414] hover:bg-black text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-98 cursor-pointer"
           >
             <span>واتساب</span>
           </button>
+          )}
 
           {/* Mobile & Side Menu Toggle Button */}
           <button

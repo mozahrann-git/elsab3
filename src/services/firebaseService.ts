@@ -121,7 +121,7 @@ export async function getStaffRole(email?: string | null): Promise<'admin' | 'sa
 /** بيانات الحساب كاملة من staff_access: الدور + ربطه بالبروكر أو بوحدات المالك */
 export interface StaffAccess {
   email: string;
-  role: 'admin' | 'sales' | 'broker' | 'owner' | 'coordinator' | 'disabled' | null;
+  role: 'admin' | 'sales' | 'broker' | 'owner' | 'coordinator' | 'company_owner' | 'disabled' | null;
   name?: string;
   brokerId?: string;          // للبروكر: ID ملفه في brokers
   propertyCodes?: string[];   // للمالك: أكواد وحداته
@@ -948,7 +948,7 @@ export async function fetchPropertyPrivateOwner(
 // إدارة الحسابات (الأدمن بيعمل الحساب ويحدد الباسوورد، وصاحبه يقدر يغيّره)
 // ==========================================
 
-export type AccountRole = 'admin' | 'sales' | 'broker' | 'owner' | 'coordinator' | 'disabled';
+export type AccountRole = 'admin' | 'sales' | 'broker' | 'owner' | 'coordinator' | 'company_owner' | 'disabled';
 
 export interface AccountRecord {
   email: string;
