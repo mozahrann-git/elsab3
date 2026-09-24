@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 import {
   UnitViewing, ChangeRequest, FieldAgent, FieldTrip, FieldFeedback, TripUnit,
   subscribeAllUnitViewings, subscribeAllChangeRequests, subscribeFieldAgents, subscribeTrips, subscribeFieldFeedback,
-  createUnitViewing, renotifyOwner, findBrokerContact, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
+  createUnitViewing, renotifyOwner, findBrokerContact, deleteUnitViewing, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
   saraConfirmFeedback, rejectFeedback,
 } from '../../services/portalService';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
@@ -73,7 +73,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       active={tab} onTab={setTab} onClose={onClose}
       footer={<button onClick={onLogout} className="w-full px-4 py-3 rounded-xl text-sm text-[#F0776A] hover:bg-white/10 text-right flex items-center gap-2"><LogOut size={16} />خروج</button>}
     >
-      {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} onSendToAgent={(code, label, at) => { setTripSeed({ code, label, at }); setTab('agents'); }} />}
+      {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} isAdmin={isAdmin} onSendToAgent={(code, label, at) => { setTripSeed({ code, label, at }); setTab('agents'); }} />}
       {tab === 'agents' && <AgentsTab agents={agents} trips={trips} fbs={fbs} viewings={viewings} properties={properties} isAdmin={isAdmin} seed={tripSeed} />}
       {tab === 'feedback' && <FeedbackTab fbs={fbs} />}
       {tab === 'changes' && <ChangesTab changes={changes} />}
@@ -84,7 +84,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
 };
 
 // ---------------- المعاينات ----------------
-const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; onSendToAgent: (code: string, label: string, at?: number) => void }> = ({ viewings, properties, onSendToAgent }) => {
+const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; onSendToAgent: (code: string, label: string, at?: number) => void }> = ({ viewings, properties, isAdmin, onSendToAgent }) => {
   const [code, setCode] = useState('');
   const [time, setTime] = useState<WhenValue | null>(null);
   const [note, setNote] = useState('');
@@ -178,6 +178,10 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; o
                 </div>
               )}
               {v.ownerStatus === 'reschedule' && <Btn tone="light" onClick={() => setViewingStatus(v.id, 'canceled')}>إلغاء</Btn>}
+              {isAdmin && (
+                <button onClick={() => { if (window.confirm(`تمسح معاينة ${v.propertyCode} نهائياً؟`)) deleteUnitViewing(v.id); }}
+                  className="self-start text-xs font-bold text-[#C2412D]">حذف المعاينة</button>
+              )}
             </Card>
           );
         })}

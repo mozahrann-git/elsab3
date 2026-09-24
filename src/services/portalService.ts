@@ -8,7 +8,7 @@
   change_requests/{id} طلب تعديل سعر/صور/إيقاف من المالك أو البروكر
 */
 import {
-  collection, doc, setDoc, updateDoc, onSnapshot, query, where, arrayUnion, getDoc, getDocs,
+  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, arrayUnion, getDoc, getDocs,
 } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { db, auth, cleanFirestoreData, savePropertyPrivateOwner } from './firebaseService';
@@ -317,4 +317,9 @@ export async function findBrokerContact(brokerId: string): Promise<{ name: strin
 /** البروكر بيحدّث صور وحدته مباشرة من غير مراجعة */
 export async function brokerUpdateUnitImages(propertyId: string, images: string[]) {
   await updateDoc(doc(db, 'properties', propertyId), { images });
+}
+
+/** الأدمن بيمسح معاينة خلاص مش محتاجينها */
+export async function deleteUnitViewing(id: string) {
+  await deleteDoc(doc(db, 'unit_viewings', id));
 }

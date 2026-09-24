@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { subscribeToStaffAuth, signOutToGuest } from '../services/firebaseService';
 import { LionLogo } from './LionLogo';
@@ -300,10 +301,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               <ChevronDown size={12} />
             </button>
 
-            {userDropdownOpen && (
+            {userDropdownOpen && createPortal(
               <>
-                <button aria-label="إغلاق" className="fixed inset-0 z-40 cursor-default" onClick={() => setUserDropdownOpen(false)} />
-                <div className="absolute left-0 top-full mt-2 w-64 max-w-[86vw] bg-white rounded-2xl shadow-xl border border-[#ECE8DF] p-2 z-50 text-right">
+                <button aria-label="إغلاق" className="fixed inset-0 z-[70] cursor-default" onClick={() => setUserDropdownOpen(false)} />
+                <div className="fixed left-3 sm:left-6 top-[76px] w-64 max-w-[86vw] bg-white rounded-2xl shadow-2xl border border-[#ECE8DF] p-2 z-[71] text-right" dir="rtl">
                   {staffSignedIn ? (
                     <>
                       {myPortalLabel && onOpenMyPortal && (
@@ -335,7 +336,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </>
                   ) : (
                     <>
-                      <button onClick={() => { setUserDropdownOpen(false); onOpenClientAuth(); }}
+                      <button onClick={() => { setUserDropdownOpen(false); onOpenClientAuth?.(); }}
                         className="w-full text-right px-3 py-2.5 text-xs font-bold hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between">
                         <span>تسجيل الدخول / إنشاء حساب</span><UserRound size={14} className="text-[#A07A26]" />
                       </button>
@@ -343,7 +344,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </>
                   )}
                 </div>
-              </>
+              </>,
+              document.body
             )}
           </div>
 
@@ -551,6 +553,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         if (onOpenBrokerPortal) onOpenBrokerPortal();
                         else if (onOpenPartnerPortals) onOpenPartnerPortals();
                       }}
+                      style={{ display: isAdminLoggedIn ? undefined : 'none' }}
                       className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5">
@@ -617,6 +620,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                 {/* 4. فريق العمل والإدارة */}
                 <div className="space-y-1.5 pt-2 border-t border-[#ECE8DF]">
+                  {(isAdminLoggedIn || isSalesLoggedIn) && (<>
                   <span className="text-[10px] font-bold text-[#8C827A] px-2 uppercase tracking-wider block">
                     غرفة المبيعات والإدارة
                   </span>
@@ -637,6 +641,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </span>
                   </button>
 
+                  </>)}
                   {onOpenMyPortal && myPortalLabel && (
                     <button
                       onClick={() => { setMobileMenuOpen(false); onOpenMyPortal(); }}
@@ -669,17 +674,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </div>
                       <ChevronLeft size={14} />
                     </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        onOpenAdmin();
-                      }}
-                      className="w-full p-2 rounded-xl text-[#8C827A] hover:text-[#141414] text-right text-[11px] font-medium transition-colors"
-                    >
-                      دخول المسؤولين (Admin Panel)
-                    </button>
-                  )}
+                  ) : null}
                 </div>
 
               </div>
