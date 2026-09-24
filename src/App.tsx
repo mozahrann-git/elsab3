@@ -2036,7 +2036,8 @@ export default function App() {
       <DistrictGuideModal
         isOpen={isDistrictGuideOpen}
         onClose={() => setIsDistrictGuideOpen(false)}
-        onSelectDistrict={(district) => setFilter({ ...filter, neighborhood: district })}
+        properties={properties}
+        onSelectDistrict={(district) => { setFilter({ ...filter, neighborhood: district }); setIsDistrictGuideOpen(false); setTimeout(() => document.getElementById('properties-grid')?.scrollIntoView({ behavior: 'smooth' }), 80); }}
         isAdmin={isAdminLoggedIn}
       />
 

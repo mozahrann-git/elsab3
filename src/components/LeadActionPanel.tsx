@@ -27,12 +27,19 @@ export const LeadActionPanel: React.FC<{
 
   const save = () => {
     const moved = stage !== lead.status;
-    const entry: LeadActivity = { at: Date.now(), by: byName, outcome: moved ? `نقل إلى: ${label(stage)}` : `في: ${label(stage)}`, comment: comment.trim(), nextAt: next?.at };
+    // التأجيل بيتسجل: مفيش حد يغيّر ميعاد من غير أثر
+    const postponed = !!(lead.nextActionAt && next && next.at > lead.nextActionAt);
+    const entry: LeadActivity = {
+      at: Date.now(), by: byName,
+      outcome: postponed ? `تأجيل من ${formatWhen(lead.nextActionAt!)} لـ ${formatWhen(next!.at)}` : moved ? `نقل إلى: ${label(stage)}` : `في: ${label(stage)}`,
+      comment: comment.trim(), nextAt: next?.at,
+    };
     onUpdateLead({
       ...lead,
       status: stage,
       notes: [`${entry.outcome} · ${comment.trim()}`, ...(lead.notes || [])],
       activity: [entry, ...act].slice(0, 80),
+      snoozeCount: ((lead as any).snoozeCount || 0) + (postponed ? 1 : 0),
       lastContactDate: new Date().toISOString(),
       nextActionAt: closing ? null : next?.at ?? lead.nextActionAt ?? null,
       followUpScheduledAt: next ? next.label : lead.followUpScheduledAt,

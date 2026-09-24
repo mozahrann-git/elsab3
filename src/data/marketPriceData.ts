@@ -81,7 +81,7 @@ export const INITIAL_CLOSED_DEALS: ClosedDeal[] = [];
 export interface ValuationParams {
   neighborhood: HadabaWostaNeighborhood;
   area: number;
-  floorType: 'ground_garden' | 'floor_1_3' | 'floor_4_6' | 'higher';
+  floorType: 'ground_garden' | 'floor_1_4' | 'floor_5_7';
   finishing: 'super_lux' | 'semi_finished';
   features: string[]; // 'elevator', 'garage', 'registered_contract', 'facade'
 }

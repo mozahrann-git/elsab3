@@ -220,16 +220,6 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
           {/* الأكشن الجاي + نقل إلى */}
           <LeadActionPanel lead={lead} stages={STAGES} byName={agents.find((x) => x.id === lead.assignedAgentId)?.name || 'الفريق'} onUpdateLead={onUpdateLead} />
 
-          {/* طلب مسح الليد (السيلز) · الأدمن بيوافق من لوحة السيلز */}
-          {!isAdmin && (
-            (lead as any).deleteRequest && !(lead as any).deleteRequest.resolved
-              ? <p className="text-xs rounded-xl bg-[#FBEDEA] text-[#9A2E1F] p-3 font-bold">طلب المسح مستني موافقة الإدارة</p>
-              : <button type="button" onClick={() => {
-                  const reason = window.prompt('ليه عايز تمسح العميل ده؟ (مثلاً: متسجل بالغلط، رقم غلط، مكرر)');
-                  if (reason && reason.trim()) onUpdateLead({ ...lead, deleteRequest: { by: agents.find((x) => x.id === lead.assignedAgentId)?.name || 'السيلز', reason: reason.trim(), at: Date.now() } } as any);
-                }} className="self-start text-xs font-bold text-[#C2412D]">اطلب مسح العميل ده</button>
-          )}
-
           {/* Key Customer Requirements Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-white border border-[#ECE8DF] rounded-2xl text-xs shadow-2xs">
 

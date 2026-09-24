@@ -230,6 +230,7 @@ export interface Lead {
   nextActionAt?: number | null;     // ميعاد الأكشن الجاي بالظبط (تنبيه حقيقي)
   activity?: { at: number; by: string; outcome: string; comment: string; nextAt?: number; transferTo?: string }[];
   transferredFrom?: string;
+  snoozeCount?: number;             // كام مرة اتأجل، بيظهر في تقرير الليدر
 }
 
 export interface FollowUpAlert {
@@ -257,6 +258,8 @@ export interface OwnerPrivateDetails {
 }
 
 export interface SalesAgent {
+  teamLeadId?: string;              // تحت أنهي تيم ليدر
+  isTeamLead?: boolean;
   id: string;
   name: string;
   email: string;

@@ -158,14 +158,19 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   const currentAgent = currentSalesAgent;
 
+  // من بشوف شغله؟ (الأدمن والتيم ليدر بيختاروا)
+  const [viewAgentId, setViewAgentId] = useState<string>('all');
+  const myTeam = useMemo(() => agents.filter((a) => (a as any).teamLeadId === currentSalesAgent?.id), [agents, currentSalesAgent]);
+  const isLead = myTeam.length > 0 || (currentSalesAgent as any)?.isTeamLead;
+  const visibleAgents = useMemo(() => (isAdmin ? agents : isLead ? [currentSalesAgent!, ...myTeam].filter(Boolean) : [currentSalesAgent!].filter(Boolean)), [isAdmin, isLead, agents, myTeam, currentSalesAgent]);
+
   // Scoped Leads
   const scopedLeads = useMemo(() => {
-    if (isAdmin) return leads;
-    return leads.filter((l) => 
-      l.assignedAgentId === currentSalesAgent?.id || 
-      l.assignedAgentName === currentSalesAgent?.name
-    );
-  }, [leads, isAdmin, currentSalesAgent]);
+    const ids = visibleAgents.map((a) => a.id);
+    const base = isAdmin ? leads : leads.filter((l) => ids.includes(l.assignedAgentId || '') || l.assignedAgentName === currentSalesAgent?.name);
+    if (viewAgentId === 'all') return base;
+    return base.filter((l) => l.assignedAgentId === viewAgentId);
+  }, [leads, isAdmin, currentSalesAgent, visibleAgents, viewAgentId]);
 
   // Filtered Leads
   const filteredLeads = useMemo(() => {
@@ -651,6 +656,37 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           <div className="space-y-4 sm:space-y-5 flex-1 flex flex-col pt-1">
             
             {/* Urgent Broadcast Banner */}
+            {(isAdmin || isLead) && (
+              <div className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">
+                <p className="font-bold text-sm">متابعات الفريق</p>
+                {visibleAgents.map((a) => {
+                  const mine = leads.filter((l) => l.assignedAgentId === a.id);
+                  const late = mine.filter((l) => l.nextActionAt && l.nextActionAt < Date.now() && l.followUpStatus !== 'completed').length;
+                  const snoozes = mine.reduce((n, l: any) => n + (l.snoozeCount || 0), 0);
+                  return (
+                    <button key={a.id} onClick={() => setViewAgentId(a.id)} className="w-full flex flex-wrap justify-between items-center gap-2 border-t border-[#F0ECE4] pt-2 text-right">
+                      <span className="font-bold text-sm">{a.name}</span>
+                      {isAdmin && (
+                        <select value={(a as any).teamLeadId || (a as any).isTeamLead ? ((a as any).isTeamLead ? 'lead' : (a as any).teamLeadId) : ''}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => { e.stopPropagation(); const v = e.target.value; onUpdateAgent({ ...a, isTeamLead: v === 'lead', teamLeadId: v === 'lead' || !v ? '' : v } as any); }}
+                          className="px-2 py-1 rounded-lg bg-white border border-[#ECE8DF] text-[11px] font-bold">
+                          <option value="">بدون فريق</option>
+                          <option value="lead">تيم ليدر</option>
+                          {agents.filter((x) => (x as any).isTeamLead && x.id !== a.id).map((x) => <option key={x.id} value={x.id}>تحت {x.name}</option>)}
+                        </select>
+                      )}
+                      <span className="flex gap-2 text-[11px]">
+                        <span className="px-2 py-1 rounded-lg bg-[#F6F4EF]">{mine.length} عميل</span>
+                        <span className={`px-2 py-1 rounded-lg ${late ? 'bg-[#FBEDEA] text-[#C2412D] font-bold' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>{late} متأخرة</span>
+                        <span className="px-2 py-1 rounded-lg bg-[#FBF8F1] text-[#6E5418]">{snoozes} تأجيل</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* عدّاد النهارده */}
             <div className="grid grid-cols-3 gap-2">
               {[['ريكويست جديد النهارده', todayNewLeads, '#1F4E9C'], ['أكشن اتسجّل النهارده', todayDone, '#141414'], ['معايناتك النهارده', todayViewings, '#1E7A45']].map(([t, v, c]) => (
@@ -660,22 +696,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 </div>
               ))}
             </div>
-
-            {/* طلبات مسح الليدز (للأدمن) */}
-            {deleteRequests.length > 0 && (
-              <div className="bg-[#FBEDEA] border border-[#E9B8AE] rounded-2xl p-4 space-y-2">
-                <p className="font-bold text-sm text-[#9A2E1F]">طلبات مسح عملاء ({deleteRequests.length})</p>
-                {deleteRequests.map((l: any) => (
-                  <div key={l.id} className="flex flex-wrap justify-between items-center gap-2 bg-white rounded-xl p-3">
-                    <div className="text-xs"><b className="text-sm">{l.name}</b> · {l.phone}<br />طلب {l.deleteRequest.by}: {l.deleteRequest.reason}</div>
-                    <div className="flex gap-2">
-                      <button onClick={async () => { if (!confirm(`مسح ${l.name} نهائياً؟`)) return; await deleteLeadFromDb(l.id); onDeleteLead?.(l.id); }} className="px-3 py-2 rounded-xl bg-[#C2412D] text-white text-xs font-bold">موافقة ومسح</button>
-                      <button onClick={() => onUpdateLead({ ...l, deleteRequest: { ...l.deleteRequest, resolved: true, rejected: true } })} className="px-3 py-2 rounded-xl bg-[#F6F4EF] text-xs font-bold">رفض</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
 
             {isAdmin && editBoard === 'banner' && (
               <div className="bg-white border-2 border-[#A07A26] rounded-2xl p-4 space-y-2">
@@ -910,9 +930,18 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   جدول المواعيد والاتصالات المستحقة لمستشاري المبيعات
                 </p>
               </div>
-              <button onClick={toggleCompact} className="self-start sm:self-auto px-3.5 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold text-[#141414]">
-                {compactView ? 'عرض مفصّل' : 'عرض مختصر'}
-              </button>
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                {(isAdmin || isLead) && (
+                  <select value={viewAgentId} onChange={(e) => setViewAgentId(e.target.value)}
+                    className="px-3 py-2 rounded-xl bg-white border border-[#ECE8DF] text-xs font-bold text-[#141414]">
+                    <option value="all">{isAdmin ? 'كل الفريق' : 'فريقي كله'}</option>
+                    {visibleAgents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                )}
+                <button onClick={toggleCompact} className="px-3.5 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold text-[#141414]">
+                  {compactView ? 'عرض مفصّل' : 'عرض مختصر'}
+                </button>
+              </div>
 
               <div className="flex items-center gap-2">
                 <button
@@ -927,7 +956,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* Followups Cards / Table */}
             <div className="space-y-3">
-              {scopedLeads.map((lead) => {
+              {scopedLeads
+                .filter((lead) => lead.followUpStatus !== 'completed' && lead.status !== 'closed' && lead.status !== 'lost')
+                .sort((a, b) => (a.nextActionAt || Infinity) - (b.nextActionAt || Infinity))
+                .map((lead) => {
                 const stageObj = CRM_PIPELINE_STAGES.find((s) => s.id === lead.status) || CRM_PIPELINE_STAGES[0];
                 return (
                   <div 
@@ -1045,18 +1077,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         >
                           تفاصيل الملف
                         </button>
-                        {isAdmin && canEdit && (
-                          <>
-                            <button onClick={() => removeFromFollowUps(lead)} title="شيله من المتابعات"
-                              className="px-3 py-1.5 bg-white hover:bg-[#F6F4EF] text-[#6B665C] text-xs font-bold rounded-xl border border-[#ECE8DF]">
-                              شيله من المتابعات
-                            </button>
-                            <button onClick={() => adminDeleteLead(lead)} title="حذف العميل نهائياً"
-                              className="px-2.5 py-1.5 bg-[#FBEDEA] hover:bg-[#F7DED8] text-[#C2412D] text-xs font-bold rounded-xl border border-[#E9B8AE]">
-                              حذف
-                            </button>
-                          </>
-                        )}
                       </div>
                     </div>
                   </div>
