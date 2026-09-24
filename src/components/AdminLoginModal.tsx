@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { SalesAgent } from '../types';
 import { safeLocalStorageSet, safeSessionStorageSet } from '../utils/storageHelper';
-import { signInStaff, getStaffRole, signOutToGuest } from '../services/firebaseService';
+import { signInStaff, getStaffRole, signOutToGuest, getStaffAccess, StaffAccess } from '../services/firebaseService';
 import { LionLogo } from './LionLogo';
 
 interface AdminLoginModalProps {
@@ -23,6 +23,7 @@ interface AdminLoginModalProps {
   onLoginSuccess?: () => void;
   onSuccessLogin?: () => void;
   onSalesLoginSuccess?: (agent: SalesAgent) => void;
+  onPortalLogin?: (access: StaffAccess) => void;
   onOpenSalesLogin?: () => void;
   salesAgents?: SalesAgent[];
   adminCredentials?: {
@@ -37,6 +38,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onLoginSuccess,
   onSuccessLogin,
   onSalesLoginSuccess,
+  onPortalLogin,
   salesAgents = [],
   adminCredentials,
 }) => {
@@ -66,7 +68,14 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     try {
       // 1) دخول حقيقي من Firebase Auth
       const user = await signInStaff(targetEmail, targetPass);
-      // 2) الدور من staff_access (الأدمن بيحدده من Firebase Console)
+      // 2) الدور من staff_access
+      const acc = await getStaffAccess(user.email);
+      if (acc && ['owner', 'broker', 'coordinator', 'company_owner'].includes(String(acc.role))) {
+        onPortalLogin?.(acc);
+        setLoading(false);
+        onClose();
+        return;
+      }
       const role = await getStaffRole(user.email);
 
       if (role === 'admin') {

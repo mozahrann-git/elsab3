@@ -60,7 +60,8 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
   onSubmit,
 }) => {
   const [acctEmail, setAcctEmail] = useState('');   // اسم المستخدم (من غير الدومين)
-  const [acctRole, setAcctRole] = useState<'owner' | 'broker'>('owner');
+  const [realOwnerName, setRealOwnerName] = useState('');
+  const [realOwnerPhone, setRealOwnerPhone] = useState('');
   const [acctPass, setAcctPass] = useState('');
   const [acctError, setAcctError] = useState('');
   const [portalAcct, setPortalAcct] = useState<StaffAccess | null>(null);
@@ -70,6 +71,7 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
     if (u && !u.isAnonymous) getStaffAccess(u.email).then((a) => setPortalAcct(a && (a.role === 'owner' || a.role === 'broker') ? a : null));
     else setPortalAcct(null);
   }, [isOpen]);
+  const isBrokerSubmitter = portalAcct?.role === 'broker';
 
   const [formData, setFormData] = useState({
     ownerName: '',
@@ -180,7 +182,7 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
       if (!acctEmail.trim()) { setAcctError('اعمل حسابك عشان تتابع شقتك'); return; }
       if (acctPass.trim().length < 6) { setAcctError('الباسوورد لازم 6 حروف أو أكتر'); return; }
       try {
-        const r = await registerPortalAccount(acctRole, acctEmail, acctPass, formData.ownerName, formData.phone);
+        const r = await registerPortalAccount('owner', acctEmail, acctPass, formData.ownerName, formData.phone);
         ownerEmail = r.email;
         brokerId = r.brokerId;
       } catch (err: any) {
@@ -196,7 +198,9 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
       id: `sub-${Date.now()}`,
       ownerName: formData.ownerName,
       phone: formData.phone,
-      ownerPhone: formData.phone,
+      ownerPhone: isBrokerSubmitter ? (realOwnerPhone || formData.phone) : formData.phone,
+      realOwnerName: isBrokerSubmitter ? realOwnerName : formData.ownerName,
+      realOwnerPhone: isBrokerSubmitter ? realOwnerPhone : formData.phone,
       whatsapp: formData.whatsapp || formData.phone,
       neighborhood: formData.neighborhood,
       unitType: formData.unitType,
@@ -358,6 +362,16 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
                       />
                     </div>
                   </div>
+                  {isBrokerSubmitter && (
+                    <div className="p-4 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] space-y-3">
+                      <p className="font-bold text-sm text-[#141414]">بيانات مالك الشقة (بتظهر للإدارة بس)</p>
+                      <p className="text-[11px] text-[#6B665C]">لازم رقم المالك من الأول عشان تقدر تأكد المعاينة معاه على طول من بوابتك.</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input required value={realOwnerName} onChange={(e) => setRealOwnerName(e.target.value)} placeholder="اسم المالك" className="w-full py-3 px-4 bg-white rounded-2xl text-sm border border-[#ECE8DF]" />
+                        <input required type="tel" dir="ltr" value={realOwnerPhone} onChange={(e) => setRealOwnerPhone(e.target.value)} placeholder="01XXXXXXXXX" className="w-full py-3 px-4 bg-white rounded-2xl text-sm font-mono border border-[#ECE8DF]" />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 2. Unit Specs & Financials */}
@@ -730,17 +744,12 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
                 ) : (
                   <div className="p-4 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] space-y-3">
                     <p className="font-bold text-sm text-[#141414]">اعمل حسابك عشان تتابع شقتك</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([['owner', 'أنا المالك'], ['broker', 'أنا بروكر']] as const).map(([k, t]) => (
-                        <button key={k} type="button" onClick={() => setAcctRole(k)} className={`py-2.5 rounded-xl text-sm font-bold border ${acctRole === k ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#ECE8DF] text-[#6B665C]'}`}>{t}</button>
-                      ))}
-                    </div>
                     <div className="flex items-stretch rounded-xl overflow-hidden border border-[#ECE8DF] bg-white" dir="ltr">
                       <input value={acctEmail} onChange={(e) => setAcctEmail(cleanUsername(e.target.value))} placeholder="username" autoCapitalize="none" autoCorrect="off" className="flex-1 min-w-0 p-3 text-sm outline-none" />
-                      <span className="px-3 flex items-center bg-[#F6F4EF] text-sm text-[#6B665C] font-mono">@{PORTAL_DOMAIN[acctRole]}</span>
+                      <span className="px-3 flex items-center bg-[#F6F4EF] text-sm text-[#6B665C] font-mono">@{PORTAL_DOMAIN.owner}</span>
                     </div>
                     <input type="password" value={acctPass} onChange={(e) => setAcctPass(e.target.value)} placeholder="باسوورد (6 حروف أو أكتر)" dir="ltr" className="w-full p-3 rounded-xl bg-white border border-[#ECE8DF] text-sm" />
-                    <p className="text-[11px] text-[#6B665C]">هتدخل بـ <b dir="ltr">{(acctEmail || 'username')}@{PORTAL_DOMAIN[acctRole]}</b> والباسوورد ده، من زرار الدخول فوق.</p>
+                    <p className="text-[11px] text-[#6B665C]">هتدخل بـ <b dir="ltr">{(acctEmail || 'username')}@{PORTAL_DOMAIN.owner}</b> والباسوورد ده، من زرار الدخول فوق.</p>
                     {acctError && <p className="text-xs text-rose-700">{acctError}</p>}
                   </div>
                 )}

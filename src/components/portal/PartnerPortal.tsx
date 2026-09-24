@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Home, CalendarClock, MessageSquareText, UserRound, Plus, ExternalLink, Pause, Play, Image as ImageIcon, BadgeDollarSign, LogOut, KeyRound, Phone } from 'lucide-react';
 import { Property } from '../../types';
-import { StaffAccess } from '../../services/firebaseService';
+import { StaffAccess, fetchPropertyPrivateOwner } from '../../services/firebaseService';
 import { uploadFile } from '../../services/mediaStorage';
 import {
   UnitViewing, OwnerFeedback, ChangeRequest,
@@ -280,9 +280,18 @@ const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: st
   const [ownerName, setOwnerName] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
   const [saved, setSaved] = useState(false);
+  // رقم المالك اللي البروكر سجّله وهو بيضيف الشقة بيتجاب لوحده
+  useEffect(() => {
+    let alive = true;
+    fetchPropertyPrivateOwner(v.propertyId).then((d) => {
+      if (!alive || !d?.ownerPhone) return;
+      setOwnerName(d.ownerName || ''); setOwnerPhone(d.ownerPhone); setSaved(true);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [v.propertyId]);
   const [when, setWhen] = useState<WhenValue | null>(v.scheduledAt ? { at: v.scheduledAt, label: formatWhen(v.scheduledAt) } : null);
   const step = v.brokerStatus === 'confirmed' ? 4 : v.brokerStatus === 'messaged' ? 3 : saved ? 2 : 1;
-  const msg = `أهلاً ${ownerName || 'أستاذنا'}، في عميل جاد عايز يعاين شقتك (${v.propertyTitle}) ${v.scheduledText}. ينفع؟ — ${brokerName} · السبع للعقارات`;
+  const msg = `أهلاً أستاذ ${ownerName || ''}، في عميل جاد عايز يعاين شقتك (${v.propertyTitle}) ${v.scheduledText}. ينفع؟ — ${brokerName} · السبع للعقارات`;
   const phone = ownerPhone.replace(/\D/g, '').replace(/^0/, '20');
   const Step: React.FC<{ n: number; t: string }> = ({ n, t }) => (
     <div className="flex items-center gap-2.5">

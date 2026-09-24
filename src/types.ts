@@ -168,6 +168,8 @@ export interface OwnerSubmission {
   ownerEmail?: string;              // حساب المالك/البروكر في البوابة
   brokerId?: string;                // لو اللي عارضها بروكر
   submittedAtMs?: number;
+  realOwnerName?: string;           // صاحب الشقة الحقيقي لو اللي عارضها بروكر
+  realOwnerPhone?: string;
 }
 
 export interface AdminCredentials {

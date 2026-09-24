@@ -23,6 +23,7 @@ interface Props {
   onClose: () => void;
   onLogout: () => void;
   onAddUnit: () => void;
+  onOpenCrm: () => void;
 }
 
 const STAGES: { id: string; label: string }[] = [
@@ -31,7 +32,7 @@ const STAGES: { id: string; label: string }[] = [
   { id: 'negotiation', label: 'تفاوض' }, { id: 'closed', label: 'صفقة مغلقة' }, { id: 'lost', label: 'مؤجل' },
 ];
 
-export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, agents, submissions, logoUrl, onClose, onLogout, onAddUnit }) => {
+export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, agents, submissions, logoUrl, onClose, onLogout, onAddUnit, onOpenCrm }) => {
   const [tab, setTab] = useState('overview');
   const [viewings, setViewings] = useState<UnitViewing[]>([]);
   const [feedback, setFeedback] = useState<OwnerFeedback[]>([]);
@@ -81,6 +82,14 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
               <p className="text-3xl font-bold" style={{ fontFamily: "'Readex Pro', sans-serif", color: c as string }}>{v as number}</p>
             </Card>
           ))}
+          <Card className="lg:col-span-4">
+            <p className="font-bold">أدوات الأونر</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Btn onClick={onOpenCrm}><Users size={16} />افتح غرفة العمليات والـ CRM</Btn>
+              <Btn tone="light" onClick={() => setTab('partners')}><Building2 size={16} />داشبورد البروكرز والملاك</Btn>
+            </div>
+            <p className="text-[11px] text-[#8C877D]">متاح ليك: المتابعة والتقارير وإضافة شقة · مش متاح: الحسابات والباسووردات وحذف الشقق</p>
+          </Card>
           <Card tone="dark" className="lg:col-span-4">
             <span className="text-sm text-[#D9B864]">قيمة المعروض</span>
             <p className="text-3xl font-bold" style={{ fontFamily: "'Readex Pro', sans-serif" }}>{fmt(live.reduce((s, p) => s + p.price, 0))} <span className="text-sm font-normal">ج.م</span></p>
@@ -138,14 +147,18 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
       {tab === 'crm' && (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="lg:col-span-2">
-            <p className="font-bold">فريق المبيعات</p>
+            <p className="font-bold">داشبورد فريق المبيعات</p>
             {agents.map((a) => {
               const mine = leads.filter((l) => l.assignedAgentId === a.id);
               return (
                 <div key={a.id} className="flex flex-wrap justify-between items-center gap-2 border-t border-[#F0ECE4] pt-2 text-sm">
                   <span className="font-bold">{a.name}</span>
-                  <span className="text-[#6B665C] text-xs">
-                    {mine.length} عميل · {mine.filter((l) => l.status === 'closed').length} صفقة · {mine.filter((l) => l.nextActionAt && l.nextActionAt < Date.now() && l.followUpStatus !== 'completed').length} متابعة متأخرة
+                  <span className="flex flex-wrap gap-2 text-[11px]">
+                    <Chip tone="grey">{mine.length} عميل</Chip>
+                    <Chip tone="green">{mine.filter((l) => l.status === 'closed').length} صفقة</Chip>
+                    <Chip tone="blue">{viewings.filter((v) => v.salesAgentId === a.id).length} معاينة</Chip>
+                    <Chip tone="gold">{mine.filter((l) => (l.activity || []).some((x: any) => x.at >= today)).length} أكشن النهارده</Chip>
+                    <Chip tone="red">{mine.filter((l) => l.nextActionAt && l.nextActionAt < Date.now() && l.followUpStatus !== 'completed').length} متأخرة</Chip>
                   </span>
                 </div>
               );

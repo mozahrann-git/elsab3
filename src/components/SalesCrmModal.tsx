@@ -65,6 +65,7 @@ interface SalesCrmModalProps {
   onSelectProperty?: (property: Property) => void;
   isAdmin?: boolean;
   onDeleteLead?: (id: string) => void;
+  canEdit?: boolean;
   currentAgentId?: string;
   onLogout?: () => void;
 }
@@ -105,6 +106,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   onSelectProperty,
   isAdmin = false,
   onDeleteLead,
+  canEdit = true,
   currentAgentId,
   onLogout
 }) => {
@@ -248,6 +250,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
   };
 
+  const [compactView, setCompactView] = useState<boolean>(() => { try { return localStorage.getItem('lion_crm_compact') === '1'; } catch { return false; } });
+  const toggleCompact = () => setCompactView((v) => { const n = !v; try { localStorage.setItem('lion_crm_compact', n ? '1' : '0'); } catch { /* */ } return n; });
+  const removeFromFollowUps = (lead: Lead) => onUpdateLead({ ...lead, nextActionAt: null, followUpStatus: 'completed', followUpUrgency: 'upcoming' } as Lead);
+  const adminDeleteLead = async (lead: Lead) => {
+    if (!window.confirm(`تمسح ${lead.name} نهائياً من الـ CRM؟`)) return;
+    await deleteLeadFromDb(lead.id).catch(() => {});
+    onDeleteLead?.(lead.id);
+  };
   const [moveTarget, setMoveTarget] = useState<LeadStatus | null>(null);
   const [board, setBoard] = useState<CrmBoard>({});
   const [editBoard, setEditBoard] = useState<null | 'banner' | 'quests'>(null);
@@ -265,7 +275,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const questTemplate: DailyQuest[] = board.quests?.length ? board.quests : INITIAL_DAILY_QUESTS;
   const agentQuests: DailyQuest[] = questTemplate.map((t) => { const mine = (currentAgent?.activeQuests || []).find((q) => q.id === t.id); return { ...t, currentCount: mine?.currentCount || 0, isCompleted: (mine?.currentCount || 0) >= t.targetCount }; });
   const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م' };
-  const deleteRequests = isAdmin ? leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved) : [];
+  const deleteRequests = isAdmin && canEdit ? leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved) : [];
   const [moveComment, setMoveComment] = useState('');
   const [moveNext, setMoveNext] = useState<WhenValue | null>(null);
 
@@ -900,6 +910,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   جدول المواعيد والاتصالات المستحقة لمستشاري المبيعات
                 </p>
               </div>
+              <button onClick={toggleCompact} className="self-start sm:self-auto px-3.5 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold text-[#141414]">
+                {compactView ? 'عرض مفصّل' : 'عرض مختصر'}
+              </button>
 
               <div className="flex items-center gap-2">
                 <button
@@ -946,7 +959,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         <ChevronDown size={13} />
                       </button>
                     </div>
-
+{!compactView && (<>
                     {/* Follow-up Fields Grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-[#F6F4EF] p-3 rounded-xl border border-[#ECE8DF]">
                       <div>
@@ -1000,9 +1013,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                       </div>
                     )}
 
+</>)}
                     {/* Notes & Actions Bar */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                      <p className="text-xs text-[#6B665C] truncate max-w-xl">
+                      <p className={`text-xs text-[#6B665C] truncate max-w-xl ${compactView ? 'hidden sm:block' : ''}`}>
                         📝 <strong className="text-[#141414]">آخر ملاحظة:</strong> {lead.followUpNote || lead.notes?.[0] || 'لا توجد ملاحظات مسجلة بعد'}
                       </p>
 
@@ -1031,6 +1045,18 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         >
                           تفاصيل الملف
                         </button>
+                        {isAdmin && canEdit && (
+                          <>
+                            <button onClick={() => removeFromFollowUps(lead)} title="شيله من المتابعات"
+                              className="px-3 py-1.5 bg-white hover:bg-[#F6F4EF] text-[#6B665C] text-xs font-bold rounded-xl border border-[#ECE8DF]">
+                              شيله من المتابعات
+                            </button>
+                            <button onClick={() => adminDeleteLead(lead)} title="حذف العميل نهائياً"
+                              className="px-2.5 py-1.5 bg-[#FBEDEA] hover:bg-[#F7DED8] text-[#C2412D] text-xs font-bold rounded-xl border border-[#E9B8AE]">
+                              حذف
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

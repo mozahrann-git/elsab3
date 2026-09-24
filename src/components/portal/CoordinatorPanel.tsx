@@ -39,6 +39,7 @@ const mapLink = (p: Property) => {
 
 export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, submissions, logoUrl, onApproveSubmission, onRejectSubmission, onClose, onLogout }) => {
   const [tab, setTab] = useState('viewings');
+  const [tripSeed, setTripSeed] = useState<{ code: string; label: string; at?: number } | null>(null);
   const [viewings, setViewings] = useState<UnitViewing[]>([]);
   const [changes, setChanges] = useState<ChangeRequest[]>([]);
   const [agents, setAgents] = useState<FieldAgent[]>([]);
@@ -72,8 +73,8 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       active={tab} onTab={setTab} onClose={onClose}
       footer={<button onClick={onLogout} className="w-full px-4 py-3 rounded-xl text-sm text-[#F0776A] hover:bg-white/10 text-right flex items-center gap-2"><LogOut size={16} />خروج</button>}
     >
-      {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} onSendToAgent={() => setTab('agents')} />}
-      {tab === 'agents' && <AgentsTab agents={agents} trips={trips} fbs={fbs} viewings={viewings} properties={properties} isAdmin={isAdmin} />}
+      {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} onSendToAgent={(code, label, at) => { setTripSeed({ code, label, at }); setTab('agents'); }} />}
+      {tab === 'agents' && <AgentsTab agents={agents} trips={trips} fbs={fbs} viewings={viewings} properties={properties} isAdmin={isAdmin} seed={tripSeed} />}
       {tab === 'feedback' && <FeedbackTab fbs={fbs} />}
       {tab === 'changes' && <ChangesTab changes={changes} />}
       {tab === 'excel' && isAdmin && <OwnersExcelTab properties={properties} />}
@@ -83,7 +84,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
 };
 
 // ---------------- المعاينات ----------------
-const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; onSendToAgent: () => void }> = ({ viewings, properties, onSendToAgent }) => {
+const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; onSendToAgent: (code: string, label: string, at?: number) => void }> = ({ viewings, properties, onSendToAgent }) => {
   const [code, setCode] = useState('');
   const [time, setTime] = useState<WhenValue | null>(null);
   const [note, setNote] = useState('');
@@ -170,9 +171,9 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; o
                   <Btn tone="blue" className="!px-2 text-xs" onClick={async () => { const ph = await phoneOf(v); if (ph) window.location.href = `tel:${ph}`; else alert('مفيش رقم مالك متسجل'); }}><Phone size={14} />اتصال</Btn>
                 </div>
               )}
-              {v.ownerStatus === 'confirmed' && (
+              {(v.ownerStatus === 'confirmed' || v.brokerStatus === 'confirmed') && (
                 <div className="grid grid-cols-2 gap-2">
-                  <Btn tone="gold" onClick={onSendToAgent}><Send size={14} />ابعت للمندوب</Btn>
+                  <Btn tone="gold" onClick={() => onSendToAgent(v.propertyCode, v.brokerConfirmedTime || v.scheduledText, v.scheduledAt)}><Send size={14} />ابعت للمندوب</Btn>
                   <Btn tone="light" onClick={() => setViewingStatus(v.id, 'done')}>اتعاينت</Btn>
                 </div>
               )}
@@ -186,14 +187,20 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; o
 };
 
 // ---------------- المندوبين والمشاوير ----------------
-const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: FieldFeedback[]; viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean }> = ({ agents, trips, fbs, viewings, properties, isAdmin }) => {
+const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: FieldFeedback[]; viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; seed?: { code: string; label: string; at?: number } | null }> = ({ agents, trips, fbs, viewings, properties, isAdmin, seed }) => {
   const { next, last } = nextInLine(agents);
   const [agentId, setAgentId] = useState('');
   const [codes, setCodes] = useState<string[]>([]);
   const [codeInput, setCodeInput] = useState('');
   const [time, setTime] = useState<WhenValue | null>(null);
   const [edit, setEdit] = useState<Partial<FieldAgent> | null>(null);
-  const confirmed = viewings.filter((v) => v.ownerStatus === 'confirmed');
+  const confirmed = viewings.filter((v) => v.ownerStatus === 'confirmed' || v.brokerStatus === 'confirmed');
+  useEffect(() => {
+    if (!seed) return;
+    setCodes((c) => (c.includes(seed.code) ? c : [...c, seed.code]));
+    if (seed.at) setTime({ at: seed.at, label: formatWhen(seed.at) });
+    else if (seed.label) setTime({ at: Date.now(), label: seed.label });
+  }, [seed?.code]);
   const chosen = agents.find((a) => a.id === (agentId || next?.id));
   const units: TripUnit[] = useMemo(() => codes.map((c) => properties.find((p) => p.code === c)).filter(Boolean).map((p) => ({
     propertyId: p!.id, code: p!.code, title: p!.title, link: `${window.location.origin}/?property=${p!.code}`, location: mapLink(p!), brokerId: p!.brokerId,

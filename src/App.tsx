@@ -1432,8 +1432,8 @@ export default function App() {
       hasElevator: true,
       hasGarage: true,
       registeredContract: true,
-      ownerName: sub.ownerName,
-      ownerPhone: sub.phone,
+      ownerName: (sub as any).realOwnerName || sub.ownerName,
+      ownerPhone: (sub as any).realOwnerPhone || sub.phone,
       createdAt: new Date().toISOString().split('T')[0],
       clicks: { whatsapp: 0, call: 0, views: 0, favorites: 0 }
     };
@@ -2057,6 +2057,11 @@ export default function App() {
         }}
         salesAgents={salesAgents}
         adminCredentials={adminCredentials}
+        onPortalLogin={(acc) => {
+          setStaffAccess(acc);
+          setIsAdminLoginOpen(false);
+          setActivePortal(acc.role === 'owner' ? 'owner' : acc.role === 'broker' ? 'broker' : acc.role === 'company_owner' ? 'company' : 'coordinator');
+        }}
       />
 
       {/* 7. Full Admin Dashboard (Add/Edit/Delete Properties with 5 photos, Review Owner Submissions, Track Clicks) */}
@@ -2131,7 +2136,8 @@ export default function App() {
         properties={properties}
         agents={salesAgents}
         leads={crmLeads}
-        isAdmin={isAdminLoggedIn}
+        isAdmin={isAdminLoggedIn || staffAccess?.role === 'company_owner'}
+        canEdit={isAdminLoggedIn || isSalesLoggedIn}
         onDeleteLead={(id) => setCrmLeads((prev) => prev.filter((l) => l.id !== id))}
         currentAgentId={currentSalesAgentId || undefined}
         onLogout={handleSalesLogout}
@@ -2201,7 +2207,8 @@ export default function App() {
         <CompanyOwnerPanel access={staffAccess} properties={properties} leads={crmLeads} agents={salesAgents} submissions={ownerSubmissions} logoUrl={customLogoUrl}
           onClose={() => setActivePortal(null)}
           onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
-          onAddUnit={() => { setActivePortal(null); setIsResaleSubmitOpen(true); }} />
+          onAddUnit={() => { setActivePortal(null); setIsResaleSubmitOpen(true); }}
+          onOpenCrm={() => { setActivePortal(null); setIsCrmOpen(true); }} />
       )}
       {activePortal === 'coordinator' && staffAccess && (
         <CoordinatorPanel name={staffAccess.name || ''} isAdmin={staffAccess.role === 'admin'} properties={properties} submissions={ownerSubmissions} logoUrl={customLogoUrl}
