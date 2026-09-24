@@ -44,6 +44,10 @@ import { SpinWheelModal } from './SpinWheelModal';
 import { LeadDetailsModal } from './LeadDetailsModal';
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
+import { ContentTab } from './sales/ContentTab';
+import { LeaderboardTab } from './sales/LeaderboardTab';
+import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
+import { OfferBuilderModal } from './sales/OfferBuilderModal';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { DailyQuest } from '../types';
@@ -161,7 +165,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   // من بشوف شغله؟ (الأدمن والتيم ليدر بيختاروا)
   const [viewAgentId, setViewAgentId] = useState<string>('all');
   const myTeam = useMemo(() => agents.filter((a) => (a as any).teamLeadId === currentSalesAgent?.id), [agents, currentSalesAgent]);
-  const isLead = myTeam.length > 0 || (currentSalesAgent as any)?.isTeamLead;
+  const isLeadRole = currentSalesAgent?.role === 'team_leader' || currentSalesAgent?.role === 'sales_manager' || (currentSalesAgent as any)?.isTeamLead;
+  const isLead = isLeadRole || myTeam.length > 0;
   const visibleAgents = useMemo(() => (isAdmin ? agents : isLead ? [currentSalesAgent!, ...myTeam].filter(Boolean) : [currentSalesAgent!].filter(Boolean)), [isAdmin, isLead, agents, myTeam, currentSalesAgent]);
 
   // Scoped Leads
@@ -263,6 +268,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     await deleteLeadFromDb(lead.id).catch(() => {});
     onDeleteLead?.(lead.id);
   };
+  const [discoveryLead, setDiscoveryLead] = useState<Lead | null>(null);
+  const [offerLead, setOfferLead] = useState<Lead | null>(null);
   const [moveTarget, setMoveTarget] = useState<LeadStatus | null>(null);
   const [board, setBoard] = useState<CrmBoard>({});
   const [editBoard, setEditBoard] = useState<null | 'banner' | 'quests'>(null);
@@ -426,15 +433,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-full bg-[#A07A26] text-white font-bold flex items-center justify-center text-xs shadow-xs font-readex">
-                  {currentSalesAgent?.name?.charAt(0) || 'م'}
+                  {(isAdmin && !currentAgentId) ? 'إد' : (currentSalesAgent?.name?.charAt(0) || 'م')}
                 </div>
                 <div>
                   <h3 className="font-bold text-xs text-white truncate max-w-[120px]">
-                    {currentSalesAgent?.name || 'مستشار المبيعات'}
+                    {(isAdmin && !currentAgentId) ? 'الإدارة' : (currentSalesAgent?.name || 'مستشار المبيعات')}
                   </h3>
                   <div className="flex items-center gap-1.5 text-[10px] text-stone-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>متاح للمتابعات</span>
+                    <span>{(isAdmin && !currentAgentId) ? (viewAgentId === 'all' ? 'بتشوف الفريق كله' : `بتشوف ${agents.find((a) => a.id === viewAgentId)?.name || ''}`) : 'متاح للمتابعات'}</span>
                   </div>
                 </div>
               </div>
@@ -503,6 +510,23 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               <div className="flex items-center gap-2.5">
                 <Target size={16} />
                 <span>المطابقة الذكية للعملاء</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('content');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full p-2.5 rounded-xl text-right flex items-center justify-between text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'content'
+                  ? 'bg-[#A07A26] text-white shadow-xs'
+                  : 'text-stone-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Target size={16} />
+                <span>المحتوى والإعلانات</span>
               </div>
             </button>
 
@@ -628,6 +652,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             { id: 'followups', label: 'المتابعات' },
             { id: 'matching', label: 'المطابقة الذكية' },
             { id: 'quests', label: 'المهام والـ XP' },
+            { id: 'content', label: 'المحتوى والإعلانات' },
             { id: 'leaderboard', label: 'المتصدرين' }
           ].map((tab) => (
             <button
@@ -666,16 +691,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   return (
                     <button key={a.id} onClick={() => setViewAgentId(a.id)} className="w-full flex flex-wrap justify-between items-center gap-2 border-t border-[#F0ECE4] pt-2 text-right">
                       <span className="font-bold text-sm">{a.name}</span>
-                      {isAdmin && (
-                        <select value={(a as any).teamLeadId || (a as any).isTeamLead ? ((a as any).isTeamLead ? 'lead' : (a as any).teamLeadId) : ''}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => { e.stopPropagation(); const v = e.target.value; onUpdateAgent({ ...a, isTeamLead: v === 'lead', teamLeadId: v === 'lead' || !v ? '' : v } as any); }}
-                          className="px-2 py-1 rounded-lg bg-white border border-[#ECE8DF] text-[11px] font-bold">
-                          <option value="">بدون فريق</option>
-                          <option value="lead">تيم ليدر</option>
-                          {agents.filter((x) => (x as any).isTeamLead && x.id !== a.id).map((x) => <option key={x.id} value={x.id}>تحت {x.name}</option>)}
-                        </select>
-                      )}
                       <span className="flex gap-2 text-[11px]">
                         <span className="px-2 py-1 rounded-lg bg-[#F6F4EF]">{mine.length} عميل</span>
                         <span className={`px-2 py-1 rounded-lg ${late ? 'bg-[#FBEDEA] text-[#C2412D] font-bold' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>{late} متأخرة</span>
@@ -696,6 +711,21 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 </div>
               ))}
             </div>
+
+            {isAdmin && canEdit && leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved).length > 0 && (
+              <div className="bg-[#FBEDEA] border border-[#E9B8AE] rounded-2xl p-4 space-y-2">
+                <p className="font-bold text-sm text-[#9A2E1F]">طلبات مسح من الفريق</p>
+                {leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved).map((l: any) => (
+                  <div key={l.id} className="flex flex-wrap justify-between items-center gap-2 bg-white rounded-xl p-3">
+                    <div className="text-xs"><b className="text-sm">{l.name}</b> · {l.assignedAgentName}<br />{l.deleteRequest.by}: {l.deleteRequest.reason}</div>
+                    <div className="flex gap-2">
+                      <button onClick={() => adminDeleteLead(l)} className="px-3 py-2 rounded-xl bg-[#C2412D] text-white text-xs font-bold">موافقة ومسح</button>
+                      <button onClick={() => onUpdateLead({ ...l, deleteRequest: { ...l.deleteRequest, resolved: true } })} className="px-3 py-2 rounded-xl bg-[#F6F4EF] text-xs font-bold">رفض</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {isAdmin && editBoard === 'banner' && (
               <div className="bg-white border-2 border-[#A07A26] rounded-2xl p-4 space-y-2">
@@ -872,6 +902,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                                   </div>
                                 </div>
                               )}
+
+                              {/* السيلز المسؤول */}
+                              <div className="flex items-center justify-between gap-2 pt-1 text-[10px]">
+                                <span className="px-2 py-0.5 rounded-lg bg-[#F6F4EF] text-[#6B665C] font-bold truncate max-w-[60%]">
+                                  {lead.assignedAgentName || 'غير مسند'}
+                                </span>
+                                {isAdmin && canEdit && (
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); adminDeleteLead(lead); }}
+                                    className="px-2 py-0.5 rounded-lg text-[#C2412D] bg-[#FBEDEA] border border-[#E9B8AE] font-bold">حذف</button>
+                                )}
+                              </div>
 
                               {/* Bottom Action Bar: Quick Status Move & Communication */}
                               <div className="pt-2 border-t border-[#ECE8DF] flex items-center justify-between gap-1.5">
@@ -1072,11 +1113,32 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         </a>
 
                         <button
+                          onClick={() => ((lead as any).discovery ? setOfferLead(lead) : setDiscoveryLead(lead))}
+                          className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl"
+                        >
+                          {(lead as any).discovery ? 'عرض مخصوص' : 'مكالمة اكتشاف'}
+                        </button>
+                        <button
                           onClick={() => setSelectedLeadForDetails(lead)}
                           className="px-3 py-1.5 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] text-xs font-bold rounded-xl border border-[#ECE8DF]"
                         >
                           تفاصيل الملف
                         </button>
+                        {isAdmin && canEdit ? (
+                          <button onClick={() => adminDeleteLead(lead)}
+                            className="px-2.5 py-1.5 bg-[#FBEDEA] hover:bg-[#F7DED8] text-[#C2412D] text-xs font-bold rounded-xl border border-[#E9B8AE]">
+                            حذف
+                          </button>
+                        ) : (lead as any).deleteRequest && !(lead as any).deleteRequest.resolved ? (
+                          <span className="px-2.5 py-1.5 bg-[#FBEDEA] text-[#9A2E1F] text-[11px] font-bold rounded-xl">طلب المسح مستني الإدارة</span>
+                        ) : (
+                          <button onClick={() => {
+                            const reason = window.prompt('ليه عايز تمسح العميل ده؟');
+                            if (reason && reason.trim()) onUpdateLead({ ...lead, deleteRequest: { by: currentAgent?.name || 'السيلز', reason: reason.trim(), at: Date.now() } } as any);
+                          }} className="px-2.5 py-1.5 bg-white text-[#C2412D] text-[11px] font-bold rounded-xl border border-[#E9B8AE]">
+                            اطلب مسح
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1383,34 +1445,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {/* ========================================================= */}
         {/* TAB 5: LEADERBOARD */}
         {/* ========================================================= */}
-        {activeTab === 'leaderboard' && (
-          <div className="space-y-4 sm:space-y-5 max-w-3xl mx-auto flex-1 pt-1 w-full">
-            <div className="bg-white border border-[#ECE8DF] p-5 sm:p-6 rounded-3xl shadow-2xs space-y-4">
-              <h3 className="font-readex font-bold text-base sm:text-lg text-[#141414]">المتصدرين الشهر ده - فريق المبيعات</h3>
-              <p className="text-xs text-[#6B665C]">ترتيب المستشارين العقاريين حسب الصفقات والـ XP</p>
+        {activeTab === 'content' && (
+          <div className="p-4 sm:p-5">
+            <ContentTab properties={properties} agents={agents} currentAgent={currentAgent} isAdmin={isAdmin} />
+          </div>
+        )}
 
-              <div className="space-y-2.5 pt-2">
-                {agents.map((ag, idx) => (
-                  <div 
-                    key={ag.id} 
-                    className="p-3.5 sm:p-4 bg-[#F6F4EF] border border-[#ECE8DF] rounded-2xl flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full font-bold flex items-center justify-center text-xs ${
-                        idx === 0 ? 'bg-[#D9B864] text-[#141414]' : 'bg-[#ECE8DF] text-[#6B665C]'
-                      }`}>
-                        {idx + 1}
-                      </span>
-                      <div>
-                        <h4 className="font-bold text-xs sm:text-sm text-[#141414]">{ag.name}</h4>
-                        <p className="text-[10px] sm:text-[11px] text-[#6B665C]">{ag.dealsClosedCount} صفقات مغلقة</p>
-                      </div>
-                    </div>
-                    <span className="font-mono text-xs sm:text-sm font-bold text-[#141414]">{ag.xp} XP</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {activeTab === 'leaderboard' && (
+          <div className="p-4 sm:p-5">
+            <LeaderboardTab agents={agents} leads={leads} />
           </div>
         )}
 
@@ -1731,6 +1774,18 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         }}
       />
 
+    {discoveryLead && (
+        <DiscoveryCallModal isOpen={!!discoveryLead} lead={discoveryLead} properties={properties} byName={currentAgent?.name || 'الفريق'}
+          onClose={() => setDiscoveryLead(null)}
+          onSaved={(u) => { onUpdateLead(u); setDiscoveryLead((d) => (d ? u : d)); }}
+          onBuildOffer={(u) => { setDiscoveryLead(null); setOfferLead(u); }} />
+      )}
+      {offerLead && (
+        <OfferBuilderModal isOpen={!!offerLead} lead={offerLead} properties={properties}
+          agentId={currentAgent?.id || ''} agentName={currentAgent?.name || ''} agentPhone={currentAgent?.phone}
+          onClose={() => setOfferLead(null)}
+          onSent={(u) => onUpdateLead(u)} />
+      )}
     </div>
   );
 };

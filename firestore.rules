@@ -15,6 +15,7 @@ service cloud.firestore {
     function isOps()      { return hasAccess() && acc().role in ['admin', 'coordinator']; }
     function isBroker()   { return roleIs('broker'); }
     function isBoss()     { return roleIs('company_owner'); }   // أونر الشركة: عرض بس
+    function isMkt()      { return roleIs('marketing'); }
     function isOwner()    { return roleIs('owner'); }
     function myBrokerId() { return acc().brokerId; }
     function myCodes()    { return acc().propertyCodes; }
@@ -125,6 +126,23 @@ service cloud.firestore {
       allow read: if isOps()
                   || (isBroker() && resource.data.brokerId == myBrokerId())
                   || (isStaff() && get(/databases/$(database)/documents/sales_agents/$(resource.data.salesAgentId)).data.email.lower() == staffEmail());
+    }
+
+    // ---------- أدوات السيلز: العروض واللينكات والمحتوى ----------
+    match /offers/{id} {
+      allow get: if true;                 // لينك العرض نفسه
+      allow update: if true;              // عدّاد الفتح بس
+      allow list, create, delete: if isStaff() || isOps() || isBoss();
+    }
+    match /tracked_links/{id} {
+      allow get: if true;
+      allow update: if true;              // عدّادات الفتح والواتساب
+      allow list, create, delete: if isStaff() || isOps() || isBoss() || isMkt();
+    }
+    match /content_slots/{id} {
+      allow read: if isStaff() || isOps() || isBoss() || isMkt();
+      allow create, update: if isStaff() || isOps() || isMkt();
+      allow delete: if isAdmin();
     }
 
     // ---------- مندوبين المعاينات ----------

@@ -2421,7 +2421,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             ? 'bg-purple-50 text-purple-900'
                             : 'bg-stone-100 text-stone-700'
                         }`}>
-                          {agent.role === 'sales_manager' ? 'مدير مبيعات' : agent.role === 'team_leader' ? 'تيم ليدر' : 'مستشار عقاري'}
+                          {agent.role === 'sales_manager' ? 'مدير مبيعات' : agent.role === 'team_leader' ? 'تيم ليدر' : `مستشار عقاري${(agent as any).teamLeadId ? ` · تحت ${salesAgentsList.find((x) => x.id === (agent as any).teamLeadId)?.name || ''}` : ''}`}
                         </span>
                       </div>
 
@@ -3458,6 +3458,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <option value="sales_agent">مستشار عقاري (Sales Agent)</option>
                       <option value="team_leader">قائد فريق (Team Leader)</option>
                       <option value="sales_manager">مدير مبيعات (Sales Manager)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1">تحت أنهي تيم ليدر:</label>
+                    <select
+                      value={(agentFormData as any).teamLeadId || ''}
+                      onChange={(e) => setAgentFormData({ ...agentFormData, teamLeadId: e.target.value } as any)}
+                      className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-900 focus:outline-none focus:border-stone-900"
+                    >
+                      <option value="">بدون (أو هو نفسه ليدر)</option>
+                      {salesAgentsList.filter((a) => a.role === 'team_leader' || (a as any).isTeamLead).map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
                     </select>
                   </div>
 

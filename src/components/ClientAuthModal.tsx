@@ -145,7 +145,7 @@ export const ClientAuthModal: React.FC<ClientAuthModalProps> = ({
         try {
           const user = await signInStaff(identifier, pass);
           const acc = await getStaffAccess(user.email);
-          if (acc && (acc.role === 'owner' || acc.role === 'broker' || acc.role === 'coordinator' || acc.role === 'company_owner')) {
+          if (acc && (acc.role === 'owner' || acc.role === 'broker' || acc.role === 'coordinator' || acc.role === 'company_owner' || acc.role === 'marketing')) {
             setSuccessMsg('أهلاً بيك! جاري فتح بوابتك...');
             setTimeout(() => { onPortalLogin?.(acc); onClose(); }, 400);
             return;

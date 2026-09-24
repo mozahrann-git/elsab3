@@ -70,7 +70,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       const user = await signInStaff(targetEmail, targetPass);
       // 2) الدور من staff_access
       const acc = await getStaffAccess(user.email);
-      if (acc && ['owner', 'broker', 'coordinator', 'company_owner'].includes(String(acc.role))) {
+      if (acc && ['owner', 'broker', 'coordinator', 'company_owner', 'marketing'].includes(String(acc.role))) {
         onPortalLogin?.(acc);
         setLoading(false);
         onClose();

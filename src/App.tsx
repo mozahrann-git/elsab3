@@ -8,8 +8,11 @@ import { subscribeDistrictContent, computeDistrictStats, DistrictContent } from 
 import { OwnerPortalPromo } from './components/OwnerPortalPromo';
 import { CoordinatorPanel } from './components/portal/CoordinatorPanel';
 import { CompanyOwnerPanel } from './components/portal/CompanyOwnerPanel';
+import { MarketingPanel } from './components/portal/MarketingPanel';
 import { FieldFeedbackPage } from './components/portal/FieldFeedbackPage';
 import { SalesFeedbackInbox } from './components/portal/SalesFeedbackInbox';
+import { OfferPublicPage } from './components/sales/OfferPublicPage';
+import { getTrackedLink, logLinkHit } from './services/salesToolsService';
 import { getStaffAccess, StaffAccess } from './services/firebaseService';
 import { linkPropertyToOwner } from './services/portalService';
 import { 
@@ -188,18 +191,32 @@ export default function App() {
 
   // حساب الشخص الداخل (مالك/بروكر/مسؤولة ملاك/سيلز/أدمن) والبوابة المفتوحة
   const [staffAccess, setStaffAccess] = useState<StaffAccess | null>(null);
-  const [activePortal, setActivePortal] = useState<null | 'owner' | 'broker' | 'coordinator' | 'company' | 'sales_feedback'>(null);
+  const [activePortal, setActivePortal] = useState<null | 'owner' | 'broker' | 'coordinator' | 'company' | 'marketing' | 'sales_feedback'>(null);
   const [feedbackTripId] = useState<string | null>(() => { try { return new URLSearchParams(window.location.search).get('fb'); } catch { return null; } });
+  // لينك العرض المخصوص واللينك المتتبّع
+  const [offerId, setOfferId] = useState<string | null>(() => { try { return new URLSearchParams(window.location.search).get('offer'); } catch { return null; } });
+  useEffect(() => {
+    let t: string | null = null;
+    try { t = new URLSearchParams(window.location.search).get('t'); } catch { /* */ }
+    if (!t) return;
+    logLinkHit(t).catch(() => {});
+    getTrackedLink(t).then((l) => {
+      if (!l) return;
+      const url = l.target.startsWith('http') ? l.target : `${window.location.origin}${l.target}`;
+      window.location.replace(url);
+    }).catch(() => {});
+  }, []);
   const [showFieldFeedback, setShowFieldFeedback] = useState<boolean>(!!feedbackTripId);
   const myPortalLabel = staffAccess?.role === 'owner' ? 'بوابة المالك'
     : staffAccess?.role === 'broker' ? 'بوابة البروكر'
     : staffAccess?.role === 'coordinator' ? 'الملاك والمعاينات'
     : staffAccess?.role === 'admin' ? 'الملاك والمعاينات'
     : staffAccess?.role === 'company_owner' ? 'لوحة الأونر'
+    : staffAccess?.role === 'marketing' ? 'لوحة الماركتنج'
     : staffAccess?.role === 'sales' ? 'فيدباك المعاينات' : undefined;
   const openMyPortal = () => {
     const r = staffAccess?.role;
-    setActivePortal(r === 'owner' ? 'owner' : r === 'broker' ? 'broker' : r === 'company_owner' ? 'company' : r === 'sales' ? 'sales_feedback' : r === 'coordinator' || r === 'admin' ? 'coordinator' : null);
+    setActivePortal(r === 'owner' ? 'owner' : r === 'broker' ? 'broker' : r === 'company_owner' ? 'company' : r === 'marketing' ? 'marketing' : r === 'sales' ? 'sales_feedback' : r === 'coordinator' || r === 'admin' ? 'coordinator' : null);
   };
 
   // بيتغير مع كل تسجيل دخول/خروج، عشان الاشتراكات تتعمل من جديد بصلاحيات الحساب الحالي
@@ -2059,7 +2076,7 @@ export default function App() {
         onPortalLogin={(acc) => {
           setStaffAccess(acc);
           setIsAdminLoginOpen(false);
-          setActivePortal(acc.role === 'owner' ? 'owner' : acc.role === 'broker' ? 'broker' : acc.role === 'company_owner' ? 'company' : 'coordinator');
+          setActivePortal(acc.role === 'owner' ? 'owner' : acc.role === 'broker' ? 'broker' : acc.role === 'company_owner' ? 'company' : acc.role === 'marketing' ? 'marketing' : 'coordinator');
         }}
       />
 
@@ -2202,6 +2219,11 @@ export default function App() {
           onClose={() => setActivePortal(null)} onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
           onAddUnit={() => { setActivePortal(null); setIsResaleSubmitOpen(true); }} />
       )}
+      {activePortal === 'marketing' && staffAccess && (
+        <MarketingPanel access={staffAccess} agents={salesAgents} logoUrl={customLogoUrl}
+          onClose={() => setActivePortal(null)}
+          onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }} />
+      )}
       {activePortal === 'company' && staffAccess && (
         <CompanyOwnerPanel access={staffAccess} properties={properties} leads={crmLeads} agents={salesAgents} submissions={ownerSubmissions} logoUrl={customLogoUrl}
           onClose={() => setActivePortal(null)}
@@ -2223,6 +2245,7 @@ export default function App() {
       )}
       <SmartFilterDock filter={filter} setFilter={setFilter} properties={properties} neighborhoods={HADABA_WOSTA_NEIGHBORHOODS as unknown as string[]} resultCount={filteredProperties.length} />
       <SalesFeedbackInbox isOpen={activePortal === 'sales_feedback'} onClose={() => setActivePortal(null)} agentId={currentSalesAgentId} isAdmin={isAdminLoggedIn} />
+      {offerId && <OfferPublicPage offerId={offerId} onClose={() => { setOfferId(null); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }} />}
       {showFieldFeedback && feedbackTripId && <FieldFeedbackPage tripId={feedbackTripId} onClose={() => { setShowFieldFeedback(false); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }} />}
 
       <ClientAuthModal
@@ -2242,7 +2265,7 @@ export default function App() {
         onPortalLogin={(acc) => {
           setStaffAccess(acc);
           setIsClientAuthOpen(false);
-          setActivePortal(acc.role === 'owner' ? 'owner' : acc.role === 'broker' ? 'broker' : acc.role === 'company_owner' ? 'company' : 'coordinator');
+          setActivePortal(acc.role === 'owner' ? 'owner' : acc.role === 'broker' ? 'broker' : acc.role === 'company_owner' ? 'company' : acc.role === 'marketing' ? 'marketing' : 'coordinator');
         }}
         salesAgents={salesAgents}
         adminCredentials={adminCredentials}
