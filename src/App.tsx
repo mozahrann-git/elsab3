@@ -1710,11 +1710,9 @@ export default function App() {
           }
         }}
         onOpenCrm={() => {
-          if (isSalesLoggedIn) {
-            setIsCrmOpen(true);
-          } else {
-            setIsSalesLoginOpen(true);
-          }
+          // الأدمن وأونر الشركة بيدخلوا على طول ويشوفوا كل الفريق
+          if (isAdminLoggedIn || isSalesLoggedIn || staffAccess?.role === 'company_owner') setIsCrmOpen(true);
+          else setIsSalesLoginOpen(true);
         }}
         isAdminLoggedIn={isAdminLoggedIn}
         pendingSubmissionsCount={ownerSubmissions.filter(s => s.status === 'pending').length}
