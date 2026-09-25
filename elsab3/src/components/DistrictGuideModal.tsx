@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Compass, 
@@ -15,9 +15,13 @@ import {
   MapPin,
   TrendingUp,
   SlidersHorizontal,
-  Layers
+  Layers,
+  Plus,
+  Save,
+  Trash2
 } from 'lucide-react';
 import { HADABA_DISTRICTS_GUIDE, HADABA_HIGHWAYS_DATA, HADABA_LANDMARKS_CATEGORIES, HADABA_LEGAL_TIPS } from '../data/properties';
+import { subscribeToGuideContent, saveGuideContent, GuideContent, DEFAULT_GUIDE } from '../services/guideContentService';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import { DistrictGuideInfo } from '../types';
 
@@ -31,6 +35,37 @@ interface DistrictGuideModalProps {
 
 const STORAGE_KEY = 'lion_hadaba_districts_custom_guide';
 
+/* شريط التعديل: يظهر للأدمن فوق كل تبويب */
+const EditorBar: React.FC<{
+  editing: boolean; busy: boolean;
+  onEdit: () => void; onCancel: () => void; onSave: () => void;
+  onAdd: () => void; addLabel: string;
+}> = ({ editing, busy, onEdit, onCancel, onSave, onAdd, addLabel }) => (
+  <div className="flex flex-wrap items-center justify-between gap-2 bg-[#FBF8F1] border border-[#E8D3A6] rounded-2xl px-3 py-2">
+    <p className="text-xs font-bold text-[#6E5418]">
+      {editing ? 'بتعدّل دلوقتي — اكتب وبعدين احفظ' : 'المحتوى ده قابل للتعديل'}
+    </p>
+    <div className="flex items-center gap-2">
+      {editing ? (
+        <>
+          <button onClick={onAdd} className="px-3 py-1.5 rounded-xl bg-white border border-[#DCD6CA] text-xs font-bold flex items-center gap-1">
+            <Plus size={13} />{addLabel}
+          </button>
+          <button onClick={onCancel} className="px-3 py-1.5 rounded-xl bg-white border border-[#DCD6CA] text-xs font-bold">إلغاء</button>
+          <button onClick={onSave} disabled={busy}
+            className="px-4 py-1.5 rounded-xl bg-[#A07A26] text-white text-xs font-bold flex items-center gap-1 disabled:opacity-60">
+            <Save size={13} />{busy ? 'بيحفظ...' : 'حفظ'}
+          </button>
+        </>
+      ) : (
+        <button onClick={onEdit} className="px-4 py-1.5 rounded-xl bg-[#141414] text-white text-xs font-bold flex items-center gap-1">
+          <Edit3 size={13} />تعديل
+        </button>
+      )}
+    </div>
+  </div>
+);
+
 export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
   properties = [],
   isOpen,
@@ -39,6 +74,68 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
   isAdmin = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'districts' | 'highways' | 'landmarks' | 'legal'>('districts');
+
+  // محتوى المحاور والمعالم والنصايح: من Firestore، قابل للتعديل
+  const [guide, setGuide] = useState<GuideContent>(DEFAULT_GUIDE);
+  const [guideDraft, setGuideDraft] = useState<GuideContent>(DEFAULT_GUIDE);
+  const [guideEdit, setGuideEdit] = useState(false);
+  const [guideBusy, setGuideBusy] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeToGuideContent((c) => {
+      setGuide(c);
+      setGuideDraft((prev) => (guideEditRef.current ? prev : c));
+    });
+    return () => unsub();
+  }, []);
+
+  const guideEditRef = useRef(false);
+  useEffect(() => { guideEditRef.current = guideEdit; }, [guideEdit]);
+
+  const saveGuide = async () => {
+    setGuideBusy(true);
+    try {
+      await saveGuideContent(guideDraft);
+      setGuide(guideDraft);
+      setGuideEdit(false);
+    } catch (err) {
+      console.error('[Guide] الحفظ فشل:', err);
+      window.alert('الحفظ مش قادر يوصل للسحابة — جرّب تاني');
+    } finally {
+      setGuideBusy(false);
+    }
+  };
+
+  const setHighway = (i: number, key: 'name' | 'description' | 'destinations' | 'travelTime', v: string) =>
+    setGuideDraft({ ...guideDraft, highways: guideDraft.highways.map((h, j) => (j === i ? { ...h, [key]: v } : h)) });
+
+  const setCategory = (i: number, v: string) =>
+    setGuideDraft({ ...guideDraft, landmarks: guideDraft.landmarks.map((c, j) => (j === i ? { ...c, category: v } : c)) });
+
+  const setItem = (ci: number, ii: number, key: 'name' | 'district' | 'desc', v: string) =>
+    setGuideDraft({
+      ...guideDraft,
+      landmarks: guideDraft.landmarks.map((c, j) =>
+        j === ci ? { ...c, items: c.items.map((it, k) => (k === ii ? { ...it, [key]: v } : it)) } : c),
+    });
+
+  const addItem = (ci: number) =>
+    setGuideDraft({
+      ...guideDraft,
+      landmarks: guideDraft.landmarks.map((c, j) =>
+        j === ci ? { ...c, items: [...c.items, { name: '', district: '', desc: '' }] } : c),
+    });
+
+  const removeItem = (ci: number, ii: number) =>
+    setGuideDraft({
+      ...guideDraft,
+      landmarks: guideDraft.landmarks.map((c, j) =>
+        j === ci ? { ...c, items: c.items.filter((_, k) => k !== ii) } : c),
+    });
+
+  const setTip = (i: number, key: 'title' | 'description', v: string) =>
+    setGuideDraft({ ...guideDraft, legalTips: guideDraft.legalTips.map((t, j) => (j === i ? { ...t, [key]: v } : t)) });
+
   const [selectedDistrictName, setSelectedDistrictName] = useState<string>('الحي الأول');
   
   // Custom Districts State with local storage persistence
@@ -100,11 +197,11 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
       <div 
-        className="relative w-full max-w-6xl bg-[#141414] border border-white/10 rounded-none sm:rounded-3xl shadow-2xl text-right text-white h-[100dvh] sm:h-[92vh] flex flex-col overflow-hidden font-ibm"
+        className="relative w-full max-w-6xl bg-[#F6F4EF] border border-[#E4DFD4] rounded-none sm:rounded-3xl shadow-2xl text-right text-[#141414] h-[100dvh] sm:h-[92vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 py-3.5 bg-[#141722] border-b border-white/10 flex items-center justify-between shrink-0">
+        <div className="px-5 py-3.5 bg-[#141414] border-b border-black/10 flex items-center justify-between shrink-0 text-white">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-[#A07A26] text-white rounded-xl shadow-md">
               <Compass size={20} />
@@ -141,11 +238,11 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
         </div>
 
         {/* Tab Controls */}
-        <div className="bg-[#11131c] border-b border-white/10 px-4 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs shrink-0">
+        <div className="bg-white border-b border-[#ECE8DF] px-4 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs shrink-0">
           <button
             onClick={() => setActiveTab('districts')}
             className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'districts' ? 'bg-[#A07A26] text-white shadow-md font-bold' : 'bg-[#1C1C1C] text-[#CFCBC2] hover:text-white'
+              activeTab === 'districts' ? 'bg-[#141414] text-white shadow-sm font-bold' : 'bg-[#F6F4EF] text-[#6B665C] hover:text-[#141414] border border-[#ECE8DF]'
             }`}
           >
             <Building2 size={14} />
@@ -155,7 +252,7 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
           <button
             onClick={() => setActiveTab('highways')}
             className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'highways' ? 'bg-[#A07A26] text-white shadow-md font-bold' : 'bg-[#1C1C1C] text-[#CFCBC2] hover:text-white'
+              activeTab === 'highways' ? 'bg-[#141414] text-white shadow-sm font-bold' : 'bg-[#F6F4EF] text-[#6B665C] hover:text-[#141414] border border-[#ECE8DF]'
             }`}
           >
             <Navigation size={14} />
@@ -165,7 +262,7 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
           <button
             onClick={() => setActiveTab('landmarks')}
             className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'landmarks' ? 'bg-[#A07A26] text-white shadow-md font-bold' : 'bg-[#1C1C1C] text-[#CFCBC2] hover:text-white'
+              activeTab === 'landmarks' ? 'bg-[#141414] text-white shadow-sm font-bold' : 'bg-[#F6F4EF] text-[#6B665C] hover:text-[#141414] border border-[#ECE8DF]'
             }`}
           >
             <ShoppingBag size={14} />
@@ -175,7 +272,7 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
           <button
             onClick={() => setActiveTab('legal')}
             className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'legal' ? 'bg-[#A07A26] text-white shadow-md font-bold' : 'bg-[#1C1C1C] text-[#CFCBC2] hover:text-white'
+              activeTab === 'legal' ? 'bg-[#141414] text-white shadow-sm font-bold' : 'bg-[#F6F4EF] text-[#6B665C] hover:text-[#141414] border border-[#ECE8DF]'
             }`}
           >
             <ShieldCheck size={14} />
@@ -199,7 +296,7 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2 transition-all border ${
                       selectedDistrictName === d.name
                         ? 'bg-[#A07A26] text-white border-[#A07A26] font-bold shadow-md'
-                        : 'bg-[#141722] text-[#CFCBC2] border-white/10 hover:border-white/25'
+                        : 'bg-white text-[#6B665C] border-[#ECE8DF] hover:border-[#DCD6CA]'
                     }`}
                   >
                     <span className={`w-2 h-2 rounded-full ${selectedDistrictName === d.name ? 'bg-black' : 'bg-[#A07A26]'}`} />
@@ -209,7 +306,7 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
               </div>
 
               {/* Spotlight Featured District Story Card (Editorial Compact Layout) */}
-              <div className="bg-[#141722] border border-white/15 rounded-2xl overflow-hidden shadow-xl grid grid-cols-1 md:grid-cols-12 gap-0">
+              <div className="bg-white border border-[#ECE8DF] rounded-2xl overflow-hidden shadow-sm grid grid-cols-1 md:grid-cols-12 gap-0">
                 
                 {/* Photo Column (5 cols) */}
                 <div className="md:col-span-5 relative h-56 md:h-auto min-h-[220px] bg-neutral-950 overflow-hidden">
@@ -231,9 +328,9 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
                     return (
                       <div className="grid grid-cols-3 gap-2 mb-3">
                         {[['متاح دلوقتي', `${list.length} شقة`], ['متوسط المتر', `${ppm.toLocaleString('en-US')} ج.م`], ['تبدأ من', `${(min / 1e6).toFixed(min % 1e6 ? 1 : 0)} مليون`]].map(([t, v]) => (
-                          <div key={t} className="rounded-xl bg-white/5 border border-white/10 p-2.5 text-center">
+                          <div key={t} className="rounded-xl bg-black/40 border border-white/20 p-2.5 text-center backdrop-blur-sm">
                             <p className="text-sm font-bold text-[#D9B864] font-readex">{v}</p>
-                            <p className="text-[10px] text-[#A3A09A]">{t}</p>
+                            <p className="text-[10px] text-white/80">{t}</p>
                           </div>
                         ))}
                       </div>
@@ -242,12 +339,12 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
                   </div>
 
                   <div className="absolute bottom-3 right-3 left-3 flex items-center justify-between text-xs">
-                    <span className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/20 text-[#E7E2D8] font-bold">
+                    <span className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/20 text-[#3A3731] font-bold">
                       📍 الهضبة الوسطى
                     </span>
                     <button
                       onClick={() => setEditingDistrict({ ...currentActiveDistrict })}
-                      className="px-2.5 py-1 bg-[#1C1C1C]/90 hover:bg-[#A07A26] text-[#E7E2D8] hover:text-black rounded-lg border border-white/20 text-xs font-bold transition-all flex items-center gap-1 shadow"
+                      className="px-2.5 py-1 bg-white/90 hover:bg-[#A07A26] text-[#3A3731] hover:text-black rounded-lg border border-white/20 text-xs font-bold transition-all flex items-center gap-1 shadow"
                     >
                       <Edit3 size={13} />
                       <span>تعديل المقال والصورة</span>
@@ -260,47 +357,47 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
                   
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-base sm:text-lg font-bold text-white">
-                        {currentActiveDistrict.name} · <span className="text-[#D9B864] text-sm font-bold">{currentActiveDistrict.tagline}</span>
+                      <h3 className="text-base sm:text-lg font-bold text-[#141414]">
+                        {currentActiveDistrict.name} · <span className="text-[#A07A26] text-sm font-bold">{currentActiveDistrict.tagline}</span>
                       </h3>
                     </div>
 
                     {/* Compact Micro-Article */}
-                    <p className="text-xs text-[#E7E2D8] leading-relaxed bg-black/40 p-3 rounded-xl border border-white/5">
+                    <p className="text-xs text-[#3A3731] leading-relaxed bg-[#F6F4EF] p-3 rounded-xl border border-[#ECE8DF]">
                       {currentActiveDistrict.desc}
                     </p>
 
                     {/* Fast Metadata Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      <div className="bg-black/30 p-2.5 rounded-lg border border-white/5 space-y-1">
-                        <div className="text-[#A3A09A] font-bold flex items-center gap-1">
-                          <MapPin size={13} className="text-[#D9B864]" />
+                      <div className="bg-[#F6F4EF] p-2.5 rounded-lg border border-[#ECE8DF] space-y-1">
+                        <div className="text-[#6B665C] font-bold flex items-center gap-1">
+                          <MapPin size={13} className="text-[#A07A26]" />
                           <span>الموقع والمداخل:</span>
                         </div>
-                        <p className="text-[#CFCBC2] text-[11px] leading-snug">{currentActiveDistrict.locationDetails}</p>
+                        <p className="text-[#3A3731] text-[11px] leading-snug">{currentActiveDistrict.locationDetails}</p>
                       </div>
 
-                      <div className="bg-black/30 p-2.5 rounded-lg border border-white/5 space-y-1">
-                        <div className="text-[#A3A09A] font-bold flex items-center gap-1">
-                          <TrendingUp size={13} className="text-[#D9B864]" />
+                      <div className="bg-[#F6F4EF] p-2.5 rounded-lg border border-[#ECE8DF] space-y-1">
+                        <div className="text-[#6B665C] font-bold flex items-center gap-1">
+                          <TrendingUp size={13} className="text-[#A07A26]" />
                           <span>أهم المعالم:</span>
                         </div>
-                        <p className="text-[#CFCBC2] text-[11px] leading-snug">{currentActiveDistrict.keyLandmarks.join(' · ')}</p>
+                        <p className="text-[#3A3731] text-[11px] leading-snug">{currentActiveDistrict.keyLandmarks.join(' · ')}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Price Bar & CTAs */}
-                  <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start bg-black/50 px-3 py-1.5 rounded-xl border border-white/5">
+                  <div className="pt-3 border-t border-[#ECE8DF] flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start bg-black/50 px-3 py-1.5 rounded-xl border border-[#ECE8DF]">
                       <div>
-                        <span className="text-[10px] text-[#A3A09A] block font-bold">المتر المتشطب:</span>
+                        <span className="text-[10px] text-[#6B665C] block font-bold">المتر المتشطب:</span>
                         <span className="text-xs font-bold text-white font-mono">{currentActiveDistrict.avgMeterFinished}</span>
                       </div>
                       <div className="w-[1px] h-6 bg-white/10" />
                       <div>
-                        <span className="text-[10px] text-[#A3A09A] block font-bold">المتر نصف تشطيب:</span>
-                        <span className="text-xs font-bold text-[#D9B864] font-mono">{currentActiveDistrict.avgMeterSemi}</span>
+                        <span className="text-[10px] text-[#6B665C] block font-bold">المتر نصف تشطيب:</span>
+                        <span className="text-xs font-bold text-[#A07A26] font-mono">{currentActiveDistrict.avgMeterSemi}</span>
                       </div>
                     </div>
 
@@ -323,8 +420,8 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
               {/* All Districts Overview Grid (Compact Cards) */}
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-bold text-[#A3A09A] flex items-center gap-1.5">
-                    <Layers size={14} className="text-[#D9B864]" />
+                  <h4 className="text-xs font-bold text-[#6B665C] flex items-center gap-1.5">
+                    <Layers size={14} className="text-[#A07A26]" />
                     <span>بطاقات سريعة لكافة أحياء الهضبة (1 إلى 8):</span>
                   </h4>
                 </div>
@@ -336,30 +433,30 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
                       onClick={() => setSelectedDistrictName(dist.name)}
                       className={`group cursor-pointer p-3 rounded-xl border transition-all flex flex-col justify-between space-y-2.5 ${
                         selectedDistrictName === dist.name
-                          ? 'bg-[#1C1C1C] border-[#A07A26] shadow-md ring-1 ring-[#A07A26]/50'
-                          : 'bg-[#12141d] border-white/10 hover:border-white/30'
+                          ? 'bg-white border-[#A07A26] shadow-md ring-1 ring-[#A07A26]/50'
+                          : 'bg-[#12141d] border-[#ECE8DF] hover:border-white/30'
                       }`}
                     >
                       <div className="space-y-1.5">
-                        <div className="relative h-24 rounded-lg overflow-hidden bg-[#1C1C1C]">
+                        <div className="relative h-24 rounded-lg overflow-hidden bg-white">
                           <img
                             src={dist.imageUrl || PRESET_IMAGES[0]}
                             alt={dist.name}
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                          <span className="absolute bottom-1.5 right-1.5 bg-black/80 text-[#D9B864] text-[10px] font-bold px-2 py-0.5 rounded border border-white/10">
+                          <span className="absolute bottom-1.5 right-1.5 bg-black/80 text-[#A07A26] text-[10px] font-bold px-2 py-0.5 rounded border border-[#ECE8DF]">
                             {dist.name}
                           </span>
                         </div>
 
                         <h5 className="text-xs font-bold text-white line-clamp-1">{dist.tagline}</h5>
-                        <p className="text-[11px] text-[#A3A09A] line-clamp-2 leading-relaxed">{dist.desc}</p>
+                        <p className="text-[11px] text-[#6B665C] line-clamp-2 leading-relaxed">{dist.desc}</p>
                       </div>
 
-                      <div className="pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] text-[#CFCBC2]">
-                        <span className="font-mono text-[#D9B864] font-bold">{dist.avgMeterFinished}</span>
-                        <span className="text-[#A3A09A] underline group-hover:text-[#D9B864]">تفاصيل &larr;</span>
+                      <div className="pt-1.5 border-t border-[#ECE8DF] flex items-center justify-between text-[10px] text-[#3A3731]">
+                        <span className="font-mono text-[#A07A26] font-bold">{dist.avgMeterFinished}</span>
+                        <span className="text-[#6B665C] underline group-hover:text-[#A07A26]">تفاصيل &larr;</span>
                       </div>
                     </div>
                   ))}
@@ -369,65 +466,163 @@ export const DistrictGuideModal: React.FC<DistrictGuideModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: HIGHWAYS */}
+          {/* TAB 2: المحاور — قابل للتعديل */}
           {activeTab === 'highways' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {HADABA_HIGHWAYS_DATA.map((h, i) => (
-                <div key={i} className="bg-[#141722] p-4 rounded-xl border border-white/10 space-y-2">
-                  <div className="flex items-center gap-2 text-[#D9B864] font-bold text-sm">
-                    <Navigation size={16} />
-                    <span>{h.name}</span>
+            <div className="space-y-3">
+              {isAdmin && (
+                <EditorBar
+                  editing={guideEdit}
+                  busy={guideBusy}
+                  onEdit={() => setGuideEdit(true)}
+                  onCancel={() => { setGuideDraft(guide); setGuideEdit(false); }}
+                  onSave={saveGuide}
+                  onAdd={() => setGuideDraft({ ...guideDraft, highways: [...guideDraft.highways, { name: '', description: '', destinations: '', travelTime: '' }] })}
+                  addLabel="ضيف محور"
+                />
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {(guideEdit ? guideDraft : guide).highways.map((h, i) => (
+                  <div key={i} className="bg-white p-4 rounded-2xl border border-[#ECE8DF] space-y-2 shadow-sm">
+                    {guideEdit ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Navigation size={16} className="text-[#A07A26] shrink-0" />
+                          <input value={h.name} onChange={(e) => setHighway(i, 'name', e.target.value)} placeholder="اسم المحور"
+                            className="flex-1 rounded-lg bg-[#F6F4EF] border border-[#E4DFD4] px-2 py-1.5 text-sm font-bold" />
+                          <button onClick={() => setGuideDraft({ ...guideDraft, highways: guideDraft.highways.filter((_, j) => j !== i) })}
+                            className="p-1.5 text-[#C2412D]" aria-label="مسح"><Trash2 size={14} /></button>
+                        </div>
+                        <textarea rows={3} value={h.description} onChange={(e) => setHighway(i, 'description', e.target.value)} placeholder="وصف المحور"
+                          className="w-full rounded-lg bg-[#F6F4EF] border border-[#E4DFD4] px-2 py-1.5 text-xs leading-6" />
+                        <input value={h.destinations} onChange={(e) => setHighway(i, 'destinations', e.target.value)} placeholder="بيربط بإيه؟ افصل بـ ·"
+                          className="w-full rounded-lg bg-[#F6F4EF] border border-[#E4DFD4] px-2 py-1.5 text-xs" />
+                        <input value={h.travelTime} onChange={(e) => setHighway(i, 'travelTime', e.target.value)} placeholder="الوقت المستغرق"
+                          className="w-full rounded-lg bg-[#F6F4EF] border border-[#E4DFD4] px-2 py-1.5 text-xs" />
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 text-[#141414] font-bold text-sm">
+                          <Navigation size={16} className="text-[#A07A26]" />
+                          <span>{h.name}</span>
+                        </div>
+                        <p className="text-xs text-[#3A3731] leading-relaxed">{h.description}</p>
+                        <div className="pt-2 border-t border-[#F0ECE4] text-xs space-y-1 text-[#6B665C]">
+                          <div><strong className="text-[#141414]">الربط:</strong> {h.destinations}</div>
+                          <div className="text-[#A07A26] font-bold">⏱ {h.travelTime}</div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <p className="text-xs text-[#CFCBC2] leading-relaxed">
-                    {h.description}
-                  </p>
-                  <div className="pt-2 border-t border-white/10 text-xs space-y-1 text-[#A3A09A]">
-                    <div><strong>الربط:</strong> {h.destinations}</div>
-                    <div className="text-[#D9B864] font-bold">⏱ {h.travelTime}</div>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 
-          {/* TAB 3: LANDMARKS */}
+          {/* TAB 3: الجامعات والمعالم — قابل للتعديل */}
           {activeTab === 'landmarks' && (
             <div className="space-y-4">
-              {HADABA_LANDMARKS_CATEGORIES.map((cat, idx) => (
-                <div key={idx} className="bg-[#141722] p-4 rounded-xl border border-white/10 space-y-3">
-                  <h3 className="text-sm font-bold text-[#D9B864] pb-1 border-b border-white/10">
-                    {cat.category}
-                  </h3>
+              {isAdmin && (
+                <EditorBar
+                  editing={guideEdit}
+                  busy={guideBusy}
+                  onEdit={() => setGuideEdit(true)}
+                  onCancel={() => { setGuideDraft(guide); setGuideEdit(false); }}
+                  onSave={saveGuide}
+                  onAdd={() => setGuideDraft({ ...guideDraft, landmarks: [...guideDraft.landmarks, { category: '', items: [] }] })}
+                  addLabel="ضيف قسم"
+                />
+              )}
+              {(guideEdit ? guideDraft : guide).landmarks.map((cat, idx) => (
+                <div key={idx} className="bg-white p-4 rounded-2xl border border-[#ECE8DF] space-y-3 shadow-sm">
+                  {guideEdit ? (
+                    <div className="flex items-center gap-2 pb-2 border-b border-[#F0ECE4]">
+                      <input value={cat.category} onChange={(e) => setCategory(idx, e.target.value)} placeholder="اسم القسم"
+                        className="flex-1 rounded-lg bg-[#F6F4EF] border border-[#E4DFD4] px-2 py-1.5 text-sm font-bold" />
+                      <button onClick={() => setGuideDraft({ ...guideDraft, landmarks: guideDraft.landmarks.filter((_, j) => j !== idx) })}
+                        className="p-1.5 text-[#C2412D]" aria-label="مسح القسم"><Trash2 size={14} /></button>
+                    </div>
+                  ) : (
+                    <h3 className="text-sm font-bold text-[#141414] pb-1 border-b border-[#F0ECE4]">{cat.category}</h3>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {cat.items.map((it, i) => (
-                      <div key={i} className="bg-black/40 p-2.5 rounded-lg border border-white/5 space-y-1">
-                        <div className="flex justify-between items-center text-xs">
-                          <strong className="text-white font-bold">{it.name}</strong>
-                          <span className="text-[10px] text-[#D9B864] font-mono">{it.district}</span>
-                        </div>
-                        <p className="text-[11px] text-[#A3A09A]">{it.desc}</p>
+                      <div key={i} className="bg-[#F6F4EF] p-2.5 rounded-xl border border-[#ECE8DF] space-y-1">
+                        {guideEdit ? (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <input value={it.name} onChange={(e) => setItem(idx, i, 'name', e.target.value)} placeholder="الاسم"
+                                className="flex-1 rounded bg-white border border-[#E4DFD4] px-2 py-1 text-xs font-bold" />
+                              <input value={it.district} onChange={(e) => setItem(idx, i, 'district', e.target.value)} placeholder="الحي"
+                                className="w-24 rounded bg-white border border-[#E4DFD4] px-2 py-1 text-[11px]" />
+                              <button onClick={() => removeItem(idx, i)} className="p-1 text-[#C2412D]" aria-label="مسح"><Trash2 size={12} /></button>
+                            </div>
+                            <input value={it.desc} onChange={(e) => setItem(idx, i, 'desc', e.target.value)} placeholder="وصف مختصر"
+                              className="w-full rounded bg-white border border-[#E4DFD4] px-2 py-1 text-[11px]" />
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center text-xs gap-2">
+                              <strong className="text-[#141414] font-bold">{it.name}</strong>
+                              <span className="text-[10px] text-[#A07A26] font-mono shrink-0">{it.district}</span>
+                            </div>
+                            <p className="text-[11px] text-[#6B665C] leading-5">{it.desc}</p>
+                          </>
+                        )}
                       </div>
                     ))}
+                    {guideEdit && (
+                      <button onClick={() => addItem(idx)}
+                        className="rounded-xl border-2 border-dashed border-[#DCD6CA] p-2.5 text-xs font-bold text-[#8C877D] flex items-center justify-center gap-1">
+                        <Plus size={14} />ضيف مكان
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* TAB 4: LEGAL */}
+          {/* TAB 4: النصايح القانونية — قابل للتعديل */}
           {activeTab === 'legal' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {HADABA_LEGAL_TIPS.map((tip, idx) => (
-                <div key={idx} className="bg-[#141722] p-4 rounded-xl border border-white/10 space-y-2">
-                  <div className="flex items-center gap-2 text-[#D9B864] font-bold text-xs sm:text-sm">
-                    <ShieldCheck size={16} />
-                    <span>{tip.title}</span>
+            <div className="space-y-3">
+              {isAdmin && (
+                <EditorBar
+                  editing={guideEdit}
+                  busy={guideBusy}
+                  onEdit={() => setGuideEdit(true)}
+                  onCancel={() => { setGuideDraft(guide); setGuideEdit(false); }}
+                  onSave={saveGuide}
+                  onAdd={() => setGuideDraft({ ...guideDraft, legalTips: [...guideDraft.legalTips, { title: '', description: '', iconType: 'shield' }] })}
+                  addLabel="ضيف نصيحة"
+                />
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {(guideEdit ? guideDraft : guide).legalTips.map((tip, idx) => (
+                  <div key={idx} className="bg-white p-4 rounded-2xl border border-[#ECE8DF] space-y-2 shadow-sm">
+                    {guideEdit ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck size={16} className="text-[#A07A26] shrink-0" />
+                          <input value={tip.title} onChange={(e) => setTip(idx, 'title', e.target.value)} placeholder="عنوان النصيحة"
+                            className="flex-1 rounded-lg bg-[#F6F4EF] border border-[#E4DFD4] px-2 py-1.5 text-sm font-bold" />
+                          <button onClick={() => setGuideDraft({ ...guideDraft, legalTips: guideDraft.legalTips.filter((_, j) => j !== idx) })}
+                            className="p-1.5 text-[#C2412D]" aria-label="مسح"><Trash2 size={14} /></button>
+                        </div>
+                        <textarea rows={3} value={tip.description} onChange={(e) => setTip(idx, 'description', e.target.value)} placeholder="الشرح"
+                          className="w-full rounded-lg bg-[#F6F4EF] border border-[#E4DFD4] px-2 py-1.5 text-xs leading-6" />
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 text-[#141414] font-bold text-xs sm:text-sm">
+                          <ShieldCheck size={16} className="text-[#A07A26]" />
+                          <span>{tip.title}</span>
+                        </div>
+                        <p className="text-xs text-[#3A3731] leading-relaxed">{tip.description}</p>
+                      </>
+                    )}
                   </div>
-                  <p className="text-xs text-[#A3A09A] leading-relaxed">
-                    {tip.description}
-                  </p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 

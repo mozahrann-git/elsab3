@@ -125,6 +125,7 @@ import {
   saveClosedDealToDb,
   deleteClosedDealFromDb,
   migrateLocalClosedDeals,
+  deleteOwnerSubmissionFromDb,
   seedCrmLeadsToDb,
   subscribeToSiteConfig,
   saveSiteBannerToDb,
@@ -1408,6 +1409,9 @@ export default function App() {
 
   const handleDeleteSubmission = (submissionId: string) => {
     setOwnerSubmissions((prev) => prev.filter((s) => s.id !== submissionId));
+    deleteOwnerSubmissionFromDb(submissionId).catch((err) => {
+      console.error('[Submissions] المسح مش قادر يوصل للسحابة:', err);
+    });
   };
 
   const handleApproveSubmission = (submissionIdOrSub: string | OwnerSubmission) => {

@@ -2348,6 +2348,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           </>
                         )}
 
+                        {/* مسح نهائي: متاح لأي طلب مش منتظر رد (مرفوض أو متنشر) */}
+                        {sub.status !== 'pending' && onDeleteSubmission && (
+                          <button
+                            onClick={() => {
+                              if (!window.confirm(`هتمسح طلب ${sub.ownerName} نهائياً. متأكد؟`)) return;
+                              onDeleteSubmission(sub.id);
+                              showToast('تم مسح الطلب نهائياً');
+                            }}
+                            className="px-3 py-2 bg-white hover:bg-[#FDF2F0] text-[#C2412D] border border-[#E8C2BA] text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                            <span>مسح نهائي</span>
+                          </button>
+                        )}
+
                         <a
                           href={generateWhatsAppLink(sub.ownerPhone, `مرحباً أستاذ ${sub.ownerName}، بخصوص شقتك المعروضة بالهضبة الوسطى (${sub.neighborhood})...`)}
                           target="_blank"

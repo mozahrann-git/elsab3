@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, Plus, Eye, EyeOff, Save, UserX, KeyRound, Search } from 'lucide-react';
-import { subscribeToAccounts, saveAccount, disableAccount, AccountRecord, AccountRole } from '../services/firebaseService';
+import { X, Plus, Eye, EyeOff, Save, UserX, KeyRound, Search, Trash2 } from 'lucide-react';
+import { subscribeToAccounts, saveAccount, disableAccount, deleteAccount, AccountRecord, AccountRole } from '../services/firebaseService';
 
 /*
   إدارة كل الحسابات من مكان واحد: سيلز، بروكر، مالك، أدمن.
@@ -130,6 +130,18 @@ export const AccountsManagerModal: React.FC<Props> = ({ isOpen, onClose, showToa
                   <button onClick={() => openEdit(a)} className="px-3 py-2 rounded-xl bg-[#F6F4EF] text-sm font-bold">تعديل</button>
                   {a.role !== 'disabled' && a.role !== 'admin' && (
                     <button onClick={() => disableAccount(a.email).then(() => showToast?.('اتوقف الحساب'))} aria-label="إيقاف" className="px-3 py-2 rounded-xl text-rose-700 hover:bg-rose-50"><UserX size={16} /></button>
+                  )}
+                  {a.role !== 'admin' && (
+                    <button
+                      onClick={() => {
+                        if (!window.confirm(`هتمسح حساب ${a.name || a.email} نهائياً ومش هيقدر يدخل تاني. متأكد؟`)) return;
+                        deleteAccount(a.email)
+                          .then(() => showToast?.('اتمسح الحساب'))
+                          .catch(() => showToast?.('المسح مش قادر يوصل للسحابة — جرّب تاني'));
+                      }}
+                      aria-label="مسح نهائي"
+                      className="px-3 py-2 rounded-xl text-[#C2412D] hover:bg-[#FDF2F0]"
+                    ><Trash2 size={16} /></button>
                   )}
                 </div>
               </div>

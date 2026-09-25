@@ -79,7 +79,7 @@ export const DistrictPage: React.FC<Props> = ({ name, stats, content, properties
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[60] bg-[#F6F4EF] overflow-y-auto overscroll-contain" dir="rtl">
+    <div className="fixed inset-0 z-[60] bg-[#F6F4EF] overflow-y-auto overflow-x-hidden overscroll-contain w-full max-w-full" dir="rtl">
       {/* الهيرو */}
       <header className="relative bg-[#141414] text-white">
         {cover && <img src={cover} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />}

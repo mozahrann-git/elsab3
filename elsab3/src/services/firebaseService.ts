@@ -767,6 +767,12 @@ export function subscribeToOwnerSubmissions(
   });
 }
 
+/** مسح طلب مالك نهائياً من السحابة */
+export async function deleteOwnerSubmissionFromDb(submissionId: string): Promise<void> {
+  await ensureAuth();
+  await deleteDoc(doc(db, 'owner_submissions', submissionId));
+}
+
 export async function saveOwnerSubmissionToDb(submission: OwnerSubmission): Promise<void> {
   try {
     const docRef = doc(db, 'owner_submissions', submission.id);
@@ -1032,6 +1038,14 @@ export function subscribeToAccounts(onUpdate: (list: AccountRecord[]) => void, o
     list.sort((a, b) => (a.role || '').localeCompare(b.role || '') || a.email.localeCompare(b.email));
     onUpdate(list);
   }, (e) => onError?.(e));
+}
+
+/** مسح حساب من الصلاحيات. ملاحظة: بيمنعه من الدخول، وحساب Firebase Auth نفسه بيتشال من Console. */
+export async function deleteAccount(email: string): Promise<void> {
+  const key = (email || '').trim().toLowerCase();
+  if (!key) throw new Error('مفيش إيميل');
+  await ensureAuth();
+  await deleteDoc(doc(db, 'staff_access', key));
 }
 
 /**

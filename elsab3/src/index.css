@@ -137,3 +137,23 @@
 /* منع السكرول الأفقي: كان بيزحزح النوافذ والبوابات على الموبايل */
 html, body { max-width: 100%; overflow-x: hidden; }
 #root { max-width: 100vw; overflow-x: clip; }
+
+/* ===== تفاعل الأزرار في الموقع كله =====
+   كل زرار بيرد على الضغط: بينكمش شوية وبيفتح لونه.
+   كان الناس بتدوس ومتحسش إن حاجة حصلت. */
+button:not(:disabled), [role="button"]:not([aria-disabled="true"]), a[href], label[for], summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.12s ease, filter 0.12s ease, opacity 0.12s ease;
+}
+button:not(:disabled):active, [role="button"]:not([aria-disabled="true"]):active, a[href]:active, label[for]:active, summary:active {
+  transform: scale(0.97);
+  filter: brightness(0.93);
+}
+button:disabled, [aria-disabled="true"] { cursor: not-allowed; }
+
+/* وضوح للي بيتنقل بالكيبورد */
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid #A07A26;
+  outline-offset: 2px;
+}

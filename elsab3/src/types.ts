@@ -142,6 +142,7 @@ export interface FilterState {
 export interface OwnerSubmission {
   id: string;
   ownerName: string;
+  propertyCode?: string;            // كود الوحدة لو المالك عارفه، بيربط الطلب بالشقة على طول
   phone: string;
   whatsapp: string;
   neighborhood: HadabaWostaNeighborhood;
