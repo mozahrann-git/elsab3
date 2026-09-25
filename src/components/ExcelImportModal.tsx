@@ -24,6 +24,7 @@ import {
 import { Property } from '../types';
 import { parseExcelFile, downloadExcelTemplate, exportPropertiesToExcel, SheetStat } from '../utils/excelHelper';
 import { USER_EXCEL_PROPERTIES } from '../data/userProperties';
+import { realImages } from '../utils/propertyMedia';
 import { formatPrice } from '../utils/helpers';
 
 interface ExcelImportModalProps {
@@ -285,10 +286,10 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
             <button
               onClick={handleLoadFullDefaultInventory}
               className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 rounded-lg font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-              title="تحميل قاعدة بيانات شقق الهضبة الوسطى الجاهزة بالكامل (41 شقة معتمدة)"
+              title={`تحميل قاعدة شقق الهضبة الوسطى الجاهزة (${USER_EXCEL_PROPERTIES.length} شقة)`}
             >
               <Database size={14} className="text-emerald-400" />
-              <span>استيراد شقق الهضبة المجهزة (41 شقة)</span>
+              <span>استيراد شقق الهضبة المجهزة ({USER_EXCEL_PROPERTIES.length} شقة)</span>
             </button>
           </div>
 
@@ -364,6 +365,21 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
                       <CheckCircle2 size={13} />
                       <span>تم فحص الشيت بنجاح: تم استخراج كافة الشقق بالكامل ({parsedProperties.length} شقة صالحة للاستيراد)</span>
                     </p>
+                    {(() => {
+                      const noPhoto = parsedProperties.filter((p) => realImages(p).length === 0);
+                      if (noPhoto.length === 0) return null;
+                      return (
+                        <p className="text-xs text-amber-400 font-bold flex items-start gap-1 mt-1">
+                          <Info size={13} className="shrink-0 mt-0.5" />
+                          <span>
+                            {noPhoto.length} شقة من غير صور حقيقية — هتظهر في الموقع بغلاف فاضي لحد ما ترفعلها صور:{' '}
+                            <span className="font-mono text-amber-300">
+                              {noPhoto.slice(0, 8).map((p) => p.code).join('، ')}{noPhoto.length > 8 ? ` +${noPhoto.length - 8}` : ''}
+                            </span>
+                          </span>
+                        </p>
+                      );
+                    })()}
                     {sheetStats.length > 1 && (
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
                         <span className="text-[11px] text-stone-400">تمت قراءة أوراق العمل:</span>

@@ -49,6 +49,13 @@ ALL_HADABA_PROPERTIES.forEach(p => {
   if (p.code) masterByCode.set(p.code.toUpperCase(), p);
 });
 
+/** الصور الحقيقية للشقة: اللي مرفوعة فعلاً، من غير صور Unsplash البديلة */
+export function realImages(property: Partial<Property>): string[] {
+  return Array.isArray(property.images)
+    ? property.images.filter((img) => typeof img === 'string' && img.trim().length > 0 && !img.includes('images.unsplash.com'))
+    : [];
+}
+
 /**
  * Ensures that a property always has its full gallery images and video media intact.
  * Priority order:
@@ -59,9 +66,7 @@ ALL_HADABA_PROPERTIES.forEach(p => {
  */
 export function hydratePropertyMedia(property: Property, _cachedProperty?: Property): Property {
   // الصور الحقيقية اللي على السيرفر بس: مفيش صور بديلة ولا صور قديمة من ذاكرة المتصفح
-  const currentImages = Array.isArray(property.images)
-    ? property.images.filter(img => typeof img === 'string' && img.trim().length > 0 && !img.includes('images.unsplash.com'))
-    : [];
+  const currentImages = realImages(property);
   return {
     ...property,
     images: currentImages,

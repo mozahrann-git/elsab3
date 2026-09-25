@@ -56,6 +56,16 @@ service cloud.firestore {
       allow update: if isStaff();
     }
 
+    match /site_content/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /closed_deals/{dealId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /crm_leads/{leadId} {
       allow read: if isBoss();
       allow create: if true;

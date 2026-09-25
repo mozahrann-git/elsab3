@@ -278,7 +278,11 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [myViewings, setMyViewings] = useState<any[]>([]);
   useEffect(() => subscribeAllUnitViewings(setMyViewings), []);
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
-  const todayViewings = myViewings.filter((v) => (isAdmin || v.salesAgentId === currentAgent?.id) && v.createdAt >= startOfToday.getTime()).length;
+  const viewingAgentIds = viewAgentId !== 'all' ? [viewAgentId] : visibleAgents.map((a) => a.id);
+  const todayViewings = myViewings.filter((v) => viewingAgentIds.includes(v.salesAgentId || '') && v.createdAt >= startOfToday.getTime()).length;
+  const viewingsLabel = viewAgentId !== 'all'
+    ? `معاينات ${agents.find((a) => a.id === viewAgentId)?.name || ''} النهارده`
+    : (isAdmin || isLead) ? 'معاينات الفريق النهارده' : 'معايناتك النهارده';
   const todayNewLeads = scopedLeads.filter((l) => {
     const t = new Date(l.createdAt || l.lastContactDate || 0).getTime();
     return t >= startOfToday.getTime();
@@ -433,15 +437,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-full bg-[#A07A26] text-white font-bold flex items-center justify-center text-xs shadow-xs font-readex">
-                  {(isAdmin && !currentAgentId) ? 'إد' : (currentSalesAgent?.name?.charAt(0) || 'م')}
+                  {isAdmin ? 'إد' : (currentSalesAgent?.name?.charAt(0) || 'م')}
                 </div>
                 <div>
                   <h3 className="font-bold text-xs text-white truncate max-w-[120px]">
-                    {(isAdmin && !currentAgentId) ? 'الإدارة' : (currentSalesAgent?.name || 'مستشار المبيعات')}
+                    {isAdmin ? 'الإدارة' : (currentSalesAgent?.name || 'مستشار المبيعات')}
                   </h3>
                   <div className="flex items-center gap-1.5 text-[10px] text-stone-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>{(isAdmin && !currentAgentId) ? (viewAgentId === 'all' ? 'بتشوف الفريق كله' : `بتشوف ${agents.find((a) => a.id === viewAgentId)?.name || ''}`) : 'متاح للمتابعات'}</span>
+                    <span>{(isAdmin || isLead) ? (viewAgentId === 'all' ? 'بتشوف الفريق كله' : `بتشوف ${agents.find((a) => a.id === viewAgentId)?.name || ''}`) : 'متاح للمتابعات'}</span>
                   </div>
                 </div>
               </div>
@@ -683,14 +687,33 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             {/* Urgent Broadcast Banner */}
             {(isAdmin || isLead) && (
               <div className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">
-                <p className="font-bold text-sm">متابعات الفريق</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-bold text-sm">متابعات الفريق</p>
+                  {viewAgentId !== 'all' && (
+                    <button
+                      onClick={() => setViewAgentId('all')}
+                      className="px-3 py-1.5 rounded-xl bg-[#141414] text-white text-[11px] font-bold active:scale-95 transition"
+                    >
+                      ✕ بتشوف {agents.find((a) => a.id === viewAgentId)?.name || ''} · رجوع لكل الفريق
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#8C877D]">دوس على أي حد عشان تشوف عملاءه لوحدهم</p>
                 {visibleAgents.map((a) => {
                   const mine = leads.filter((l) => l.assignedAgentId === a.id);
                   const late = mine.filter((l) => l.nextActionAt && l.nextActionAt < Date.now() && l.followUpStatus !== 'completed').length;
                   const snoozes = mine.reduce((n, l: any) => n + (l.snoozeCount || 0), 0);
                   return (
-                    <button key={a.id} onClick={() => setViewAgentId(a.id)} className="w-full flex flex-wrap justify-between items-center gap-2 border-t border-[#F0ECE4] pt-2 text-right">
-                      <span className="font-bold text-sm">{a.name}</span>
+                    <button
+                      key={a.id}
+                      onClick={() => setViewAgentId(viewAgentId === a.id ? 'all' : a.id)}
+                      aria-pressed={viewAgentId === a.id}
+                      className={`w-full flex flex-wrap justify-between items-center gap-2 border-t border-[#F0ECE4] pt-2 px-2 -mx-2 rounded-xl text-right transition active:scale-[0.99] hover:bg-[#F6F4EF] ${viewAgentId === a.id ? 'bg-[#141414] text-white hover:bg-[#141414]' : viewAgentId !== 'all' ? 'opacity-50' : ''}`}
+                    >
+                      <span className="font-bold text-sm flex items-center gap-1.5">
+                        <ChevronLeft size={14} className={viewAgentId === a.id ? 'text-[#D9B864]' : 'text-[#A07A26]'} />
+                        {a.name}
+                      </span>
                       <span className="flex gap-2 text-[11px]">
                         <span className="px-2 py-1 rounded-lg bg-[#F6F4EF]">{mine.length} عميل</span>
                         <span className={`px-2 py-1 rounded-lg ${late ? 'bg-[#FBEDEA] text-[#C2412D] font-bold' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>{late} متأخرة</span>
@@ -704,7 +727,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* عدّاد النهارده */}
             <div className="grid grid-cols-3 gap-2">
-              {[['ريكويست جديد النهارده', todayNewLeads, '#1F4E9C'], ['أكشن اتسجّل النهارده', todayDone, '#141414'], ['معايناتك النهارده', todayViewings, '#1E7A45']].map(([t, v, c]) => (
+              {[['ريكويست جديد النهارده', todayNewLeads, '#1F4E9C'], ['أكشن اتسجّل النهارده', todayDone, '#141414'], [viewingsLabel, todayViewings, '#1E7A45']].map(([t, v, c]) => (
                 <div key={t as string} className="rounded-2xl bg-white border border-[#ECE8DF] p-3 text-center">
                   <p className="text-2xl font-readex font-bold" style={{ color: c as string }}>{v as number}</p>
                   <p className="text-[11px] text-[#6B665C]">{t as string}</p>

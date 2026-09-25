@@ -28,7 +28,7 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Property, SalesAgent, Lead, OwnerSubmission, OwnerPrivateDetails, BrokerProfile, ViewingRequest, ViewingFeedback } from '../types';
+import { Property, SalesAgent, Lead, OwnerSubmission, OwnerPrivateDetails, BrokerProfile, ViewingRequest, ViewingFeedback, ClosedDeal } from '../types';
 import { ensureUploaded } from './mediaStorage';
 
 // Suppress benign internal network retry logs
@@ -633,6 +633,56 @@ export async function fetchSiteConfigFromDb(): Promise<SiteConfig | null> {
   }
 }
 
+// ---------- الصفقات المقفولة: اتنقلت من المتصفح لـ Firestore ----------
+export function subscribeToClosedDeals(
+  onUpdate: (deals: ClosedDeal[]) => void,
+  onError?: (error: unknown, isQuota: boolean) => void
+): () => void {
+  const col = collection(db, 'closed_deals');
+  return onSnapshot(col, (snapshot) => {
+    const deals: ClosedDeal[] = [];
+    snapshot.forEach((docSnap) => deals.push(docSnap.data() as ClosedDeal));
+    // الأحدث الأول
+    deals.sort((a, b) => String(b.closedDate || '').localeCompare(String(a.closedDate || '')));
+    onUpdate(deals);
+  }, (error) => {
+    const isQuota = isQuotaExceededError(error);
+    console.warn('[Firebase] Subscription notice on closed_deals:', error);
+    if (onError) onError(error, isQuota);
+  });
+}
+
+export async function saveClosedDealToDb(deal: ClosedDeal): Promise<void> {
+  await ensureAuth();
+  await setDoc(doc(db, 'closed_deals', deal.id), cleanFirestoreData(deal), { merge: true });
+}
+
+export async function deleteClosedDealFromDb(dealId: string): Promise<void> {
+  await ensureAuth();
+  await deleteDoc(doc(db, 'closed_deals', dealId));
+}
+
+/** ترحيل لمرة واحدة: أي صفقات لسه متخزنة في المتصفح بتتنقل للسحابة وبعدين تتمسح من المتصفح */
+export async function migrateLocalClosedDeals(): Promise<number> {
+  let moved = 0;
+  try {
+    const raw = localStorage.getItem('lion_closed_deals_v2');
+    if (!raw) return 0;
+    const list: ClosedDeal[] = JSON.parse(raw);
+    if (!Array.isArray(list) || list.length === 0) { localStorage.removeItem('lion_closed_deals_v2'); return 0; }
+    for (const d of list) {
+      if (!d || !d.id) continue;
+      await saveClosedDealToDb(d);
+      moved += 1;
+    }
+    localStorage.removeItem('lion_closed_deals_v2');
+    console.info(`[Firebase] اتنقل ${moved} صفقة مقفولة من المتصفح للسحابة`);
+  } catch (err) {
+    console.warn('[Firebase] الترحيل مش قادر يكمّل، البيانات لسه في المتصفح:', err);
+  }
+  return moved;
+}
+
 export function subscribeToSiteConfig(
   onUpdate: (config: SiteConfig) => void,
   onError?: (error: unknown, isQuota: boolean) => void
@@ -715,6 +765,12 @@ export function subscribeToOwnerSubmissions(
     const isQuota = isQuotaExceededError(error);
     if (onError) onError(error, isQuota);
   });
+}
+
+/** مسح طلب مالك نهائياً من السحابة */
+export async function deleteOwnerSubmissionFromDb(submissionId: string): Promise<void> {
+  await ensureAuth();
+  await deleteDoc(doc(db, 'owner_submissions', submissionId));
 }
 
 export async function saveOwnerSubmissionToDb(submission: OwnerSubmission): Promise<void> {
@@ -982,6 +1038,14 @@ export function subscribeToAccounts(onUpdate: (list: AccountRecord[]) => void, o
     list.sort((a, b) => (a.role || '').localeCompare(b.role || '') || a.email.localeCompare(b.email));
     onUpdate(list);
   }, (e) => onError?.(e));
+}
+
+/** مسح حساب من الصلاحيات. ملاحظة: بيمنعه من الدخول، وحساب Firebase Auth نفسه بيتشال من Console. */
+export async function deleteAccount(email: string): Promise<void> {
+  const key = (email || '').trim().toLowerCase();
+  if (!key) throw new Error('مفيش إيميل');
+  await ensureAuth();
+  await deleteDoc(doc(db, 'staff_access', key));
 }
 
 /**

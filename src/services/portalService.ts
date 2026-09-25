@@ -36,6 +36,8 @@ export interface UnitViewing {
   salesAgentId?: string;           // السيلز اللي طلب المعاينة (الفيدباك يرجعله)
   salesAgentName?: string;
   ownerName?: string;
+  leadId?: string;                 // العميل في الـ CRM (الربط مع المسار)
+  leadName?: string;
   createdAt: number;
 }
 
@@ -131,6 +133,8 @@ export function subscribeAllOwnerFeedback(cb: (l: OwnerFeedback[]) => void) {
 // ---------- المالك ----------
 export async function respondToViewing(id: string, status: 'confirmed' | 'reschedule', note?: string) {
   await updateDoc(doc(db, 'unit_viewings', id), cleanFirestoreData({ ownerStatus: status, ownerNote: note || '', ownerRespondedAt: Date.now() }));
+  const snap = await getDoc(doc(db, 'unit_viewings', id));
+  if (snap.exists()) await syncViewingToLead(snap.data() as UnitViewing, status === 'confirmed');
 }
 
 export async function createChangeRequest(r: Omit<ChangeRequest, 'id' | 'status' | 'createdAt' | 'requesterEmail'>) {
@@ -184,6 +188,32 @@ export async function brokerConfirmViewing(viewingId: string, time: string) {
   await updateDoc(doc(db, 'unit_viewings', viewingId), {
     brokerStatus: 'confirmed', brokerConfirmedTime: time, brokerConfirmedAt: Date.now(), ownerStatus: 'confirmed',
   });
+  const snap = await getDoc(doc(db, 'unit_viewings', viewingId));
+  if (snap.exists()) await syncViewingToLead(snap.data() as UnitViewing, true);
+}
+
+/** ربط المعاينة بمسار العميل: أي تأكيد معاينة بينقل العميل لمرحلة "معاينة مؤكدة" ويتسجل في رحلته */
+export async function syncViewingToLead(v: Partial<UnitViewing> & { leadId?: string }, confirmed: boolean) {
+  if (!v.leadId) return;
+  try {
+    const when = v.brokerConfirmedTime || v.scheduledText || '';
+    await updateDoc(doc(db, 'crm_leads', v.leadId), cleanFirestoreData({
+      status: confirmed ? 'visit_booked' : 'visit_requested',
+      visitScheduledAt: when,
+      ...(v.scheduledAt ? { nextActionAt: v.scheduledAt } : {}),
+      followUpStatus: 'pending',
+      followUpNote: confirmed
+        ? `معاينة مؤكدة على ${v.propertyCode || ''} — ${when}`
+        : `معاينة تحت التأكيد على ${v.propertyCode || ''} — ${when}`,
+      activity: arrayUnion({
+        at: Date.now(), by: 'التنسيق',
+        outcome: confirmed ? `معاينة مؤكدة · ${v.propertyCode || ''}` : `طلب معاينة · ${v.propertyCode || ''}`,
+        comment: when, ...(v.scheduledAt ? { nextAt: v.scheduledAt } : {}),
+      }),
+    }));
+  } catch (err) {
+    console.warn('[Viewings] مش قادر يحدّث العميل في المسار:', err);
+  }
 }
 
 // ---------- سارة (مسؤولة الملاك) والأدمن ----------
@@ -193,6 +223,7 @@ export async function createUnitViewing(v: Omit<UnitViewing, 'id' | 'createdAt' 
     ...v, id, ownerStatus: 'pending', brokerStatus: v.brokerId ? 'pending' : undefined,
     notifyCount: 1, lastNotifiedAt: Date.now(), createdAt: Date.now(),
   }), { merge: true });
+  await syncViewingToLead(v as Partial<UnitViewing>, false);
   return id;
 }
 export async function renotifyOwner(v: UnitViewing) {
@@ -200,6 +231,8 @@ export async function renotifyOwner(v: UnitViewing) {
 }
 export async function setViewingStatus(id: string, ownerStatus: OwnerViewingStatus) {
   await updateDoc(doc(db, 'unit_viewings', id), { ownerStatus });
+  const snap = await getDoc(doc(db, 'unit_viewings', id));
+  if (snap.exists()) await syncViewingToLead(snap.data() as UnitViewing, ownerStatus === 'confirmed');
 }
 export async function publishFeedback(f: Omit<OwnerFeedback, 'id' | 'publishedAt'>) {
   const id = f.sourceFeedbackId ? `of-${f.sourceFeedbackId}` : `of-${Date.now()}`;

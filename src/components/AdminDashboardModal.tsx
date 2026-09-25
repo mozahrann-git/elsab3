@@ -14,6 +14,7 @@ import {
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { INITIAL_SALES_AGENTS, INITIAL_BADGES, INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { INITIAL_PRICE_MAP_DATA, INITIAL_CLOSED_DEALS } from '../data/marketPriceData';
+import { saveClosedDealToDb, deleteClosedDealFromDb } from '../services/firebaseService';
 import { DEFAULT_BROKERS } from '../data/brokerData';
 import { 
   X, 
@@ -209,16 +210,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     return INITIAL_PRICE_MAP_DATA;
   });
 
-  const [closedDealsList, setClosedDealsList] = useState<ClosedDeal[]>(() => {
-    if (externalClosedDeals && externalClosedDeals.length > 0) return externalClosedDeals;
-    try {
-      const saved = localStorage.getItem('lion_closed_deals');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
-    return INITIAL_CLOSED_DEALS;
-  });
+  // الصفقات المقفولة بتيجي من السحابة (App بيشترك فيها)، مش من المتصفح
+  const [closedDealsList, setClosedDealsList] = useState<ClosedDeal[]>(externalClosedDeals || INITIAL_CLOSED_DEALS);
 
   // Closed deal modal state
   const [isNewDealModalOpen, setIsNewDealModalOpen] = useState(false);
@@ -238,9 +231,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   }, [externalPriceMapData]);
 
   React.useEffect(() => {
-    if (externalClosedDeals && externalClosedDeals.length > 0) {
-      setClosedDealsList(externalClosedDeals);
-    }
+    if (externalClosedDeals) setClosedDealsList(externalClosedDeals);
   }, [externalClosedDeals]);
 
   const syncPriceMap = (updated: NeighborhoodPriceMapData[]) => {
@@ -249,10 +240,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     safeLocalStorageSet('lion_price_map_data', JSON.stringify(updated));
   };
 
+  // الحفظ بقى في السحابة؛ الاشتراك في App هيرجّع القايمة المحدّثة لوحده
   const syncClosedDeals = (updated: ClosedDeal[]) => {
     setClosedDealsList(updated);
     if (onUpdateClosedDeals) onUpdateClosedDeals(updated);
-    safeLocalStorageSet('lion_closed_deals', JSON.stringify(updated));
   };
 
   const handleUpdatePriceRow = (neighborhood: HadabaWostaNeighborhood, field: 'avgFinishedPrice' | 'avgSemiFinishedPrice', val: number) => {
@@ -279,13 +270,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     };
     syncClosedDeals([newDeal, ...closedDealsList]);
     setIsNewDealModalOpen(false);
-    showToast('تمت إضافة الصفقة المغلقة بنجاح');
+    saveClosedDealToDb(newDeal)
+      .then(() => showToast('تمت إضافة الصفقة المغلقة وحفظها في السحابة'))
+      .catch(() => showToast('الصفقة اتضافت على الشاشة بس محفظتش في السحابة — جرّب تاني'));
   };
 
   const handleDeleteClosedDeal = (dealId: string) => {
     const updated = closedDealsList.filter(d => d.id !== dealId);
     syncClosedDeals(updated);
-    showToast('تم حذف الصفقة');
+    deleteClosedDealFromDb(dealId)
+      .then(() => showToast('تم حذف الصفقة'))
+      .catch(() => showToast('الحذف مش قادر يوصل للسحابة — الصفقة ممكن ترجع تظهر'));
   };
 
   React.useEffect(() => {
@@ -2351,6 +2346,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               رفض الطلب
                             </button>
                           </>
+                        )}
+
+                        {/* مسح نهائي: متاح لأي طلب مش منتظر رد (مرفوض أو متنشر) */}
+                        {sub.status !== 'pending' && onDeleteSubmission && (
+                          <button
+                            onClick={() => {
+                              if (!window.confirm(`هتمسح طلب ${sub.ownerName} نهائياً. متأكد؟`)) return;
+                              onDeleteSubmission(sub.id);
+                              showToast('تم مسح الطلب نهائياً');
+                            }}
+                            className="px-3 py-2 bg-white hover:bg-[#FDF2F0] text-[#C2412D] border border-[#E8C2BA] text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                            <span>مسح نهائي</span>
+                          </button>
                         )}
 
                         <a

@@ -79,7 +79,7 @@ export const DistrictPage: React.FC<Props> = ({ name, stats, content, properties
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[60] bg-[#F6F4EF] overflow-y-auto overscroll-contain" dir="rtl">
+    <div className="fixed inset-0 z-[60] bg-[#F6F4EF] overflow-y-auto overflow-x-hidden overscroll-contain w-full max-w-full" dir="rtl">
       {/* الهيرو */}
       <header className="relative bg-[#141414] text-white">
         {cover && <img src={cover} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />}
@@ -138,7 +138,7 @@ export const DistrictPage: React.FC<Props> = ({ name, stats, content, properties
         )}
 
         <div className="grid gap-6 lg:grid-cols-3 min-w-0">
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 min-w-0">
             {/* عن الحي */}
             {(edit || c.about) ? (
               <div className="rounded-2xl bg-white border border-[#ECE8DF] p-6 space-y-3">
@@ -167,7 +167,7 @@ export const DistrictPage: React.FC<Props> = ({ name, stats, content, properties
             {units.length > 0 && (
               <div className="space-y-3">
                 <p className="font-bold text-lg">شقق في {name}</p>
-                <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
+                <div className="flex gap-3 overflow-x-auto pb-2 snap-x max-w-full">
                   {units.slice(0, 10).map((p) => (
                     <button key={p.id} onClick={() => onOpenProperty(p)} className="snap-start shrink-0 w-56 text-right rounded-2xl bg-white border border-[#ECE8DF] overflow-hidden">
                       {p.images?.[0] ? <img src={p.images[0]} alt="" className="w-full h-32 object-cover" /> : <div className="w-full h-32" style={{ background: 'repeating-linear-gradient(135deg,#E7E2D8 0 10px,#EFEBE3 10px 20px)' }} />}

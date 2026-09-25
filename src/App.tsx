@@ -121,6 +121,11 @@ import {
   subscribeToCrmLeads,
   saveLeadToDb,
   updateLeadInDb,
+  subscribeToClosedDeals,
+  saveClosedDealToDb,
+  deleteClosedDealFromDb,
+  migrateLocalClosedDeals,
+  deleteOwnerSubmissionFromDb,
   seedCrmLeadsToDb,
   subscribeToSiteConfig,
   saveSiteBannerToDb,
@@ -859,19 +864,21 @@ export default function App() {
     safeLocalStorageSet('lion_price_map_data', JSON.stringify(priceMapData));
   }, [priceMapData]);
 
-  const [closedDeals, setClosedDeals] = useState<ClosedDeal[]>(() => {
-    try {
-      const saved = localStorage.getItem('lion_closed_deals_v2');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
-    return INITIAL_CLOSED_DEALS;
-  });
+  // الصفقات المقفولة: مصدرها Firestore دلوقتي مش المتصفح
+  const [closedDeals, setClosedDeals] = useState<ClosedDeal[]>(INITIAL_CLOSED_DEALS);
 
   useEffect(() => {
-    safeLocalStorageSet('lion_closed_deals_v2', JSON.stringify(closedDeals));
-  }, [closedDeals]);
+    let unsub: (() => void) | undefined;
+    (async () => {
+      // ترحيل لمرة واحدة لأي صفقات قديمة لسه محفوظة في المتصفح
+      await migrateLocalClosedDeals();
+      unsub = subscribeToClosedDeals(
+        (deals) => setClosedDeals(deals),
+        (err) => console.warn('[ClosedDeals] مش قادر يقرا من السحابة:', err)
+      );
+    })();
+    return () => { if (unsub) unsub(); };
+  }, []);
 
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
     try {
@@ -1402,6 +1409,9 @@ export default function App() {
 
   const handleDeleteSubmission = (submissionId: string) => {
     setOwnerSubmissions((prev) => prev.filter((s) => s.id !== submissionId));
+    deleteOwnerSubmissionFromDb(submissionId).catch((err) => {
+      console.error('[Submissions] المسح مش قادر يوصل للسحابة:', err);
+    });
   };
 
   const handleApproveSubmission = (submissionIdOrSub: string | OwnerSubmission) => {

@@ -75,6 +75,7 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
 
   const [formData, setFormData] = useState({
     ownerName: '',
+    propertyCode: '',
     phone: '',
     whatsapp: '',
     neighborhood: HADABA_WOSTA_NEIGHBORHOODS[0] as HadabaWostaNeighborhood,
@@ -197,6 +198,7 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
     const newSub: OwnerSubmission = {
       id: `sub-${Date.now()}`,
       ownerName: formData.ownerName,
+      propertyCode: formData.propertyCode || undefined,
       phone: formData.phone,
       ownerPhone: isBrokerSubmitter ? (realOwnerPhone || formData.phone) : formData.phone,
       realOwnerName: isBrokerSubmitter ? realOwnerName : formData.ownerName,
@@ -381,6 +383,19 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
                     <span>مواصفات الشقة والسعر المطلوب:</span>
                   </div>
                   
+                  {/* كود الشقة: لو المالك عارفه، بيربط الطلب بالوحدة على طول */}
+                  <div>
+                    <label className="text-xs text-stone-700 mb-1.5 block font-bold">كود الشقة (لو عندك كود من السبع)</label>
+                    <input
+                      type="text"
+                      value={formData.propertyCode}
+                      onChange={(e) => setFormData({ ...formData, propertyCode: e.target.value.toUpperCase().trim() })}
+                      placeholder="زي H1705 — سيبها فاضية لو معندكش"
+                      className="w-full py-3 px-4 bg-stone-50 rounded-2xl text-xs sm:text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 font-bold border border-stone-200/70 font-mono"
+                    />
+                    <p className="text-[11px] text-stone-500 mt-1">الكود بيخلّي طلبك يوصل لوحدتك على طول من غير بحث.</p>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="text-xs text-stone-700 mb-1.5 block font-bold">الحي بالهضبة الوسطى *</label>

@@ -1,5 +1,5 @@
 import { LeadActionPanel } from './LeadActionPanel';
-import { WhenPicker } from './common/WhenPicker';
+import { WhenPicker, formatWhen, relTime } from './common/WhenPicker';
 import React, { useState } from 'react';
 import { Lead, Property, SalesAgent, LeadStatus } from '../types';
 import { 
@@ -21,6 +21,7 @@ import {
   Eye
 } from 'lucide-react';
 import { formatPrice, generateWhatsAppLink, generateCallLink } from '../utils/helpers';
+import { createUnitViewing } from '../services/portalService';
 
 interface LeadDetailsModalProps {
   isOpen: boolean;
@@ -57,13 +58,11 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
 }) => {
   const [newNote, setNewNote] = useState('');
   const [visitDate, setVisitDate] = useState(lead.visitScheduledAt || '');
+  const [visitAt, setVisitAt] = useState<number | null>(null);
+  const [visitSaving, setVisitSaving] = useState(false);
+  const [visitError, setVisitError] = useState('');
   const [visitLoc, setVisitLoc] = useState(lead.visitLocation || 'الهضبة الوسطى - المقطم');
   const [isEditingSchedule, setIsEditingSchedule] = useState(false);
-
-  // Follow-up state
-  const [isEditingFollowUp, setIsEditingFollowUp] = useState(false);
-  const [followUpTime, setFollowUpTime] = useState(lead.followUpScheduledAt || '');
-  const [followUpNoteText, setFollowUpNoteText] = useState(lead.followUpNote || '');
 
   if (!isOpen) return null;
 
@@ -101,51 +100,49 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     });
   };
 
-  const handleSaveVisitSchedule = () => {
+  // حجز المعاينة: بيتسجل عند العميل وبيروح لجدول التنسيق (سارة) في نفس الوقت
+  const handleSaveVisitSchedule = async () => {
+    if (!visitDate) { setVisitError('حدد ميعاد المعاينة الأول'); return; }
+    setVisitSaving(true); setVisitError('');
+    const prop = properties.find((p) => p.code === lead.interestedPropertyCode);
+
     onUpdateLead({
       ...lead,
-      status: 'visit_booked',
+      status: 'visit_requested',
       visitScheduledAt: visitDate,
-      visitLocation: visitLoc
-    });
-    setIsEditingSchedule(false);
-  };
-
-  const handleSaveFollowUp = () => {
-    onUpdateLead({
-      ...lead,
-      followUpScheduledAt: followUpTime,
-      followUpNote: followUpNoteText,
+      visitLocation: visitLoc,
+      ...(visitAt ? { nextActionAt: visitAt } : {}),
       followUpStatus: 'pending',
-      followUpUrgency: followUpTime.includes('اليوم') || followUpTime.includes('الآن') ? 'urgent' : 'upcoming'
-    });
-    setIsEditingFollowUp(false);
-  };
+      followUpNote: `معاينة تحت التنسيق${prop ? ` على ${prop.code}` : ''} — ${visitDate}`,
+      activity: [{
+        at: Date.now(), by: lead.assignedAgentName || 'السيلز',
+        outcome: `طلب معاينة${prop ? ` · ${prop.code}` : ''}`, comment: `${visitDate} · ${visitLoc}`,
+        ...(visitAt ? { nextAt: visitAt } : {})
+      }, ...((lead.activity as any[]) || [])].slice(0, 80)
+    } as Lead);
 
-  const handleQuickFollowUp = (preset: '+2h' | '+tomorrow' | '+2days') => {
-    let text = 'اليوم بعد ساعتين';
-    let urgency: 'urgent' | 'today' | 'upcoming' = 'today';
-
-    if (preset === '+2h') {
-      text = 'اليوم بعد ساعتين';
-      urgency = 'urgent';
-    } else if (preset === '+tomorrow') {
-      text = 'غداً الساعة 11:00 ص';
-      urgency = 'today';
-    } else if (preset === '+2days') {
-      text = 'بعد يومين 12:00 ظهراً';
-      urgency = 'upcoming';
+    if (prop) {
+      try {
+        await createUnitViewing({
+          propertyId: prop.id, propertyCode: prop.code, propertyTitle: prop.title, brokerId: (prop as any).brokerId,
+          scheduledText: visitDate, ...(visitAt ? { scheduledAt: visitAt } : {}),
+          clientNote: visitLoc, ownerName: '',
+          salesAgentId: lead.assignedAgentId, salesAgentName: lead.assignedAgentName,
+          leadId: lead.id, leadName: lead.name,
+        } as any);
+      } catch {
+        setVisitError('اتسجلت عند العميل، بس مش قادرة توصل لجدول التنسيق — بلّغ سارة يدوي');
+        setVisitSaving(false);
+        return;
+      }
+    } else {
+      setVisitError('العميل مش مربوط بكود شقة، فالمعاينة اتسجلت عنده بس ومروحتش للتنسيق');
+      setVisitSaving(false);
+      return;
     }
 
-    onUpdateLead({
-      ...lead,
-      followUpScheduledAt: text,
-      followUpNote: followUpNoteText || 'متابعة هاتفية مع العميل',
-      followUpStatus: 'pending',
-      followUpUrgency: urgency
-    });
-    setFollowUpTime(text);
-    setIsEditingFollowUp(false);
+    setVisitSaving(false);
+    setIsEditingSchedule(false);
   };
 
   // Find linked property in inventory
@@ -275,7 +272,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                 <div className="space-y-2.5 text-xs">
                   <div>
                     <label className="text-[#141414] block mb-1 font-bold">تاريخ وتوقيت المعاينة:</label>
-                    <WhenPicker quick={false} onChange={(v) => setVisitDate(v.label)} />
+                    <WhenPicker quick={false} onChange={(v) => { setVisitDate(v.label); setVisitAt(v.at); }} />
                     {visitDate && <p className="text-xs text-[#6B665C] mt-1">المختار: <b>{visitDate}</b></p>}
                   </div>
                   <div>
@@ -297,11 +294,13 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                     </button>
                     <button
                       onClick={handleSaveVisitSchedule}
-                      className="px-4 py-1.5 bg-[#A07A26] hover:bg-[#8B681D] text-white font-bold rounded-xl shadow-2xs cursor-pointer"
+                      disabled={visitSaving}
+                      className="px-4 py-1.5 bg-[#A07A26] hover:bg-[#8B681D] disabled:opacity-50 text-white font-bold rounded-xl shadow-2xs cursor-pointer"
                     >
-                      حفظ الميعاد
+                      {visitSaving ? 'بيتبعت للتنسيق...' : 'حفظ وابعت للتنسيق'}
                     </button>
                   </div>
+                  {visitError && <p className="text-[11px] text-[#C2412D] font-bold">{visitError}</p>}
                 </div>
               ) : (
                 <div className="space-y-1 text-xs">
@@ -345,109 +344,36 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
             </div>
           )}
 
-          {/* Follow-up Reminder Schedule Box */}
-          <div className="p-4 bg-white border border-[#ECE8DF] rounded-2xl space-y-2.5 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-[#141414] font-bold text-xs sm:text-sm">
-                <Clock size={16} className="text-[#A07A26]" />
-                <span>تنبيه وميعاد المتابعة القادمة</span>
-              </div>
-              {!isEditingFollowUp && (
-                <button 
-                  onClick={() => setIsEditingFollowUp(true)}
-                  className="text-xs text-[#A07A26] hover:underline font-bold cursor-pointer"
-                >
-                  {lead.followUpScheduledAt ? 'تعديل موعد المتابعة' : '+ جدولة متابعة جديدة'}
-                </button>
-              )}
+          {/* ميعاد المتابعة القادمة — عرض فقط، التغيير بيتم من بوكس "نقل وتسجيل" فوق عشان يتسجل */}
+          <div className="p-4 bg-white border border-[#ECE8DF] rounded-2xl space-y-2 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-[#141414] font-bold text-xs sm:text-sm">
+              <Clock size={16} className="text-[#A07A26]" />
+              <span>تنبيه وميعاد المتابعة القادمة</span>
             </div>
-
-            {isEditingFollowUp ? (
-              <div className="space-y-2.5 text-xs">
-                <div>
-                  <label className="text-[#141414] block mb-1 font-bold">توقيت المتابعة القادمة:</label>
-                  <WhenPicker quick={false} onChange={(v) => setFollowUpTime(v.label)} />
-                    {followUpTime && <p className="text-xs text-[#6B665C] mt-1">المختار: <b>{followUpTime}</b></p>}
-                </div>
-
-                <div>
-                  <label className="text-[#141414] block mb-1 font-bold">هدف المتابعة وملاحظة التذكير:</label>
-                  <input
-                    type="text"
-                    value={followUpNoteText}
-                    onChange={(e) => setFollowUpNoteText(e.target.value)}
-                    placeholder="مثال: الاتصال لسماع رأيه وتحديد ميعاد المعاينة"
-                    className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none"
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-[#6B665C]">خيارات سريعة:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickFollowUp('+2h')}
-                      className="px-2.5 py-1 bg-[#FAF4E5] border border-[#E9DFCA] text-[#A07A26] text-[11px] font-bold rounded-xl cursor-pointer"
-                    >
-                      + ساعتين
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickFollowUp('+tomorrow')}
-                      className="px-2.5 py-1 bg-[#FAF4E5] border border-[#E9DFCA] text-[#A07A26] text-[11px] font-bold rounded-xl cursor-pointer"
-                    >
-                      + غداً 11 ص
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingFollowUp(false)}
-                      className="px-3 py-1.5 bg-[#F6F4EF] rounded-xl text-[#6B665C] font-bold cursor-pointer"
-                    >
-                      إلغاء
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveFollowUp}
-                      className="px-4 py-1.5 bg-[#A07A26] hover:bg-[#8B681D] text-white font-bold rounded-xl shadow-2xs cursor-pointer"
-                    >
-                      حفظ التنبيه
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
+            {lead.nextActionAt ? (
               <div className="space-y-1.5 text-xs">
-                {lead.followUpScheduledAt ? (
-                  <>
-                    <div className="flex items-center justify-between text-[#6B665C]">
-                      <span>الموعد المحدد:</span>
-                      <strong className="text-[#141414] font-bold">{lead.followUpScheduledAt}</strong>
-                    </div>
-                    {lead.followUpNote && (
-                      <div className="flex items-start justify-between text-[#6B665C] gap-2">
-                        <span className="shrink-0">المطلوب:</span>
-                        <p className="text-[#141414] text-right font-medium">{lead.followUpNote}</p>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex items-center justify-between text-[#6B665C]">
-                    <span>لم يتم تحديد موعد متابعة قادم</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleQuickFollowUp('+2h')}
-                        className="px-2.5 py-1 bg-[#FAF4E5] border border-[#E9DFCA] text-[#A07A26] rounded-xl text-[11px] font-bold cursor-pointer"
-                      >
-                        + متابعة بعد ساعتين
-                      </button>
-                    </div>
+                <div className="flex items-center justify-between text-[#6B665C]">
+                  <span>الموعد المحدد:</span>
+                  <strong className={`font-bold ${lead.nextActionAt < Date.now() ? 'text-[#C2412D]' : 'text-[#141414]'}`}>
+                    {formatWhen(lead.nextActionAt)} · {relTime(lead.nextActionAt)}
+                  </strong>
+                </div>
+                {lead.followUpNote && (
+                  <div className="flex items-start justify-between text-[#6B665C] gap-2">
+                    <span className="shrink-0">المطلوب:</span>
+                    <p className="text-[#141414] text-right font-medium">{lead.followUpNote}</p>
                   </div>
                 )}
+                {(lead.snoozeCount || 0) > 0 && (
+                  <p className="text-[11px] text-[#6E5418]">اتأجل {lead.snoozeCount} مرة</p>
+                )}
               </div>
+            ) : (
+              <p className="text-xs text-[#6B665C]">مفيش ميعاد متابعة قادم</p>
             )}
+            <p className="text-[11px] text-[#8C877D] pt-1 border-t border-[#F0ECE4]">
+              لتغيير الميعاد استخدم بوكس «نقل وتسجيل» فوق — أي تغيير لازم يتسجل بكومنت.
+            </p>
           </div>
 
           {/* Linked Property Showcase */}

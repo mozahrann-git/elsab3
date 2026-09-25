@@ -6,7 +6,7 @@
 */
 
 // ======= إعدادات Cloudinary =======
-export const CLOUDINARY_CLOUD_NAME = 'اكتب_اسم_الحساب_هنا';   // من Dashboard ← Cloud name
+export const CLOUDINARY_CLOUD_NAME = 'x7ls7cua';   // من Dashboard ← Cloud name
 export const CLOUDINARY_UPLOAD_PRESET = 'elsab3_unsigned';      // من Settings ← Upload ← Upload presets
 // ===================================
 

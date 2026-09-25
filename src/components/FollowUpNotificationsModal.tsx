@@ -22,6 +22,7 @@ import {
   Filter
 } from 'lucide-react';
 import { generateCallLink, generateWhatsAppLink, formatPrice } from '../utils/helpers';
+import { formatWhen } from './common/WhenPicker';
 
 interface FollowUpNotificationsModalProps {
   isOpen: boolean;
@@ -121,40 +122,43 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
       notes: updatedNotes,
       lastContactDate: 'الآن',
       followUpStatus: 'completed',
+      nextActionAt: null,
       followUpScheduledAt: undefined,
-      followUpNote: undefined
-    });
+      followUpNote: undefined,
+      activity: [{ at: Date.now(), by: currentAgent.name, outcome: 'تمت المتابعة', comment: alert.note || 'تواصل تليفوني' }, ...((lead.activity as any[]) || [])].slice(0, 80)
+    } as Lead);
   };
 
   // Snooze / Reschedule follow-up
+  // تأجيل المتابعة: بيتسجل بوقت حقيقي + سطر في رحلة العميل + عدّاد التأجيل
   const handleSnooze = (alert: FollowUpAlert, snoozeOption: '+1h' | '+tomorrow' | '+2days') => {
     const lead = leads.find((l) => l.id === alert.leadId);
     if (!lead) return;
 
-    let newTimeText = 'اليوم بعد ساعة';
-    let urgency: 'urgent' | 'today' | 'upcoming' = 'today';
-
-    if (snoozeOption === '+1h') {
-      newTimeText = 'اليوم بعد ساعة واحدة';
-      urgency = 'today';
-    } else if (snoozeOption === '+tomorrow') {
-      newTimeText = 'غداً الساعة 11:00 ص';
-      urgency = 'upcoming';
+    let newAt = Date.now() + 60 * 60 * 1000;
+    if (snoozeOption === '+tomorrow') {
+      const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(11, 0, 0, 0); newAt = d.getTime();
     } else if (snoozeOption === '+2days') {
-      newTimeText = 'بعد يومين 12:00 ظهراً';
-      urgency = 'upcoming';
+      const d = new Date(); d.setDate(d.getDate() + 2); d.setHours(12, 0, 0, 0); newAt = d.getTime();
     }
 
+    const oldAt = lead.nextActionAt || 0;
+    const postponed = !!(oldAt && newAt > oldAt);
+    const outcome = postponed
+      ? `تأجيل من ${formatWhen(oldAt)} لـ ${formatWhen(newAt)}`
+      : `تحديد متابعة ${formatWhen(newAt)}`;
     const timestamp = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-    const updatedNotes = [`[${timestamp}] تم تأجيل المتابعة إلى: ${newTimeText}`, ...(lead.notes || [])];
 
     onUpdateLead({
       ...lead,
-      notes: updatedNotes,
-      followUpScheduledAt: newTimeText,
+      notes: [`[${timestamp}] ${outcome}`, ...(lead.notes || [])],
+      activity: [{ at: Date.now(), by: currentAgent.name, outcome, comment: lead.followUpNote || '', nextAt: newAt }, ...((lead.activity as any[]) || [])].slice(0, 80),
+      snoozeCount: (lead.snoozeCount || 0) + (postponed ? 1 : 0),
+      nextActionAt: newAt,
+      followUpScheduledAt: formatWhen(newAt),
       followUpStatus: 'pending',
-      followUpUrgency: urgency
-    });
+      followUpUrgency: newAt - Date.now() < 3 * 3600 * 1000 ? 'urgent' : 'upcoming'
+    } as Lead);
   };
 
   // Send WhatsApp Follow-up Message
