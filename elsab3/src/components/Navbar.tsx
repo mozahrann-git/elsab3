@@ -391,12 +391,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             
             {/* Drawer Top Header */}
             <div>
-              <div className="p-4 sm:p-5 border-b border-[#ECE8DF] bg-white flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="sticky top-0 z-10 p-4 border-b border-[#ECE8DF] bg-white/95 backdrop-blur-sm flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
                   <LionLogo size={32} customLogoUrl={customLogoUrl} />
-                  <div>
-                    <h2 className="font-readex font-bold text-sm text-[#141414]">السبع للعقارات</h2>
-                    <p className="text-[11px] text-[#6B665C]">ريسيل واستثمار الهضبة الوسطى</p>
+                  <div className="min-w-0">
+                    <h2 className="font-readex font-bold text-sm text-[#141414] truncate">السبع للعقارات</h2>
+                    <p className="text-[11px] text-[#6B665C] truncate">الهضبة الوسطى بالمقطم</p>
                   </div>
                 </div>
 
@@ -409,286 +409,205 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </div>
 
-              {/* Navigation Sections */}
-              <div className="p-4 space-y-5">
-                
-                {/* 1. أقسام العقارات والمعروض */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-[#8C827A] px-2 uppercase tracking-wider block">
-                    استكشاف الشقق والمعروض
-                  </span>
+              {/* ===== القائمة: الأهم كبير، والباقي صفوف مضغوطة ===== */}
+              <div className="p-4 space-y-6">
 
+                {/* الحاجة الأساسية: يشوف الشقق */}
+                <div className="grid grid-cols-2 gap-2.5">
                   <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      handleAvailableUnitsClick();
-                    }}
-                    className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
+                    onClick={() => { setMobileMenuOpen(false); handleAvailableUnitsClick(); }}
+                    className="rounded-2xl bg-[#141414] text-white p-4 text-right flex flex-col justify-between min-h-[104px] shadow-sm"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Building2 size={16} className="text-[#A07A26]" />
-                      <span>شقق ريسيل (استلام فوري)</span>
+                    <Building2 size={22} className="text-[#D9B864]" />
+                    <div>
+                      <p className="font-bold text-sm font-readex">الشقق المتاحة</p>
+                      <p className="text-[11px] text-[#A3A09A]">استلام فوري</p>
                     </div>
-                    <ChevronLeft size={14} className="text-[#8C827A]" />
                   </button>
 
                   <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      handleUnderConstructionClick();
-                    }}
-                    className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
+                    onClick={() => { setMobileMenuOpen(false); handleUnderConstructionClick(); }}
+                    className="rounded-2xl bg-white border border-[#ECE8DF] p-4 text-right flex flex-col justify-between min-h-[104px]"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Layers size={16} className="text-[#A07A26]" />
-                      <span>مشاريع تحت الإنشاء (تقسيط)</span>
+                    <Layers size={22} className="text-[#A07A26]" />
+                    <div>
+                      <p className="font-bold text-sm font-readex text-[#141414]">تحت الإنشاء</p>
+                      <p className="text-[11px] text-[#6B665C]">بالتقسيط</p>
                     </div>
-                    <ChevronLeft size={14} className="text-[#8C827A]" />
                   </button>
+                </div>
 
-                  {onOpenPriceMap && (
-                    <button
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        onOpenPriceMap();
-                      }}
-                      className="w-full p-2.5 rounded-xl bg-[#FAF4E5] hover:bg-[#F3EAD5] border border-[#E9DFCA] text-right flex items-center justify-between text-xs font-bold text-[#A07A26] transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Compass size={16} className="text-[#A07A26]" />
-                        <span>مؤشر وخريطة أسعار الأحياء</span>
-                      </div>
-                      <ChevronLeft size={14} className="text-[#A07A26]" />
+                {/* قبل ما تشتري */}
+                <div className="space-y-1">
+                  <p className="text-[11px] font-bold text-[#8C827A] px-1 pb-1">قبل ما تشتري</p>
+                  <div className="rounded-2xl bg-white border border-[#ECE8DF] overflow-hidden divide-y divide-[#F0ECE4]">
+                    {onOpenPriceMap && (
+                      <button onClick={() => { setMobileMenuOpen(false); onOpenPriceMap(); }}
+                        className="w-full px-3.5 py-3 text-right flex items-center gap-3 hover:bg-[#FAF8F5]">
+                        <Compass size={18} className="text-[#A07A26] shrink-0" />
+                        <span className="flex-1 text-sm font-bold text-[#141414]">مؤشر أسعار الأحياء</span>
+                        <ChevronLeft size={15} className="text-[#C9C4BA]" />
+                      </button>
+                    )}
+                    <button onClick={() => { setMobileMenuOpen(false); handleDistrictGuideClick(); }}
+                      className="w-full px-3.5 py-3 text-right flex items-center gap-3 hover:bg-[#FAF8F5]">
+                      <BookOpen size={18} className="text-[#A07A26] shrink-0" />
+                      <span className="flex-1 text-sm font-bold text-[#141414]">دليل الأحياء</span>
+                      <ChevronLeft size={15} className="text-[#C9C4BA]" />
                     </button>
-                  )}
+                    {onOpenClosedDeals && (
+                      <button onClick={() => { setMobileMenuOpen(false); onOpenClosedDeals(); }}
+                        className="w-full px-3.5 py-3 text-right flex items-center gap-3 hover:bg-[#FAF8F5]">
+                        <Award size={18} className="text-[#A07A26] shrink-0" />
+                        <span className="flex-1 text-sm font-bold text-[#141414]">صفقات اتقفلت</span>
+                        <ChevronLeft size={15} className="text-[#C9C4BA]" />
+                      </button>
+                    )}
+                  </div>
+                </div>
 
+                {/* عندك شقة */}
+                <div className="space-y-1">
+                  <p className="text-[11px] font-bold text-[#8C827A] px-1 pb-1">عندك شقة؟</p>
                   <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      handleDistrictGuideClick();
-                    }}
-                    className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
+                    onClick={() => { setMobileMenuOpen(false); onOpenResaleSubmit(); }}
+                    className="w-full rounded-2xl bg-[#FAF4E5] border border-[#E9DFCA] p-3.5 text-right flex items-center gap-3"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <BookOpen size={16} className="text-[#A07A26]" />
-                      <span>دليل أحياء الهضبة الـ 9 الشامل</span>
-                    </div>
-                    <ChevronLeft size={14} className="text-[#8C827A]" />
+                    <PlusCircle size={20} className="text-[#A07A26] shrink-0" />
+                    <span className="flex-1">
+                      <span className="block text-sm font-bold text-[#141414]">اعرض شقتك للبيع</span>
+                      <span className="block text-[11px] text-[#6E5418]">بنراجعها وننشرها في المعرض</span>
+                    </span>
+                    <ChevronLeft size={15} className="text-[#A07A26]" />
                   </button>
-
                   {onOpenValuation && (
                     <button
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        onOpenValuation();
-                      }}
-                      className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
+                      onClick={() => { setMobileMenuOpen(false); onOpenValuation(); }}
+                      className="w-full rounded-2xl bg-white border border-[#ECE8DF] px-3.5 py-3 text-right flex items-center gap-3 mt-1"
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Calculator size={16} className="text-[#A07A26]" />
-                        <span>كام تستاهل شقتك؟ (حاسبة التقييم)</span>
-                      </div>
-                      <ChevronLeft size={14} className="text-[#8C827A]" />
-                    </button>
-                  )}
-
-                  {onOpenClosedDeals && (
-                    <button
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        onOpenClosedDeals();
-                      }}
-                      className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Award size={16} className="text-[#A07A26]" />
-                        <span>صفقات حقيقية اتقفلت حديثاً</span>
-                      </div>
-                      <ChevronLeft size={14} className="text-[#8C827A]" />
+                      <Calculator size={18} className="text-[#A07A26] shrink-0" />
+                      <span className="flex-1 text-sm font-bold text-[#141414]">كام تستاهل شقتك؟</span>
+                      <ChevronLeft size={15} className="text-[#C9C4BA]" />
                     </button>
                   )}
                 </div>
 
-                {/* 2. خدمات الملاك والوسطاء */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-[#8C827A] px-2 uppercase tracking-wider block">
-                    خدمات الملاك والشركاء
-                  </span>
-
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      onOpenResaleSubmit();
-                    }}
-                    className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <PlusCircle size={16} className="text-[#A07A26]" />
-                      <span>اعرض شقتك للبيع (إضافة عقار)</span>
-                    </div>
-                    <ChevronLeft size={14} className="text-[#8C827A]" />
-                  </button>
-
-                  {(onOpenLandlordPortal || onOpenPartnerPortals) && (
-                    <button
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        if (onOpenLandlordPortal) onOpenLandlordPortal();
-                        else if (onOpenPartnerPortals) onOpenPartnerPortals();
-                      }}
-                      className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Building2 size={16} className="text-[#A07A26]" />
-                        <span>بوابة ملاك الوحدات (متابعة الشقق والمعاينات)</span>
+                {/* حسابك — الأرقام هي اللي بتبان */}
+                <div className="space-y-1">
+                  <p className="text-[11px] font-bold text-[#8C827A] px-1 pb-1">حسابك</p>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button onClick={() => { setMobileMenuOpen(false); onOpenFavorites(); }}
+                      className="rounded-2xl bg-white border border-[#ECE8DF] p-3 text-right">
+                      <div className="flex items-center justify-between">
+                        <Heart size={18} className={favoritesCount > 0 ? 'fill-rose-500 text-rose-500' : 'text-[#C9C4BA]'} />
+                        <span className="text-xl font-bold font-readex text-[#141414]">{favoritesCount}</span>
                       </div>
-                      <ChevronLeft size={14} className="text-[#8C827A]" />
+                      <p className="text-[11px] text-[#6B665C] mt-1">المفضلة</p>
                     </button>
-                  )}
-
-                  {(onOpenBrokerPortal || onOpenPartnerPortals) && (
-                    <button
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        if (onOpenBrokerPortal) onOpenBrokerPortal();
-                        else if (onOpenPartnerPortals) onOpenPartnerPortals();
-                      }}
-                      style={{ display: isAdminLoggedIn ? undefined : 'none' }}
-                      className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Users size={16} className="text-[#A07A26]" />
-                        <span>بوابة البروكر والشركاء (غرفة العمليات)</span>
+                    <button onClick={() => { setMobileMenuOpen(false); onOpenComparison(); }}
+                      className="rounded-2xl bg-white border border-[#ECE8DF] p-3 text-right">
+                      <div className="flex items-center justify-between">
+                        <ArrowLeftRight size={18} className={comparisonCount > 0 ? 'text-[#A07A26]' : 'text-[#C9C4BA]'} />
+                        <span className="text-xl font-bold font-readex text-[#141414]">{comparisonCount}</span>
                       </div>
-                      <ChevronLeft size={14} className="text-[#8C827A]" />
+                      <p className="text-[11px] text-[#6B665C] mt-1">المقارنة</p>
                     </button>
-                  )}
-                </div>
-
-                {/* 3. أدوات وتفضيلات الحساب */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-[#8C827A] px-2 uppercase tracking-wider block">
-                    أدوات العميل
-                  </span>
-
+                  </div>
                   <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      onOpenFavorites();
-                    }}
-                    className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
+                    onClick={() => { setMobileMenuOpen(false); if (onOpenClientAuth) onOpenClientAuth(); }}
+                    className="w-full rounded-2xl bg-white border border-[#ECE8DF] px-3.5 py-3 text-right flex items-center gap-3 mt-1"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Heart size={16} className="text-rose-500" />
-                      <span>المفضلة</span>
-                    </div>
-                    <span className="text-xs bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full font-mono font-bold">
-                      {favoritesCount}
+                    <User size={18} className="text-[#A07A26] shrink-0" />
+                    <span className="flex-1 text-sm font-bold text-[#141414] truncate">
+                      {clientProfile ? clientProfile.name : 'تسجيل الدخول'}
                     </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      onOpenComparison();
-                    }}
-                    className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <ArrowLeftRight size={16} className="text-[#A07A26]" />
-                      <span>مقارنة الشقق</span>
-                    </div>
-                    <span className="text-xs bg-[#FAF4E5] text-[#A07A26] px-2 py-0.5 rounded-full font-mono font-bold">
-                      {comparisonCount}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      if (onOpenClientAuth) onOpenClientAuth();
-                    }}
-                    className="w-full p-2.5 rounded-xl bg-white hover:bg-[#F3EFE6] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold text-[#141414] transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <User size={16} className="text-[#A07A26]" />
-                      <span>{clientProfile ? `الملف الشخصي (${clientProfile.name})` : 'تسجيل الدخول / إنشاء حساب'}</span>
-                    </div>
-                    <ChevronLeft size={14} className="text-[#8C827A]" />
+                    <ChevronLeft size={15} className="text-[#C9C4BA]" />
                   </button>
                 </div>
 
-                {/* 4. فريق العمل والإدارة */}
-                <div className="space-y-1.5 pt-2 border-t border-[#ECE8DF]">
-                  {(isAdminLoggedIn || isSalesLoggedIn) && (<>
-                  <span className="text-[10px] font-bold text-[#8C827A] px-2 uppercase tracking-wider block">
-                    غرفة المبيعات والإدارة
-                  </span>
+                {/* منطقة الشغل: لونها مختلف عشان متتلخبطش مع حاجات العميل */}
+                {(isAdminLoggedIn || isSalesLoggedIn || staffSignedIn || (onOpenMyPortal && myPortalLabel) || onOpenLandlordPortal || onOpenPartnerPortals) && (
+                  <div className="space-y-1.5 rounded-2xl bg-[#141414] p-3">
+                    <p className="text-[11px] font-bold text-[#8C827A] px-1 pb-0.5">دخول الفريق والشركاء</p>
 
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      onOpenCrm();
-                    }}
-                    className="w-full p-3 rounded-2xl bg-[#141414] hover:bg-black text-white text-right flex items-center justify-between text-xs font-bold font-readex transition-all cursor-pointer shadow-md"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Flame size={16} className="text-[#E9DFCA]" />
-                      <span>غرفة العمليات و CRM المبيعات</span>
-                    </div>
-                    <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-lg text-[#FAF4E5]">
-                      {isSalesLoggedIn ? currentSalesAgentName : 'دخول'}
-                    </span>
-                  </button>
+                    {(isAdminLoggedIn || isSalesLoggedIn) && (
+                      <button
+                        onClick={() => { setMobileMenuOpen(false); onOpenCrm(); }}
+                        className="w-full rounded-xl bg-[#A07A26] px-3.5 py-3 text-right flex items-center gap-3 text-white"
+                      >
+                        <Flame size={18} className="shrink-0" />
+                        <span className="flex-1 text-sm font-bold font-readex">غرفة العمليات</span>
+                        <span className="text-[10px] bg-black/25 px-2 py-0.5 rounded-lg truncate max-w-[90px]">
+                          {isSalesLoggedIn ? currentSalesAgentName : 'دخول'}
+                        </span>
+                      </button>
+                    )}
 
-                  </>)}
-                  {onOpenMyPortal && myPortalLabel && (
-                    <button
-                      onClick={() => { setMobileMenuOpen(false); onOpenMyPortal(); }}
-                      className="w-full p-3 mb-2 rounded-xl bg-[#A07A26] text-white text-right flex items-center justify-between text-sm font-bold"
-                    >
-                      <span>{myPortalLabel}</span>
-                      <ChevronLeft size={14} />
-                    </button>
-                  )}
-                  {staffSignedIn && (
-                    <button
-                      onClick={() => { setMobileMenuOpen(false); setChangePassOpen(true); }}
-                      className="w-full p-2.5 mb-2 rounded-xl bg-white text-[#141414] border border-[#ECE8DF] text-right flex items-center justify-between text-xs font-bold"
-                    >
-                      <span>تغيير كلمة المرور</span>
-                      <ChevronLeft size={14} />
-                    </button>
-                  )}
-                  {isAdminLoggedIn ? (
-                    <button
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        onOpenAdmin();
-                      }}
-                      className="w-full p-2.5 rounded-xl bg-[#FAF4E5] text-[#A07A26] border border-[#E9DFCA] text-right flex items-center justify-between text-xs font-bold transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Shield size={16} />
-                        <span>لوحة الإدارة المركزية</span>
-                      </div>
-                      <ChevronLeft size={14} />
-                    </button>
-                  ) : null}
-                </div>
+                    {onOpenMyPortal && myPortalLabel && (
+                      <button onClick={() => { setMobileMenuOpen(false); onOpenMyPortal(); }}
+                        className="w-full rounded-xl bg-white/10 px-3.5 py-2.5 text-right flex items-center gap-3 text-white">
+                        <Users size={17} className="text-[#D9B864] shrink-0" />
+                        <span className="flex-1 text-xs font-bold truncate">{myPortalLabel}</span>
+                        <ChevronLeft size={14} className="text-[#8C827A]" />
+                      </button>
+                    )}
+
+                    {(onOpenLandlordPortal || onOpenPartnerPortals) && (
+                      <button
+                        onClick={() => { setMobileMenuOpen(false); if (onOpenLandlordPortal) onOpenLandlordPortal(); else if (onOpenPartnerPortals) onOpenPartnerPortals(); }}
+                        className="w-full rounded-xl bg-white/10 px-3.5 py-2.5 text-right flex items-center gap-3 text-white"
+                      >
+                        <Building2 size={17} className="text-[#D9B864] shrink-0" />
+                        <span className="flex-1 text-xs font-bold">بوابة الملاك</span>
+                        <ChevronLeft size={14} className="text-[#8C827A]" />
+                      </button>
+                    )}
+
+                    {isAdminLoggedIn && (onOpenBrokerPortal || onOpenPartnerPortals) && (
+                      <button
+                        onClick={() => { setMobileMenuOpen(false); if (onOpenBrokerPortal) onOpenBrokerPortal(); else if (onOpenPartnerPortals) onOpenPartnerPortals(); }}
+                        className="w-full rounded-xl bg-white/10 px-3.5 py-2.5 text-right flex items-center gap-3 text-white"
+                      >
+                        <Users size={17} className="text-[#D9B864] shrink-0" />
+                        <span className="flex-1 text-xs font-bold">بوابة البروكر</span>
+                        <ChevronLeft size={14} className="text-[#8C827A]" />
+                      </button>
+                    )}
+
+                    {isAdminLoggedIn && (
+                      <button
+                        onClick={() => { setMobileMenuOpen(false); onOpenAdmin(); }}
+                        className="w-full rounded-xl bg-white/10 px-3.5 py-2.5 text-right flex items-center gap-3 text-white"
+                      >
+                        <Shield size={17} className="text-[#D9B864] shrink-0" />
+                        <span className="flex-1 text-xs font-bold">لوحة الإدارة</span>
+                        <ChevronLeft size={14} className="text-[#8C827A]" />
+                      </button>
+                    )}
+
+                    {staffSignedIn && (
+                      <button
+                        onClick={() => { setMobileMenuOpen(false); setChangePassOpen(true); }}
+                        className="w-full rounded-xl px-3.5 py-2 text-right text-[11px] font-bold text-[#8C827A] hover:text-white"
+                      >
+                        تغيير كلمة المرور
+                      </button>
+                    )}
+                  </div>
+                )}
 
               </div>
             </div>
 
-            {/* Bottom Footer inside Drawer */}
-            <div className="p-4 border-t border-[#ECE8DF] bg-white text-center text-xs text-[#6B665C] space-y-2">
+            {/* تحت: التواصل ثابت مهما نزلت */}
+            <div className="sticky bottom-0 p-4 border-t border-[#ECE8DF] bg-white/95 backdrop-blur-sm space-y-2">
               <button
                 onClick={handleWhatsAppClick}
-                className="w-full py-2.5 bg-[#A07A26] hover:bg-[#8A671F] text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                className="w-full py-3 bg-[#1E7A45] hover:bg-[#186438] text-white font-bold rounded-2xl flex items-center justify-center gap-2 text-sm"
               >
-                <span>تواصل مع استشاري الهضبة</span>
+                <span>كلّم استشاري الهضبة</span>
               </button>
-              <p className="text-[10px] text-[#8C827A]">
+              <p className="text-[10px] text-[#8C827A] text-center">
                 © {new Date().getFullYear()} السبع للعقارات · الهضبة الوسطى بالمقطم
               </p>
             </div>
