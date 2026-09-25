@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@layer base {
+  *, ::before, ::after {
+    font-family: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    font-family: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+    background-color: #F6F4EF;
+    color: #141414;
+  }
+
+  body {
+    background-color: #F6F4EF;
+    color: #141414;
+    font-family: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading, .font-price {
+    font-family: 'Readex Pro', sans-serif;
+    letter-spacing: -0.015em;
+  }
+
+  button, input, select, textarea, optgroup {
+    font-family: inherit;
+  }
+
+  ::selection {
+    background-color: #A07A26;
+    color: #ffffff;
+  }
+
+  /* Custom Clean Minimal Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #ECE8DF;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #D4CDBC;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #A07A26;
+  }
+}
+
+/* Design System Utilities */
+.app-bg {
+  background-color: #F6F4EF;
+}
+
+.app-card {
+  background-color: #FFFFFF;
+  border: 1px solid #ECE8DF;
+  border-radius: 16px;
+}
+
+.app-border {
+  border-color: #ECE8DF;
+}
+
+.text-main {
+  color: #141414;
+}
+
+.text-body {
+  color: #4A463F;
+}
+
+.text-secondary {
+  color: #6B665C;
+}
+
+.bg-gold {
+  background-color: #A07A26;
+}
+
+.bg-gold:hover {
+  background-color: #8A671F;
+}
+
+.text-gold {
+  color: #A07A26;
+}
+
+.border-gold {
+  border-color: #A07A26;
+}
+
+.tag-gold {
+  background-color: #EFE6D2;
+  color: #6E5418;
+}
+
+.bg-whatsapp {
+  background-color: #1E7A45;
+}
+
+.bg-whatsapp:hover {
+  background-color: #186539;
+}
+
+.bg-dark-section {
+  background-color: #141414;
+}
+
+.text-dark-gold {
+  color: #D9B864;
+}
+
+.font-readex {
+  font-family: 'Readex Pro', sans-serif;
+}
+
+.font-ibm {
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+}
+
+/* Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* منع السكرول الأفقي: كان بيزحزح النوافذ والبوابات على الموبايل */
+html, body { max-width: 100%; overflow-x: hidden; }
+#root { max-width: 100vw; overflow-x: clip; }

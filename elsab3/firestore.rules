@@ -1,0 +1,192 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- مين بيطلب؟ ----------
+    function signedIn()   { return request.auth != null; }
+    function staffEmail() { return request.auth.token.email.lower(); }
+    function isRealUser() { return signedIn() && request.auth.token.firebase.sign_in_provider == 'password'; }
+    function acc()        { return get(/databases/$(database)/documents/staff_access/$(staffEmail())).data; }
+    function hasAccess()  { return isRealUser() && exists(/databases/$(database)/documents/staff_access/$(staffEmail())); }
+    function roleIs(r)    { return hasAccess() && acc().role == r; }
+    function isAdmin()    { return roleIs('admin'); }
+    function isStaff()    { return hasAccess() && acc().role in ['admin', 'sales']; }
+    function isCoord()    { return roleIs('coordinator'); }
+    function isOps()      { return hasAccess() && acc().role in ['admin', 'coordinator']; }
+    function isBroker()   { return roleIs('broker'); }
+    function isBoss()     { return roleIs('company_owner'); }   // أونر الشركة: عرض بس
+    function isMkt()      { return roleIs('marketing'); }
+    function isOwner()    { return roleIs('owner'); }
+    function myBrokerId() { return acc().brokerId; }
+    function myCodes()    { return acc().propertyCodes; }
+    function onlyKeys(k)  { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(k); }
+
+    // ---------- الحسابات ----------
+    match /staff_access/{email} {
+      allow read: if isRealUser() && (staffEmail() == email || isAdmin() || isCoord() || isBoss());
+      allow write: if isAdmin();
+      // صاحب الحساب يغيّر الباسوورد بس
+      allow update: if isRealUser() && staffEmail() == email && onlyKeys(['password', 'updatedAt']);
+      // المالك (@owner.com) والبروكر (@broker.com) بيعملوا حسابهم بنفسهم من غير وحدات
+      allow create: if isRealUser() && staffEmail() == email && request.resource.data.propertyCodes.size() == 0
+                    && ((request.resource.data.role == 'owner' && email.matches('.*@owner[.]com$'))
+                        || (request.resource.data.role == 'broker' && email.matches('.*@broker[.]com$')
+                            && request.resource.data.brokerId == email.split('@')[0]));
+      // مسؤولة الملاك تربط وحدة بمالكها
+      allow update: if isCoord() && resource.data.role == 'owner' && onlyKeys(['propertyCodes']);
+    }
+
+    // ---------- الشقق ----------
+    match /properties/{propertyId} {
+      allow read: if true;
+      allow create, update: if isStaff() || isCoord();
+      allow delete: if isAdmin();
+      // البروكر بيحدّث صور وحدته بس
+      allow update: if isBroker() && resource.data.brokerId == myBrokerId() && onlyKeys(['images']);
+      match /private/{docId} {
+        allow read, write: if isStaff() || isCoord();
+        // البروكر يسجّل رقم المالك (ميقدرش يقراه تاني)
+        allow create, update: if isBroker() && request.resource.data.brokerId == myBrokerId();
+      }
+    }
+
+    match /sales_agents/{agentId} {
+      allow read: if true;
+      allow write: if isAdmin();
+      allow update: if isStaff();
+    }
+
+    match /closed_deals/{dealId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /crm_leads/{leadId} {
+      allow read: if isBoss();
+      allow create: if true;
+      allow read, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /owner_submissions/{id} {
+      allow read: if isBoss();
+      allow create: if true;
+      allow read: if isStaff() || isCoord() || (isRealUser() && resource.data.ownerEmail == staffEmail());
+      allow update: if isStaff() || isCoord();
+      allow delete: if isAdmin();
+    }
+
+    match /viewing_requests/{id} {
+      allow read: if isBoss();
+      allow create: if true;
+      allow read, update: if isStaff() || isCoord();
+      allow delete: if isAdmin();
+    }
+
+    // دليل الأحياء: الكل يقرا، الأدمن يعدّل
+    match /district_guides/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /site_config/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---------- بوابات الملاك والبروكرز ----------
+    match /unit_viewings/{id} {
+      allow read: if isBoss();
+      allow read, create, update, delete: if isOps();
+      allow read: if isStaff()
+                  || (isOwner() && resource.data.propertyCode in myCodes())
+                  || (isBroker() && resource.data.brokerId == myBrokerId());
+      allow update: if isOwner() && resource.data.propertyCode in myCodes()
+                    && onlyKeys(['ownerStatus', 'ownerNote', 'ownerRespondedAt']);
+      allow update: if isBroker() && resource.data.brokerId == myBrokerId()
+                    && onlyKeys(['brokerStatus', 'brokerConfirmedTime', 'brokerConfirmedAt', 'ownerStatus']);
+    }
+
+    match /owner_feedback/{id} {
+      allow read: if isBoss();
+      allow read, write: if isOps() || isStaff();
+      allow read: if (isOwner() && resource.data.propertyCode in myCodes())
+                  || (isBroker() && resource.data.brokerId == myBrokerId());
+    }
+
+    match /change_requests/{id} {
+      allow read: if isBoss();
+      allow read, update: if isOps();
+      allow read: if isRealUser() && resource.data.requesterEmail == staffEmail();
+      allow create: if isRealUser() && request.resource.data.requesterEmail == staffEmail()
+                    && request.resource.data.status == 'pending'
+                    && ((isOwner() && request.resource.data.propertyCode in myCodes())
+                        || (isBroker() && request.resource.data.brokerId == myBrokerId()));
+    }
+
+    // ---------- فيدباك البروكر: للسيلز اللي طلب المعاينة والإدارة بس ----------
+    match /broker_feedback/{id} {
+      allow read: if isBoss();
+      allow create: if isBroker() && request.resource.data.brokerId == myBrokerId();
+      allow read: if isOps()
+                  || (isBroker() && resource.data.brokerId == myBrokerId())
+                  || (isStaff() && get(/databases/$(database)/documents/sales_agents/$(resource.data.salesAgentId)).data.email.lower() == staffEmail());
+    }
+
+    // ---------- أدوات السيلز: العروض واللينكات والمحتوى ----------
+    match /offers/{id} {
+      allow get: if true;                 // لينك العرض نفسه
+      allow update: if true;              // عدّاد الفتح بس
+      allow list, create, delete: if isStaff() || isOps() || isBoss();
+    }
+    match /tracked_links/{id} {
+      allow get: if true;
+      allow update: if true;              // عدّادات الفتح والواتساب
+      allow list, create, delete: if isStaff() || isOps() || isBoss() || isMkt();
+    }
+    match /content_slots/{id} {
+      allow read: if isStaff() || isOps() || isBoss() || isMkt();
+      allow create, update: if isStaff() || isOps() || isMkt();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- مندوبين المعاينات ----------
+    match /field_agents/{id} {
+      allow read: if isBoss();
+      allow read: if isOps() || isStaff();
+      allow write: if isAdmin();
+      allow update: if isOps() || isStaff();   // الدور والعدادات
+    }
+    match /field_trips/{id} {
+      allow read: if isBoss();
+      allow get: if true;                      // الـ id نفسه هو لينك الفيدباك
+      allow list, create, update, delete: if isOps();
+    }
+    match /field_feedback/{id} {
+      allow read: if isBoss();
+      allow read, update: if isOps() || isStaff();
+      allow create: if exists(/databases/$(database)/documents/field_trips/$(request.resource.data.tripId))
+                    && request.resource.data.stage == 'submitted';
+    }
+
+    // ---------- قديم ----------
+    match /brokers/{id} {
+      allow read: if isBoss();
+      allow read: if isStaff() || isCoord() || (isBroker() && id == myBrokerId());
+      allow write: if isStaff();
+    }
+    match /viewing_feedbacks/{id} {
+      allow read: if isBoss();
+      allow read, write: if isStaff() || isCoord();
+    }
+    match /portal_users/{id}         { allow read, write: if isAdmin(); }
+    match /governance_audit_logs/{id} {
+      allow create: if isStaff();
+      allow read: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
