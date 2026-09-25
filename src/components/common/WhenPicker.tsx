@@ -92,18 +92,26 @@ export const WhenPicker: React.FC<Props> = ({ value, onChange, quick = true, lab
 };
 
 /** شريط ميزانية بطرفين (من / إلى) */
-export const BudgetRange: React.FC<{ min: number; max: number; onChange: (min: number, max: number) => void; floor?: number; ceil?: number; step?: number }> = ({ min, max, onChange, floor = 1000000, ceil = 12000000, step = 100000 }) => {
-  const f = (n: number) => `${(n / 1000000).toFixed(n % 1000000 ? 1 : 0)} مليون`;
+export const BudgetRange: React.FC<{ min: number; max: number; onChange: (min: number, max: number) => void; floor?: number; ceil?: number; step?: number }> = ({ min, max, onChange, floor = 1000000, ceil = 10000000, step = 50000 }) => {
+  const f = (n: number) => (n >= 1000000 ? `${(n / 1000000).toFixed(n % 1000000 ? 2 : 0).replace(/\.?0+$/, '')} مليون` : `${Math.round(n / 1000)} ألف`);
   const pct = (n: number) => ((n - floor) / (ceil - floor)) * 100;
   return (
     <div className="space-y-2" dir="ltr">
-      <div className="flex justify-between text-sm font-bold text-[#141414]" dir="rtl"><span>من {f(min)}</span><span>لحد {f(max)}</span></div>
+      <div className="flex justify-between items-center text-sm font-bold text-[#141414]" dir="rtl">
+        <span>من {f(min)}</span>
+        <span className="text-[11px] font-normal text-[#8C877D]">الفرق {f(Math.max(0, max - min))}</span>
+        <span>لحد {f(max)}</span>
+      </div>
       <div className="relative h-8">
+        <div className="absolute top-2 inset-x-0 flex justify-between px-0.5">
+          {Array.from({ length: 10 }, (_, i) => <span key={i} className="w-px h-2 bg-[#DCD6CA]" />)}
+        </div>
         <div className="absolute top-3.5 inset-x-0 h-1.5 rounded-full bg-[#E4DFD4]" />
         <div className="absolute top-3.5 h-1.5 rounded-full bg-[#A07A26]" style={{ left: `${pct(min)}%`, right: `${100 - pct(max)}%` }} />
         <input type="range" aria-label="أقل ميزانية" min={floor} max={ceil} step={step} value={min} onChange={(e) => onChange(Math.min(Number(e.target.value), max - step), max)} className="dual-range absolute inset-0 w-full" />
         <input type="range" aria-label="أقصى ميزانية" min={floor} max={ceil} step={step} value={max} onChange={(e) => onChange(min, Math.max(Number(e.target.value), min + step))} className="dual-range absolute inset-0 w-full" />
       </div>
+      <div className="flex justify-between text-[10px] text-[#8C877D]" dir="rtl"><span>{f(floor)}</span><span>{f((floor + ceil) / 2)}</span><span>{f(ceil)}+</span></div>
       <style>{`.dual-range{-webkit-appearance:none;appearance:none;background:transparent;pointer-events:none;height:32px;margin:0}
 .dual-range::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:24px;height:24px;border-radius:99px;background:#141414;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer}
 .dual-range::-moz-range-thumb{pointer-events:auto;width:22px;height:22px;border-radius:99px;background:#141414;border:3px solid #fff;cursor:pointer}`}</style>

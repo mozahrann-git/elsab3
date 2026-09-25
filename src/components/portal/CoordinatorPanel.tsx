@@ -25,6 +25,7 @@ interface Props {
   logoUrl?: string;
   onApproveSubmission: (s: OwnerSubmission) => void;
   onRejectSubmission: (id: string) => void;
+  onUpdateSubmission?: (s: OwnerSubmission) => void;
   onClose: () => void;
   onLogout: () => void;
 }
@@ -37,7 +38,7 @@ const mapLink = (p: Property) => {
   return `https://maps.google.com/?q=${encodeURIComponent(`${loc || p.neighborhood} الهضبة الوسطى المقطم`)}`;
 };
 
-export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, submissions, logoUrl, onApproveSubmission, onRejectSubmission, onClose, onLogout }) => {
+export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, submissions, logoUrl, onApproveSubmission, onRejectSubmission, onUpdateSubmission, onClose, onLogout }) => {
   const [tab, setTab] = useState('viewings');
   const [tripSeed, setTripSeed] = useState<{ code: string; label: string; at?: number } | null>(null);
   const [viewings, setViewings] = useState<UnitViewing[]>([]);
@@ -78,7 +79,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       {tab === 'feedback' && <FeedbackTab fbs={fbs} />}
       {tab === 'changes' && <ChangesTab changes={changes} />}
       {tab === 'excel' && isAdmin && <OwnersExcelTab properties={properties} />}
-      {tab === 'units' && <UnitsTab submissions={submissions} onApprove={onApproveSubmission} onReject={onRejectSubmission} />}
+      {tab === 'units' && <UnitsTab submissions={submissions} byName={name || 'الإدارة'} onApprove={onApproveSubmission} onReject={onRejectSubmission} onUpdateSubmission={onUpdateSubmission} />}
     </PortalShell>
   );
 };
@@ -341,24 +342,107 @@ const ChangesTab: React.FC<{ changes: ChangeRequest[] }> = ({ changes }) => {
   );
 };
 
-// ---------------- الشقق الجديدة ----------------
-const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; onApprove: (s: OwnerSubmission) => void; onReject: (id: string) => void }> = ({ submissions, onApprove, onReject }) => {
+// ---------------- الشقق الجديدة: مراجعة قبل النشر ----------------
+const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; byName: string; onApprove: (s: OwnerSubmission) => void; onReject: (id: string) => void; onUpdateSubmission?: (s: OwnerSubmission) => void }> = ({ submissions, byName, onApprove, onReject, onUpdateSubmission }) => {
+  const [open, setOpen] = useState<OwnerSubmission | null>(null);
   const pend = submissions.filter((s) => s.status === 'pending');
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       {!pend.length && <p className="lg:col-span-2 text-center text-sm text-[#6B665C] py-10">مفيش شقق جديدة</p>}
-      {pend.map((s) => (
-        <Card key={s.id}>
-          <div className="flex justify-between"><span className="font-bold">{s.area} م² · {s.neighborhood}</span><Chip tone={(s as any).brokerId ? 'blue' as any : 'gold'}>{(s as any).brokerId ? `بروكر: ${(s as any).brokerId}` : 'من مالك'}</Chip></div>
-          <p className="text-sm">{fmt(s.askingPrice)} ج.م · {(s as any).brokerId ? 'بعتها البروكر' : 'المالك'}: {s.ownerName}</p>
-          {s.images?.length > 0 && <div className="flex gap-2 overflow-x-auto">{s.images.slice(0, 5).map((u) => <img key={u} src={u} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />)}</div>}
-          <div className="grid grid-cols-3 gap-2">
-            <Btn onClick={() => onApprove(s)} className="text-xs !px-2">انشر بكود</Btn>
-            <a href={`tel:${s.phone}`} className="rounded-xl bg-[#F6F4EF] text-sm font-semibold flex items-center justify-center">اتصال</a>
-            <Btn tone="danger" onClick={() => onReject(s.id)} className="text-xs !px-2">رفض</Btn>
-          </div>
-        </Card>
-      ))}
+      {pend.map((s) => {
+        const q = (s as any).qualityCheck;
+        return (
+          <Card key={s.id}>
+            <div className="flex justify-between items-center gap-2">
+              <span className="font-bold">{s.area} م² · {s.neighborhood}</span>
+              <Chip tone={(s as any).brokerId ? ('blue' as any) : 'gold'}>{(s as any).brokerId ? `بروكر: ${(s as any).brokerId}` : 'من مالك'}</Chip>
+            </div>
+            <p className="text-sm">{fmt(s.askingPrice)} ج.م · {(s as any).brokerId ? 'بعتها البروكر' : 'المالك'}: {s.ownerName}</p>
+            {s.images?.length > 0 && <div className="flex gap-2 overflow-x-auto">{s.images.slice(0, 5).map((u) => <img key={u} src={u} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />)}</div>}
+            {q ? <Chip tone="green">اتأكد مع المالك · {q.by}{q.accountDelivered ? ' · الحساب اتسلّم' : ''}</Chip> : <Chip tone="red">لسه محتاجة مراجعة جودة</Chip>}
+            <div className="grid grid-cols-3 gap-2">
+              <Btn onClick={() => setOpen(s)} className="text-xs !px-2">راجع وانشر</Btn>
+              <a href={`tel:${s.phone}`} className="rounded-xl bg-[#F6F4EF] text-sm font-semibold flex items-center justify-center">اتصال</a>
+              <Btn tone="danger" onClick={() => onReject(s.id)} className="text-xs !px-2">رفض</Btn>
+            </div>
+          </Card>
+        );
+      })}
+      {open && <ReviewModal sub={open} byName={byName} onClose={() => setOpen(null)} onApprove={onApprove} onUpdateSubmission={onUpdateSubmission} />}
+    </div>
+  );
+};
+
+/* شاشة المراجعة: تعديل كل البيانات، كتابة الكود بإيدك، شيل الصور الوحشة، وتأكيد الجودة */
+const ReviewModal: React.FC<{ sub: OwnerSubmission; byName: string; onClose: () => void; onApprove: (s: OwnerSubmission) => void; onUpdateSubmission?: (s: OwnerSubmission) => void }> = ({ sub, byName, onClose, onApprove, onUpdateSubmission }) => {
+  const [d, setD] = useState<any>({ ...sub, code: (sub as any).code || `H${Math.floor(1000 + Math.random() * 8999)}` });
+  const [busy, setBusy] = useState(false);
+  const q = d.qualityCheck;
+  const inp = 'w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm';
+  const save = (extra: any = {}) => { const n = { ...d, ...extra }; setD(n); onUpdateSubmission?.(n); return n; };
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/60 flex items-end sm:items-center justify-center" dir="rtl">
+      <div className="bg-[#F6F4EF] w-full sm:max-w-2xl max-h-[92dvh] rounded-t-3xl sm:rounded-3xl flex flex-col">
+        <header className="bg-[#141414] text-white px-5 py-4 flex justify-between items-center rounded-t-3xl">
+          <div><p className="font-bold">مراجعة الشقة قبل النشر</p><p className="text-xs text-[#CFCBC2]">{sub.ownerName} · {sub.phone}</p></div>
+          <button onClick={onClose} aria-label="إغلاق" className="p-2 rounded-xl hover:bg-white/10">✕</button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <Card tone={q ? undefined : 'gold'}>
+            <p className="font-bold text-sm">1. مراجعة الجودة مع المالك</p>
+            {q ? (
+              <p className="text-sm text-[#1E7A45] font-bold">✓ اتأكد مع المالك بواسطة {q.by}{q.accountDelivered ? ' · والحساب اتسلّم له' : ''}</p>
+            ) : (
+              <>
+                <p className="text-xs text-[#6B665C] leading-6">كلّم المالك، أكّد البيانات والسعر، وسلّمه الإيميل والباسورد بتاع بوابته.</p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <a href={`tel:${sub.phone}`} className="py-3 rounded-xl bg-[#1F4E9C] text-white text-center text-sm font-bold">اتصل بالمالك</a>
+                  <Btn tone="green" onClick={() => save({ qualityCheck: { by: byName, at: Date.now(), accountDelivered: true } })}>اتأكد وسلّمت الحساب</Btn>
+                </div>
+              </>
+            )}
+          </Card>
+
+          <Card>
+            <p className="font-bold text-sm">2. الكود والبيانات</p>
+            <label className="text-xs font-bold space-y-1 block">كود الوحدة
+              <input value={d.code} onChange={(e) => setD({ ...d, code: e.target.value.toUpperCase() })} dir="ltr" className={`${inp} font-mono`} />
+            </label>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <label className="text-xs font-bold space-y-1">السعر<input type="number" value={d.askingPrice} onChange={(e) => setD({ ...d, askingPrice: Number(e.target.value) })} className={inp} /></label>
+              <label className="text-xs font-bold space-y-1">المساحة<input type="number" value={d.area} onChange={(e) => setD({ ...d, area: Number(e.target.value) })} className={inp} /></label>
+              <label className="text-xs font-bold space-y-1">الغرف<input type="number" value={d.bedrooms || 3} onChange={(e) => setD({ ...d, bedrooms: Number(e.target.value) })} className={inp} /></label>
+              <label className="text-xs font-bold space-y-1">الدور<input value={d.floor || ''} onChange={(e) => setD({ ...d, floor: e.target.value })} className={inp} /></label>
+            </div>
+            <label className="text-xs font-bold space-y-1 block">العنوان بالتفصيل<input value={d.exactLocation || ''} onChange={(e) => setD({ ...d, exactLocation: e.target.value })} className={inp} /></label>
+            <label className="text-xs font-bold space-y-1 block">وصف الوحدة (اللي هيقراه الزائر)
+              <textarea rows={4} value={d.description || d.notes || ''} onChange={(e) => setD({ ...d, description: e.target.value })} className={inp} />
+            </label>
+          </Card>
+
+          <Card>
+            <p className="font-bold text-sm">3. الصور ({(d.images || []).length})</p>
+            <p className="text-xs text-[#6B665C]">دوس على أي صورة وحشة عشان تشيلها قبل النشر.</p>
+            <div className="flex gap-2 flex-wrap">
+              {(d.images || []).map((u: string) => (
+                <button key={u} onClick={() => setD({ ...d, images: d.images.filter((x: string) => x !== u) })} className="relative">
+                  <img src={u} alt="" className="w-20 h-20 rounded-xl object-cover" />
+                  <span className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-[#C2412D] text-white text-xs font-bold flex items-center justify-center">✕</span>
+                </button>
+              ))}
+              {!(d.images || []).length && <span className="text-xs text-[#C2412D] font-bold">مفيش صور · انشرها كده ولا تستنى المالك يبعت؟</span>}
+            </div>
+          </Card>
+        </div>
+
+        <div className="p-4 border-t border-[#E4DFD4] grid grid-cols-2 gap-2" style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))' }}>
+          <Btn tone="light" onClick={() => { save(); onClose(); }}>احفظ كمسودة</Btn>
+          <Btn disabled={busy || !q || !d.code.trim()} onClick={() => { setBusy(true); onApprove(save()); onClose(); }}>انشر بكود {d.code}</Btn>
+          {!q && <p className="col-span-2 text-[11px] text-[#C2412D] text-center">النشر مقفول لحد ما تتأكد مع المالك</p>}
+        </div>
+      </div>
     </div>
   );
 };
@@ -394,7 +478,6 @@ const OwnersExcelTab: React.FC<{ properties: Property[] }> = ({ properties }) =>
     setBusy('جاري عمل الحسابات...'); setLog([]);
     const wb = XLSX.read(await file.arrayBuffer());
     const rows: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    // نفس الإيميل ممكن يبقى عنده أكتر من شقة
     const byEmail: Record<string, { name: string; phone: string; pass: string; codes: string[]; commission: string }> = {};
     rows.forEach((r) => {
       const email = String(r['الإيميل (اكتبه)'] || '').trim().toLowerCase();
@@ -423,7 +506,7 @@ const OwnersExcelTab: React.FC<{ properties: Property[] }> = ({ properties }) =>
       </Card>
       <Card tone="gold">
         <p className="font-bold text-lg">2. ارفع الشيت بعد ما تملاه</p>
-        <p className="text-sm text-[#6B665C] leading-7">كل صف فيه إيميل بيتعمله حساب مالك بالباسوورد اللي في الشيت، ووحداته بتترِبط بيه لوحدها. نفس الإيميل على أكتر من شقة = حساب واحد بكل شققه.</p>
+        <p className="text-sm text-[#6B665C] leading-7">كل صف فيه إيميل بيتعمله حساب مالك بالباسوورد اللي في الشيت، ووحداته بتترِبط بيه لوحدها.</p>
         <input type="file" accept=".xlsx,.xls" disabled={!!busy} onChange={(e) => e.target.files?.[0] && importSheet(e.target.files[0])} className="text-sm" />
         {busy && busy.includes('الحسابات') && <p className="text-sm font-bold">{busy}</p>}
         {log.length > 0 && <div className="max-h-64 overflow-y-auto text-xs space-y-1 font-mono" dir="ltr">{log.map((l, i) => <p key={i} style={{ textAlign: 'right' }}>{l}</p>)}</div>}

@@ -128,6 +128,11 @@ service cloud.firestore {
                   || (isStaff() && get(/databases/$(database)/documents/sales_agents/$(resource.data.salesAgentId)).data.email.lower() == staffEmail());
     }
 
+    match /unit_visits/{id} {
+      allow create, update: if true;      // الزائر بيسجّل زيارته
+      allow read: if isStaff() || isOps() || isBoss() || isOwner() || isBroker() || isMkt();
+    }
+
     // ---------- أدوات السيلز: العروض واللينكات والمحتوى ----------
     match /offers/{id} {
       allow get: if true;                 // لينك العرض نفسه

@@ -7,6 +7,7 @@ import {
   subscribeAllUnitViewings, subscribeAllOwnerFeedback, subscribeAllChangeRequests,
 } from '../../services/portalService';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
+import { UnitVisit, subscribeVisits, summarize } from '../../services/visitorService';
 import { formatWhen } from '../common/WhenPicker';
 
 /*
@@ -38,6 +39,8 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
   const [feedback, setFeedback] = useState<OwnerFeedback[]>([]);
   const [changes, setChanges] = useState<ChangeRequest[]>([]);
   const [accounts, setAccounts] = useState<AccountRecord[]>([]);
+  const [visits, setVisits] = useState<UnitVisit[]>([]);
+  useEffect(() => subscribeVisits(setVisits), []);
 
   useEffect(() => {
     const u = [subscribeAllUnitViewings(setViewings), subscribeAllOwnerFeedback(setFeedback), subscribeAllChangeRequests(setChanges), subscribeToAccounts(setAccounts)];
@@ -54,7 +57,7 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
   const stageCount = (id: string) => leads.filter((l) => l.status === id).length;
   const codesOf = (a: AccountRecord) => (Array.isArray(a.propertyCodes) ? a.propertyCodes : String(a.propertyCodes || '').split(',').map((c) => c.trim()).filter(Boolean));
 
-  const readonly = <p className="text-[11px] text-[#8C877D]">عرض فقط · التعديل من الإدارة</p>;
+  const readonly = null;
 
   return (
     <PortalShell
@@ -76,6 +79,8 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
           {[
             ['وحدات معروضة', live.length, '#141414'], ['عملاء في الـ CRM', leads.length, '#1F4E9C'],
             ['ريكويست جديد النهارده', todayLeads, '#A07A26'], ['معاينات النهارده', todayViewings, '#1E7A45'],
+            ['زوار مختلفين النهارده', new Set(visits.filter((v) => v.at >= today).map((v) => v.visitor)).size, '#7A3E9C'],
+            ['طلبات تواصل النهارده', visits.filter((v) => v.at >= today && v.requested).length, '#C2412D'],
           ].map(([t, v, c]) => (
             <Card key={t as string}>
               <p className="text-xs text-[#6B665C]">{t as string}</p>
@@ -88,7 +93,6 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
               <Btn onClick={onOpenCrm}><Users size={16} />افتح غرفة العمليات والـ CRM</Btn>
               <Btn tone="light" onClick={() => setTab('partners')}><Building2 size={16} />داشبورد البروكرز والملاك</Btn>
             </div>
-            <p className="text-[11px] text-[#8C877D]">متاح ليك: المتابعة والتقارير وإضافة شقة · مش متاح: الحسابات والباسووردات وحذف الشقق</p>
           </Card>
           <Card tone="dark" className="lg:col-span-4">
             <span className="text-sm text-[#D9B864]">قيمة المعروض</span>

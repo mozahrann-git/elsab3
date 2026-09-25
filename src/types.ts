@@ -101,6 +101,8 @@ export interface Property {
   brokerId?: string;                // مسند لبروكر معين
   ownerEmail?: string;              // حساب المالك في البوابة
   viewingsPaused?: boolean;         // المالك طلب إيقاف المعاينات
+  lastViewAt?: number;              // آخر مشاهدة حقيقية
+  lastRequestAt?: number;           // آخر طلب (واتساب/مكالمة)
   note?: string;
   location?: string;
   sales?: string;
@@ -170,6 +172,7 @@ export interface OwnerSubmission {
   submittedAtMs?: number;
   realOwnerName?: string;           // صاحب الشقة الحقيقي لو اللي عارضها بروكر
   realOwnerPhone?: string;
+  qualityCheck?: { by: string; at: number; accountDelivered?: boolean; note?: string };
 }
 
 export interface AdminCredentials {

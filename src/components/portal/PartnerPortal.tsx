@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Home, CalendarClock, MessageSquareText, UserRound, Plus, ExternalLink, Pause, Play, Image as ImageIcon, BadgeDollarSign, LogOut, KeyRound, Phone } from 'lucide-react';
 import { Property } from '../../types';
 import { StaffAccess, fetchPropertyPrivateOwner } from '../../services/firebaseService';
+import { UnitVisit, subscribeVisits, summarize } from '../../services/visitorService';
 import { uploadFile } from '../../services/mediaStorage';
 import {
   UnitViewing, OwnerFeedback, ChangeRequest,
@@ -44,6 +45,9 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
   const [passOpen, setPassOpen] = useState(false);
   const [nag, setNag] = useState(false);
   const [myFb, setMyFb] = useState<BrokerFeedback[]>([]);
+  const [visits, setVisits] = useState<UnitVisit[]>([]);
+  useEffect(() => subscribeVisits(setVisits), []);
+  const statsOf = (code: string) => summarize(visits.filter((v) => v.code === code));
   useEffect(() => (isBroker && access.brokerId ? subscribeMyBrokerFeedback(access.brokerId, setMyFb) : undefined), [isBroker, access.brokerId]);
 
   const codes = useMemo(() => (access.propertyCodes || []).map((c) => c.trim().toUpperCase()), [access.propertyCodes]);
@@ -73,8 +77,9 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
     return () => clearInterval(t);
   }, [pending.length]);
 
-  const weekViews = mine.reduce((s, p) => s + (p.clicks?.views || 0), 0);
-  const weekAsks = mine.reduce((s, p) => s + (p.clicks?.whatsapp || 0) + (p.clicks?.call || 0), 0);
+  const mineVisits = visits.filter((v) => mine.some((p) => p.code === v.code));
+  const weekViews = new Set(mineVisits.map((v) => v.visitor)).size;
+  const weekAsks = mineVisits.filter((v) => v.requested).length || mine.reduce((s2, p) => s2 + (p.clicks?.whatsapp || 0) + (p.clicks?.call || 0), 0);
   const reviewSubs = subs.filter((s) => s.status === 'pending');
 
   const tabs = [
@@ -114,14 +119,14 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
 
       {unit ? (
         <UnitDetail unit={unit} viewings={viewings.filter((v) => v.propertyCode === unit.code)} feedback={feedback.filter((f) => f.propertyCode === unit.code)}
-          changes={changes.filter((c) => c.propertyId === unit.id)} district={district(unit)} isBroker={isBroker} brokerId={access.brokerId} onBack={() => setOpenUnit(null)} />
+          changes={changes.filter((c) => c.propertyId === unit.id)} district={district(unit)} isBroker={isBroker} brokerId={access.brokerId} visitsAll={visits} onBack={() => setOpenUnit(null)} />
       ) : tab === 'units' ? (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card tone="dark" className="lg:col-span-3">
             <span className="text-sm text-[#D9B864]">{isBroker ? 'شغلك لحد النهارده' : 'على وحداتك لحد النهارده'}</span>
             <div className="grid grid-cols-3 gap-2">
-              <Stat n={fmt(weekViews)} l="مشاهدة" light />
-              <Stat n={fmt(weekAsks)} l="طلب تفاصيل" color="#7ED3A0" light />
+              <Stat n={fmt(weekViews)} l="زائر مختلف" light />
+              <Stat n={fmt(weekAsks)} l="طلب تواصل" color="#7ED3A0" light />
               <Stat n={String(viewings.length)} l="معاينة" color="#D9B864" light />
               {isBroker && (() => {
                 const done = viewings.filter((v) => v.brokerConfirmedAt);
@@ -147,11 +152,13 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
                     </div>
                   </div>
                   {pv && <div className="rounded-xl bg-[#FBEDEA] border border-[#E9B8AE] text-[#9A2E1F] text-sm font-semibold px-3 py-2">معاينة {pv.scheduledText} مستنية تأكيدك</div>}
-                  <div className="grid grid-cols-3 border-t border-[#F0ECE4] pt-3">
-                    <Stat n={fmt(p.clicks?.views)} l="مشاهدة" />
-                    <Stat n={fmt(p.clicks?.whatsapp)} l="واتساب" color="#1E7A45" />
-                    <Stat n={fmt(p.clicks?.call)} l="مكالمة" color="#1F4E9C" />
-                  </div>
+                  {(() => { const st = statsOf(p.code); return (
+                    <div className="grid grid-cols-3 border-t border-[#F0ECE4] pt-3">
+                      <Stat n={fmt(st.visitors)} l="زائر مختلف" />
+                      <Stat n={fmt(st.visits)} l="زيارة" color="#6B665C" />
+                      <Stat n={fmt(st.requests || (p.clicks?.whatsapp || 0) + (p.clicks?.call || 0))} l="طلب تواصل" color="#1E7A45" />
+                    </div>
+                  ); })()}
                 </Card>
               </button>
             );
@@ -390,8 +397,8 @@ const FeedbackList: React.FC<{ feedback: OwnerFeedback[] }> = ({ feedback }) => 
 
 const UnitDetail: React.FC<{
   unit: Property; viewings: UnitViewing[]; feedback: OwnerFeedback[]; changes: ChangeRequest[];
-  district: { avg: number; diff: number } | null; isBroker: boolean; brokerId?: string; onBack: () => void;
-}> = ({ unit, viewings, feedback, changes, district, isBroker, brokerId, onBack }) => {
+  district: { avg: number; diff: number } | null; isBroker: boolean; brokerId?: string; visitsAll: UnitVisit[]; onBack: () => void;
+}> = ({ unit, viewings, feedback, changes, district, isBroker, brokerId, visitsAll, onBack }) => {
   const [mode, setMode] = useState<'' | 'price' | 'photos'>('');
   const [price, setPrice] = useState('');
   const [files, setFiles] = useState<string[]>([]);
@@ -426,6 +433,33 @@ const UnitDetail: React.FC<{
       </Card>
       <div className="lg:col-span-2 grid gap-4">
         {viewings.filter((v) => v.ownerStatus === 'pending').map((v) => isBroker ? <BrokerViewing key={v.id} v={v} brokerId={brokerId || ''} brokerName="" /> : <OwnerViewing key={v.id} v={v} />)}
+        <Card>
+          <p className="font-bold">مين شاف الشقة ومن فين</p>
+          {(() => {
+            const st = summarize(visitsAll.filter((v) => v.code === unit.code));
+            return (
+              <>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {[['زائر مختلف', st.visitors], ['زيارة', st.visits], ['طلب تواصل', st.requests]].map(([l, v]) => (
+                    <div key={l as string} className="rounded-xl bg-[#F6F4EF] py-2.5">
+                      <p className="font-bold" style={{ fontFamily: "'Readex Pro', sans-serif" }}>{v as number}</p>
+                      <p className="text-[10px] text-[#6B665C]">{l as string}</p>
+                    </div>
+                  ))}
+                </div>
+                {st.sources.length > 0 && (
+                  <div className="space-y-1">
+                    {st.sources.slice(0, 4).map(([k, n]) => (
+                      <div key={k} className="flex justify-between text-xs"><span className="truncate">{k === 'مباشر' ? 'دخل الموقع مباشرة' : `من لينك ${k}`}</span><span className="font-bold">{n}</span></div>
+                    ))}
+                  </div>
+                )}
+                {st.lastAt && <p className="text-[11px] text-[#8C877D]">آخر زيارة: {formatWhen(st.lastAt)}</p>}
+              </>
+            );
+          })()}
+        </Card>
+
         <Card>
           <p className="font-bold">مسار الشقة</p>
           {steps.map((s, i) => (
