@@ -50,16 +50,7 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
   const statsOf = (code: string) => summarize(visits.filter((v) => v.code === code));
   useEffect(() => (isBroker && access.brokerId ? subscribeMyBrokerFeedback(access.brokerId, setMyFb) : undefined), [isBroker, access.brokerId]);
 
-  // ملاحظة: propertyCodes ساعات بتتحفظ نص "H1705, H1625" وساعات قائمة — لازم الاتنين يشتغلوا
-  const codes = useMemo(() => {
-    const raw: any = access?.propertyCodes;
-    const list: string[] = Array.isArray(raw)
-      ? raw
-      : typeof raw === 'string'
-        ? raw.split(',')
-        : [];
-    return list.map((c) => String(c || '').trim().toUpperCase()).filter(Boolean);
-  }, [access?.propertyCodes]);
+  const codes = useMemo(() => (access.propertyCodes || []).map((c) => c.trim().toUpperCase()), [access.propertyCodes]);
   const mine = useMemo(() => properties.filter((p) =>
     isBroker ? (access.role === 'admin' || p.brokerId === access.brokerId) : codes.includes(String(p.code || '').toUpperCase())
   ), [properties, codes, access, isBroker]);

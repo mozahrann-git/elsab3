@@ -62,7 +62,6 @@ import { PropertyDetailModal } from './components/PropertyDetailModal';
 import { ResaleSubmissionModal } from './components/ResaleSubmissionModal';
 import { PropertyComparisonModal } from './components/PropertyComparisonModal';
 import { FavoritesModal } from './components/FavoritesModal';
-import { DistrictGuideModal } from './components/DistrictGuideModal';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { SalesCrmModal } from './components/SalesCrmModal';
@@ -563,7 +562,6 @@ export default function App() {
   const [isResaleSubmitOpen, setIsResaleSubmitOpen] = useState(false);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
-  const [isDistrictGuideOpen, setIsDistrictGuideOpen] = useState(false);
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
@@ -1063,7 +1061,6 @@ export default function App() {
     isResaleSubmitOpen ||
     isComparisonOpen ||
     isFavoritesOpen ||
-    isDistrictGuideOpen ||
     isExcelImportOpen ||
     isCrmOpen ||
     isSalesLoginOpen ||
@@ -1112,8 +1109,6 @@ export default function App() {
           setIsComparisonOpen(false);
         } else if (isFavoritesOpen) {
           setIsFavoritesOpen(false);
-        } else if (isDistrictGuideOpen) {
-          setIsDistrictGuideOpen(false);
         } else if (isExcelImportOpen) {
           setIsExcelImportOpen(false);
         } else if (isCrmOpen) {
@@ -1150,7 +1145,6 @@ export default function App() {
     isResaleSubmitOpen,
     isComparisonOpen,
     isFavoritesOpen,
-    isDistrictGuideOpen,
     isExcelImportOpen,
     isCrmOpen,
     isSalesLoginOpen,
@@ -1713,7 +1707,7 @@ export default function App() {
         comparisonCount={comparisonList.length}
         onOpenComparison={() => setIsComparisonOpen(true)}
         onOpenResaleSubmit={() => setIsResaleSubmitOpen(true)}
-        onOpenGuide={() => setIsDistrictGuideOpen(true)}
+        onOpenGuide={() => document.getElementById('districts-guide-section')?.scrollIntoView({ behavior: 'smooth' })}
         onOpenPriceMap={() => setIsPriceMapOpen(true)}
         onOpenValuation={() => setIsValuationOpen(true)}
         myPortalLabel={myPortalLabel}
@@ -2010,7 +2004,7 @@ export default function App() {
             setIsAdminLoginOpen(true);
           }
         }}
-        onOpenDistrictGuide={() => setIsDistrictGuideOpen(true)}
+        onOpenDistrictGuide={() => document.getElementById('districts-guide-section')?.scrollIntoView({ behavior: 'smooth' })}
         customLogoUrl={customLogoUrl}
         footerConfig={footerConfig}
       />
@@ -2060,13 +2054,7 @@ export default function App() {
       />
 
       {/* 5. District Guide Modal (Visual Photo Stories & Editable) */}
-      <DistrictGuideModal
-        isOpen={isDistrictGuideOpen}
-        onClose={() => setIsDistrictGuideOpen(false)}
-        properties={properties}
-        onSelectDistrict={(district) => { setFilter({ ...filter, neighborhood: district }); setIsDistrictGuideOpen(false); setTimeout(() => document.getElementById('properties-grid')?.scrollIntoView({ behavior: 'smooth' }), 80); }}
-        isAdmin={isAdminLoggedIn}
-      />
+      {/* دليل الأحياء المصور اتشال — صفحات الأحياء (DistrictPage) بقت هي المرجع */}
 
       {/* 6. Admin Login Modal (Protected by Email & Password) */}
       <AdminLoginModal
