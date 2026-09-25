@@ -44,6 +44,10 @@ import { SpinWheelModal } from './SpinWheelModal';
 import { LeadDetailsModal } from './LeadDetailsModal';
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
+import { ContentTab } from './sales/ContentTab';
+import { LeaderboardTab } from './sales/LeaderboardTab';
+import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
+import { OfferBuilderModal } from './sales/OfferBuilderModal';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { DailyQuest } from '../types';
@@ -264,6 +268,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     await deleteLeadFromDb(lead.id).catch(() => {});
     onDeleteLead?.(lead.id);
   };
+  const [discoveryLead, setDiscoveryLead] = useState<Lead | null>(null);
+  const [offerLead, setOfferLead] = useState<Lead | null>(null);
   const [moveTarget, setMoveTarget] = useState<LeadStatus | null>(null);
   const [board, setBoard] = useState<CrmBoard>({});
   const [editBoard, setEditBoard] = useState<null | 'banner' | 'quests'>(null);
@@ -509,6 +515,23 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             <button
               onClick={() => {
+                setActiveTab('content');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full p-2.5 rounded-xl text-right flex items-center justify-between text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'content'
+                  ? 'bg-[#A07A26] text-white shadow-xs'
+                  : 'text-stone-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Target size={16} />
+                <span>المحتوى والإعلانات</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
                 setActiveTab('quests');
                 setIsMobileMenuOpen(false);
               }}
@@ -629,6 +652,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             { id: 'followups', label: 'المتابعات' },
             { id: 'matching', label: 'المطابقة الذكية' },
             { id: 'quests', label: 'المهام والـ XP' },
+            { id: 'content', label: 'المحتوى والإعلانات' },
             { id: 'leaderboard', label: 'المتصدرين' }
           ].map((tab) => (
             <button
@@ -1089,6 +1113,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         </a>
 
                         <button
+                          onClick={() => ((lead as any).discovery ? setOfferLead(lead) : setDiscoveryLead(lead))}
+                          className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl"
+                        >
+                          {(lead as any).discovery ? 'عرض مخصوص' : 'مكالمة اكتشاف'}
+                        </button>
+                        <button
                           onClick={() => setSelectedLeadForDetails(lead)}
                           className="px-3 py-1.5 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] text-xs font-bold rounded-xl border border-[#ECE8DF]"
                         >
@@ -1415,34 +1445,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {/* ========================================================= */}
         {/* TAB 5: LEADERBOARD */}
         {/* ========================================================= */}
-        {activeTab === 'leaderboard' && (
-          <div className="space-y-4 sm:space-y-5 max-w-3xl mx-auto flex-1 pt-1 w-full">
-            <div className="bg-white border border-[#ECE8DF] p-5 sm:p-6 rounded-3xl shadow-2xs space-y-4">
-              <h3 className="font-readex font-bold text-base sm:text-lg text-[#141414]">المتصدرين الشهر ده - فريق المبيعات</h3>
-              <p className="text-xs text-[#6B665C]">ترتيب المستشارين العقاريين حسب الصفقات والـ XP</p>
+        {activeTab === 'content' && (
+          <div className="p-4 sm:p-5">
+            <ContentTab properties={properties} agents={agents} currentAgent={currentAgent} isAdmin={isAdmin} />
+          </div>
+        )}
 
-              <div className="space-y-2.5 pt-2">
-                {agents.map((ag, idx) => (
-                  <div 
-                    key={ag.id} 
-                    className="p-3.5 sm:p-4 bg-[#F6F4EF] border border-[#ECE8DF] rounded-2xl flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full font-bold flex items-center justify-center text-xs ${
-                        idx === 0 ? 'bg-[#D9B864] text-[#141414]' : 'bg-[#ECE8DF] text-[#6B665C]'
-                      }`}>
-                        {idx + 1}
-                      </span>
-                      <div>
-                        <h4 className="font-bold text-xs sm:text-sm text-[#141414]">{ag.name}</h4>
-                        <p className="text-[10px] sm:text-[11px] text-[#6B665C]">{ag.dealsClosedCount} صفقات مغلقة</p>
-                      </div>
-                    </div>
-                    <span className="font-mono text-xs sm:text-sm font-bold text-[#141414]">{ag.xp} XP</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {activeTab === 'leaderboard' && (
+          <div className="p-4 sm:p-5">
+            <LeaderboardTab agents={agents} leads={leads} />
           </div>
         )}
 
@@ -1763,6 +1774,18 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         }}
       />
 
+    {discoveryLead && (
+        <DiscoveryCallModal isOpen={!!discoveryLead} lead={discoveryLead} properties={properties} byName={currentAgent?.name || 'الفريق'}
+          onClose={() => setDiscoveryLead(null)}
+          onSaved={(u) => { onUpdateLead(u); setDiscoveryLead((d) => (d ? u : d)); }}
+          onBuildOffer={(u) => { setDiscoveryLead(null); setOfferLead(u); }} />
+      )}
+      {offerLead && (
+        <OfferBuilderModal isOpen={!!offerLead} lead={offerLead} properties={properties}
+          agentId={currentAgent?.id || ''} agentName={currentAgent?.name || ''} agentPhone={currentAgent?.phone}
+          onClose={() => setOfferLead(null)}
+          onSent={(u) => onUpdateLead(u)} />
+      )}
     </div>
   );
 };

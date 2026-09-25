@@ -17,7 +17,6 @@ export const MarketingPanel: React.FC<{
   const [slots, setSlots] = useState<ContentSlot[]>([]);
   const [forms, setForms] = useState<SalesForms>(DEFAULT_FORMS);
   const [busy, setBusy] = useState('');
-  const [err, setErr] = useState('');
   useEffect(() => subscribeSlots(setSlots), []);
   useEffect(() => subscribeSalesForms(setForms), []);
 
@@ -27,15 +26,10 @@ export const MarketingPanel: React.FC<{
   const pending = open.filter((s) => s.shoot?.status === 'requested').length;
 
   const upload = async (s: ContentSlot, file: File) => {
-    setBusy(s.id); setErr('');
-    if (file.size > 95 * 1024 * 1024) { setErr('الفيديو أكبر من 95 ميجا · صغّره أو ارفعه بجودة أقل'); setBusy(''); return; }
+    setBusy(s.id);
     try {
       const url = await uploadFile(file, 'marketing', s.id);
       await updateSlot(s.id, { shoot: { ...(s.shoot as any), status: 'delivered', finalUrl: url } });
-    } catch (e: any) {
-      setErr(String(e?.message || '').includes('preset') || String(e?.message || '').includes('format')
-        ? 'صيغة الفيديو مش مسموحة في الإعدادات · كلّم الإدارة تضيف mp4/mov'
-        : 'مقدرناش نرفع الفيديو · جرّب تاني أو بجودة أقل');
     } finally { setBusy(''); }
   };
 
@@ -77,11 +71,10 @@ export const MarketingPanel: React.FC<{
                 </div>
               )}
               {s.shoot?.status === 'confirmed' && <Btn tone="light" onClick={() => updateSlot(s.id, { shoot: { ...(s.shoot as any), status: 'shot' } })}>اتصوّر</Btn>}
-              {err && busy === '' && <p className="text-xs text-[#C2412D] font-bold">{err}</p>}
               {(s.shoot?.status === 'shot' || s.shoot?.status === 'confirmed') && (
                 <label className="rounded-xl border-2 border-dashed border-[#CFC7B8] p-4 text-center text-sm text-[#6B665C] cursor-pointer">
                   {busy === s.id ? 'جاري الرفع...' : 'ارفع الفيديو بعد المونتاج'}
-                  <input type="file" accept="video/mp4,video/quicktime,video/*" className="hidden" onChange={(e) => e.target.files?.[0] && upload(s, e.target.files[0])} />
+                  <input type="file" accept="video/*" className="hidden" onChange={(e) => e.target.files?.[0] && upload(s, e.target.files[0])} />
                 </label>
               )}
             </Card>

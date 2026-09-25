@@ -1,16 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Offer, OfferUnit, getOffer, logOfferOpen } from '../../services/salesToolsService';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../services/firebaseService';
-import { Property } from '../../types';
-import { ArrowRight } from 'lucide-react';
+import { Offer, getOffer, logOfferOpen } from '../../services/salesToolsService';
 
 /* صفحة العرض اللي العميل بيشوفها: شقق العرض بس، بصوت السيلز واسمه */
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
 export const OfferPublicPage: React.FC<{ offerId: string; onClose: () => void }> = ({ offerId, onClose }) => {
   const [offer, setOffer] = useState<Offer | null | undefined>(undefined);
-  const [open, setOpen] = useState<{ unit: OfferUnit; p?: Property } | null>(null);
   useEffect(() => {
     getOffer(offerId).then((o) => { setOffer(o); if (o) logOfferOpen(offerId); }).catch(() => setOffer(null));
   }, [offerId]);
@@ -60,11 +55,7 @@ export const OfferPublicPage: React.FC<{ offerId: string; onClose: () => void }>
                     <span className="font-bold" style={{ fontFamily: "'Readex Pro', sans-serif" }}>{fmt(u.price)} ج.م</span>
                   </div>
                   {u.note && <p className="leading-7 text-[13.5px] bg-[#FBF8F1] border-r-4 border-[#A07A26] rounded-lg p-3">« {u.note} »</p>}
-                  <button onClick={async () => {
-                    logOfferOpen(offerId, u.code);
-                    setOpen({ unit: u });
-                    try { const snap = await getDoc(doc(db, 'properties', u.propertyId)); if (snap.exists()) setOpen({ unit: u, p: snap.data() as Property }); } catch { /* */ }
-                  }} className="text-sm font-bold text-[#A07A26]">شوف التفاصيل والصور ←</button>
+                  <a href={`/?property=${u.code}`} className="inline-block text-sm font-bold text-[#A07A26]">شوف التفاصيل والصور ←</a>
                 </div>
               </article>
             ))}
@@ -73,49 +64,9 @@ export const OfferPublicPage: React.FC<{ offerId: string; onClose: () => void }>
               <p className="leading-8">{offer.question || 'قولّي رأيك وأنا أرتبلك المعاينة'}</p>
               <a href={wa} target="_blank" rel="noopener noreferrer" className="block w-full py-3.5 rounded-xl bg-[#1FA85D] font-bold">رد على {offer.agentName} واتساب</a>
             </div>
+            <button onClick={onClose} className="w-full text-sm text-[#6B665C] py-3">تصفّح كل شقق السبع</button>
           </main>
         </>
-      )}
-
-      {open && (
-        <div className="fixed inset-0 z-[95] bg-[#F6F4EF] overflow-y-auto" dir="rtl">
-          <header className="sticky top-0 bg-[#141414] text-white px-4 py-3 flex items-center gap-3">
-            <button onClick={() => setOpen(null)} className="flex items-center gap-1.5 text-sm font-bold">
-              <ArrowRight size={18} />رجوع للعرض
-            </button>
-            <span className="mr-auto font-mono text-xs bg-white/10 px-2 py-1 rounded-md">{open.unit.code}</span>
-          </header>
-          <div className="max-w-lg mx-auto p-4 space-y-4 pb-16">
-            <div className="flex gap-2 overflow-x-auto">
-              {(open.p?.images || (open.unit.image ? [open.unit.image] : [])).map((img, i) => (
-                <img key={i} src={img} alt="" className="h-56 rounded-2xl object-cover shrink-0" />
-              ))}
-              {!(open.p?.images || []).length && !open.unit.image && (
-                <div className="w-full h-48 rounded-2xl" style={{ background: 'repeating-linear-gradient(135deg,#E7E2D8 0 12px,#EFEBE3 12px 24px)' }} />
-              )}
-            </div>
-            {open.p?.videoUrl && <video src={open.p.videoUrl} controls playsInline className="w-full rounded-2xl" />}
-            <div className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">
-              <p className="font-bold text-lg">{open.p?.title || open.unit.title}</p>
-              <p className="font-bold text-xl" style={{ fontFamily: "'Readex Pro', sans-serif" }}>{fmt(open.unit.price)} ج.م</p>
-              {open.p && (
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  {[['المساحة', `${open.p.area} م²`], ['الغرف', `${open.p.bedrooms} غرف`], ['الحمامات', `${open.p.bathrooms || '—'}`], ['الدور', open.p.floor || '—']].map(([l, v]) => (
-                    <div key={l as string} className="rounded-xl bg-[#F6F4EF] p-3">
-                      <p className="text-[11px] text-[#6B665C]">{l as string}</p>
-                      <p className="font-bold text-sm">{v as string}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {open.unit.note && <p className="leading-7 text-[13.5px] bg-[#FBF8F1] border-r-4 border-[#A07A26] rounded-lg p-3">« {open.unit.note} »</p>}
-              {open.p?.description && <p className="leading-7 text-sm text-[#4A463F]">{open.p.description}</p>}
-            </div>
-            <button onClick={() => setOpen(null)} className="w-full py-3.5 rounded-2xl bg-[#141414] text-white font-bold flex items-center justify-center gap-2">
-              <ArrowRight size={18} />رجوع لباقي العرض
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );

@@ -13,7 +13,6 @@ import { FieldFeedbackPage } from './components/portal/FieldFeedbackPage';
 import { SalesFeedbackInbox } from './components/portal/SalesFeedbackInbox';
 import { OfferPublicPage } from './components/sales/OfferPublicPage';
 import { getTrackedLink, logLinkHit } from './services/salesToolsService';
-import { logVisit, markVisit } from './services/visitorService';
 import { getStaffAccess, StaffAccess } from './services/firebaseService';
 import { linkPropertyToOwner } from './services/portalService';
 import { 
@@ -200,7 +199,6 @@ export default function App() {
     let t: string | null = null;
     try { t = new URLSearchParams(window.location.search).get('t'); } catch { /* */ }
     if (!t) return;
-    try { sessionStorage.setItem('lion_source', t); } catch { /* */ }
     logLinkHit(t).catch(() => {});
     getTrackedLink(t).then((l) => {
       if (!l) return;
@@ -1251,40 +1249,14 @@ export default function App() {
   }, [crmLeads, isSalesLoggedIn, isAdminLoggedIn, currentSalesAgentId]);
 ;
 
-  /*
-    عدّ حقيقي: مشاهدة واحدة لكل جهاز كل 12 ساعة، وشغل الفريق مش بيتحسب،
-    والطلبات (واتساب + مكالمة) بتتعد لوحدها عشان الرقم اللي بيوصل للمالك يبقى صادق.
-  */
+  // Click tracking function (WhatsApp, Calls, Views, Favorites)
   const handleTrackClick = (propertyId: string, type: 'whatsapp' | 'call' | 'views' | 'favorites') => {
-    // فتحات الفريق مبتتحسبش
-    if (isAdminLoggedIn || isSalesLoggedIn || staffAccess) return;
-    const src = (() => { try { return sessionStorage.getItem('lion_source') || undefined; } catch { return undefined; } })();
-    const prop0 = properties.find((p) => p.id === propertyId);
-    if (type === 'views') logVisit(propertyId, prop0?.code || '', { source: src }).catch(() => {});
-    if (type === 'whatsapp' || type === 'call') {
-      markVisit(propertyId, { requested: true, code: prop0?.code || '', source: src }).catch(() => {});
-      if (src) logLinkHit(src, true).catch(() => {});
-    }
-    if (type === 'views') {
-      try {
-        const raw = localStorage.getItem('lion_seen_units');
-        const seen: Record<string, number> = raw ? JSON.parse(raw) : {};
-        const last = seen[propertyId] || 0;
-        if (Date.now() - last < 12 * 3600000) return;   // نفس الجهاز خلال 12 ساعة
-        seen[propertyId] = Date.now();
-        localStorage.setItem('lion_seen_units', JSON.stringify(seen));
-      } catch { /* ignore */ }
-    }
     setProperties((prev) =>
       prev.map((prop) => {
         if (prop.id !== propertyId) return prop;
         const clicks = { ...(prop.clicks || { whatsapp: 0, call: 0, views: 0, favorites: 0 }) };
         clicks[type] = (clicks[type] || 0) + 1;
-        const updated: any = { ...prop, clicks };
-        if (type === 'views') updated.lastViewAt = Date.now();
-        if (type === 'whatsapp' || type === 'call') updated.lastRequestAt = Date.now();
-        savePropertyToDb(updated).catch(() => {});
-        return updated;
+        return { ...prop, clicks };
       })
     );
   };
@@ -1444,7 +1416,7 @@ export default function App() {
     // Create a live property from submission using latest edited attributes
     const newProperty: Property = {
       id: `prop-${Date.now()}`,
-      code: ((sub as any).code || `SEBA-HW-${Math.floor(100 + Math.random() * 900)}`).toUpperCase(),
+      code: `SEBA-HW-${Math.floor(100 + Math.random() * 900)}`,
       title: `شقة ${sub.area}م² بالهضبة الوسطى (${sub.neighborhood}) - ${sub.finishing === 'finished' ? 'متشطبة سوبر لوكس' : 'نصف تشطيب'}`,
       neighborhood: sub.neighborhood,
       propertyType: sub.unitType || 'apartment',
@@ -1454,9 +1426,9 @@ export default function App() {
       price: sub.askingPrice,
       pricePerMeter: Math.round(sub.askingPrice / (sub.area || 1)),
       area: sub.area,
-      bedrooms: (sub as any).bedrooms ?? sub.bedrooms,
+      bedrooms: sub.bedrooms,
       bathrooms: sub.bathrooms,
-      floor: (sub as any).floor || sub.floor,
+      floor: sub.floor,
       view: 'إطلالة مفتوحة على الشارع الرئيسي',
       deliveryDate: 'استلام فوري',
       paymentMethod: sub.paymentMethod || 'cash',
@@ -2262,7 +2234,6 @@ export default function App() {
       {activePortal === 'coordinator' && staffAccess && (
         <CoordinatorPanel name={staffAccess.name || ''} isAdmin={staffAccess.role === 'admin'} properties={properties} submissions={ownerSubmissions} logoUrl={customLogoUrl}
           onApproveSubmission={(s) => handleApproveSubmission(s)} onRejectSubmission={handleRejectSubmission}
-          onUpdateSubmission={(s) => { setOwnerSubmissions((prev) => prev.map((x) => (x.id === s.id ? s : x))); saveOwnerSubmissionToDb(s).catch(() => {}); }}
           onClose={() => setActivePortal(null)} onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }} />
       )}
       {openDistrict && (
