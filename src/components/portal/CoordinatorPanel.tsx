@@ -9,6 +9,7 @@ import {
   UnitViewing, ChangeRequest, FieldAgent, FieldTrip, FieldFeedback, TripUnit,
   subscribeAllUnitViewings, subscribeAllChangeRequests, subscribeFieldAgents, subscribeTrips, subscribeFieldFeedback,
   createUnitViewing, renotifyOwner, findBrokerContact, deleteUnitViewing, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
+  acceptOwnerProposal, askClientAboutProposal, counterProposeToOwner, cancelViewing,
   saraConfirmFeedback, rejectFeedback,
 } from '../../services/portalService';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
@@ -74,7 +75,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       active={tab} onTab={setTab} onClose={onClose}
       footer={<button onClick={onLogout} className="w-full px-4 py-3 rounded-xl text-sm text-[#F0776A] hover:bg-white/10 text-right flex items-center gap-2"><LogOut size={16} />خروج</button>}
     >
-      {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} isAdmin={isAdmin} onSendToAgent={(code, label, at) => { setTripSeed({ code, label, at }); setTab('agents'); }} />}
+      {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} isAdmin={isAdmin} byName={name} onSendToAgent={(code, label, at) => { setTripSeed({ code, label, at }); setTab('agents'); }} />}
       {tab === 'agents' && <AgentsTab agents={agents} trips={trips} fbs={fbs} viewings={viewings} properties={properties} isAdmin={isAdmin} seed={tripSeed} />}
       {tab === 'feedback' && <FeedbackTab fbs={fbs} />}
       {tab === 'changes' && <ChangesTab changes={changes} />}
@@ -85,7 +86,58 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
 };
 
 // ---------------- المعاينات ----------------
-const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; onSendToAgent: (code: string, label: string, at?: number) => void }> = ({ viewings, properties, isAdmin, onSendToAgent }) => {
+/* المالك اقترح ميعاد تاني: سارة تقبله، أو تسأل العميل، أو تقترح ميعاد تالت. الإلغاء آخر حاجة. */
+const RescheduleActions: React.FC<{ v: UnitViewing; byName: string }> = ({ v, byName }) => {
+  const [mode, setMode] = useState<null | 'counter'>(null);
+  const [alt, setAlt] = useState<WhenValue | null>(null);
+  const [busy, setBusy] = useState('');
+  const proposed = v.ownerProposedText || v.ownerNote || '';
+
+  if (mode === 'counter') {
+    return (
+      <div className="flex flex-col gap-2 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] p-3">
+        <p className="text-xs font-bold text-[#6E5418]">اقترحي ميعاد تالت على المالك</p>
+        <WhenPicker value={alt} onChange={setAlt} quick={false} label="الميعاد الجديد" />
+        <div className="grid grid-cols-2 gap-2">
+          <Btn tone="light" className="text-xs !px-2" onClick={() => { setMode(null); setAlt(null); }}>رجوع</Btn>
+          <Btn className="text-xs !px-2" disabled={!alt || !!busy}
+            onClick={async () => { setBusy('x'); try { await counterProposeToOwner(v, alt!.label, alt!.at); } finally { setBusy(''); setMode(null); } }}>
+            ابعتي للمالك
+          </Btn>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] p-3">
+      <p className="text-xs text-[#6E5418]">
+        المالك اقترح: <b className="text-[#141414]">{proposed || 'من غير ميعاد محدد'}</b>
+        {v.clientAskedAt ? ' · اتبعت للسيلز يسأل العميل' : ''}
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        <Btn tone="green" className="text-xs !px-2" disabled={!!busy}
+          onClick={async () => { setBusy('a'); try { await acceptOwnerProposal(v); } finally { setBusy(''); } }}>
+          يناسبنا · أكّدي
+        </Btn>
+        <Btn tone="blue" className="text-xs !px-2" disabled={!!busy || !v.leadId}
+          title={v.leadId ? '' : 'المعاينة دي مش مربوطة بعميل'}
+          onClick={async () => { setBusy('b'); try { await askClientAboutProposal(v, byName); } finally { setBusy(''); } }}>
+          اسألي العميل
+        </Btn>
+        <Btn tone="light" className="text-xs !px-2" onClick={() => setMode('counter')}>ميعاد تالت</Btn>
+      </div>
+      <button
+        onClick={() => { const r = window.prompt('سبب الإلغاء؟ (هيتسجل في رحلة العميل)'); if (r && r.trim()) cancelViewing(v.id, r.trim()); }}
+        className="self-start text-[11px] font-bold text-[#C2412D]"
+      >
+        إلغاء المعاينة
+      </button>
+    </div>
+  );
+};
+
+const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; byName: string; onSendToAgent: (code: string, label: string, at?: number) => void }> = ({ viewings, properties, isAdmin, byName, onSendToAgent }) => {
   const [code, setCode] = useState('');
   const [time, setTime] = useState<WhenValue | null>(null);
   const [note, setNote] = useState('');
@@ -162,7 +214,8 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
                 <span className="font-bold">{v.propertyCode} · {v.scheduledText}</span>
                 {v.ownerStatus === 'pending' ? <Chip tone="red">{v.brokerId ? 'البروكر' : 'المالك'} ما ردّش · {since(v.lastNotifiedAt)}</Chip>
                   : v.ownerStatus === 'confirmed' ? <Chip tone="green">اتأكدت {v.brokerConfirmedTime || ''}</Chip>
-                  : <Chip tone="gold">طلب ميعاد تاني: {v.ownerNote}</Chip>}
+                  : v.ownerStatus === 'canceled' ? <Chip tone="grey">اتلغت{v.canceledReason ? ` · ${v.canceledReason}` : ''}</Chip>
+                  : <Chip tone="gold">طلب ميعاد تاني: {v.ownerProposedText || v.ownerNote}</Chip>}
               </div>
               <p className="text-sm text-[#6B665C]">{v.propertyTitle} · المالك: <b>{v.ownerName || owners[v.propertyId] || '—'}</b>{v.salesAgentName ? ` · طلب ${v.salesAgentName}` : ''} · اتبلّغ {v.notifyCount} مرة{late ? ' · فات ربع ساعة' : ''}</p>
               {v.ownerStatus === 'pending' && (
@@ -178,10 +231,14 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
                   <Btn tone="light" onClick={() => setViewingStatus(v.id, 'done')}>اتعاينت</Btn>
                 </div>
               )}
-              {v.ownerStatus === 'reschedule' && <Btn tone="light" onClick={() => setViewingStatus(v.id, 'canceled')}>إلغاء</Btn>}
-              {isAdmin && (
+              {v.ownerStatus === 'reschedule' && <RescheduleActions v={v} byName={byName} />}
+              {isAdmin && !v.leadId && v.ownerStatus !== 'reschedule' && (
                 <button onClick={() => { if (window.confirm(`تمسح معاينة ${v.propertyCode} نهائياً؟`)) deleteUnitViewing(v.id); }}
                   className="self-start text-xs font-bold text-[#C2412D]">حذف المعاينة</button>
+              )}
+              {isAdmin && v.leadId && v.ownerStatus !== 'canceled' && v.ownerStatus !== 'reschedule' && (
+                <button onClick={() => { const r = window.prompt('سبب الإلغاء؟ (هيتسجل في رحلة العميل)'); if (r && r.trim()) cancelViewing(v.id, r.trim()); }}
+                  className="self-start text-xs font-bold text-[#C2412D]">إلغاء المعاينة بسبب</button>
               )}
             </Card>
           );
@@ -375,7 +432,13 @@ const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; byName: string; onApp
 
 /* شاشة المراجعة: تعديل كل البيانات، كتابة الكود بإيدك، شيل الصور الوحشة، وتأكيد الجودة */
 const ReviewModal: React.FC<{ sub: OwnerSubmission; byName: string; onClose: () => void; onApprove: (s: OwnerSubmission) => void; onUpdateSubmission?: (s: OwnerSubmission) => void }> = ({ sub, byName, onClose, onApprove, onUpdateSubmission }) => {
-  const [d, setD] = useState<any>({ ...sub, code: (sub as any).code || `H${Math.floor(1000 + Math.random() * 8999)}` });
+  // كود مقترح ثابت: مشتق من رقم الطلب نفسه، فمش بيتغيّر كل ما تفتح الشاشة
+  const suggestedCode = React.useMemo(() => {
+    const digits = String(sub.id || '').replace(/\D/g, '');
+    const tail = digits.slice(-4).padStart(4, '0');
+    return `H${tail}`;
+  }, [sub.id]);
+  const [d, setD] = useState<any>({ ...sub, code: (sub as any).code || suggestedCode });
   const [busy, setBusy] = useState(false);
   const q = d.qualityCheck;
   const inp = 'w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm';
@@ -408,7 +471,8 @@ const ReviewModal: React.FC<{ sub: OwnerSubmission; byName: string; onClose: () 
           <Card>
             <p className="font-bold text-sm">2. الكود والبيانات</p>
             <label className="text-xs font-bold space-y-1 block">كود الوحدة
-              <input value={d.code} onChange={(e) => setD({ ...d, code: e.target.value.toUpperCase() })} dir="ltr" className={`${inp} font-mono`} />
+              <input value={d.code} onChange={(e) => setD({ ...d, code: e.target.value.toUpperCase().replace(/\s+/g, '') })} dir="ltr" className={`${inp} font-mono`} />
+              <span className="block text-[11px] font-normal text-[#6B665C]">ده الكود اللي الشقة هتتنشر بيه على الموقع. غيّره زي ما تحب قبل النشر.</span>
             </label>
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="text-xs font-bold space-y-1">السعر<input type="number" value={d.askingPrice} onChange={(e) => setD({ ...d, askingPrice: Number(e.target.value) })} className={inp} /></label>

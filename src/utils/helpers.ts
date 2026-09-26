@@ -1,12 +1,26 @@
+/** بيحوّل أي قيمة لرقم آمن. البيانات القديمة ساعات بتيجي نص أو ناقصة. */
+const toNumber = (v: unknown): number => {
+  if (typeof v === 'number' && isFinite(v)) return v;
+  const n = Number(String(v ?? '').replace(/[^\d.-]/g, ''));
+  return isFinite(n) ? n : 0;
+};
+
+/** بيحوّل أي قيمة لنص آمن، عشان .replace متضربش لو القيمة رقم أو ناقصة. */
+const toText = (v: unknown, fallback = ''): string => {
+  if (typeof v === 'string') return v;
+  if (v === null || v === undefined) return fallback;
+  return String(v);
+};
+
 export function formatPrice(price: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'decimal',
     maximumFractionDigits: 0
-  }).format(price) + ' ج.م';
+  }).format(toNumber(price)) + ' ج.م';
 }
 
 export function formatNumber(num: number): string {
-  return new Intl.NumberFormat('en-US').format(num);
+  return new Intl.NumberFormat('en-US').format(toNumber(num));
 }
 
 export function generateWhatsAppLink(
@@ -15,12 +29,13 @@ export function generateWhatsAppLink(
   propertyTitle?: string,
   customMessage?: string
 ): string {
-  let cleanPhone = phone.replace(/[^0-9]/g, '');
+  let cleanPhone = toText(phone, '01021242871').replace(/[^0-9]/g, '');
+  if (!cleanPhone) cleanPhone = '01021242871';
   if (cleanPhone.startsWith('01')) {
     cleanPhone = '2' + cleanPhone;
   }
   
-  let message = customMessage;
+  let message = toText(customMessage) || undefined;
   if (!message) {
     if (propertyCode) {
       message = `مهتم بشقة كود ${propertyCode} بالهضبة الوسطى`;
@@ -32,8 +47,8 @@ export function generateWhatsAppLink(
 }
 
 export function generateCallLink(phone: string = '01021242871'): string {
-  const cleanPhone = phone.replace(/[^0-9+]/g, '');
-  return `tel:${cleanPhone}`;
+  const cleanPhone = toText(phone, '01021242871').replace(/[^0-9+]/g, '');
+  return `tel:${cleanPhone || '01021242871'}`;
 }
 
 export function compressImage(
@@ -202,7 +217,7 @@ export interface VideoEmbedInfo {
 
 export function getVideoEmbedInfo(url?: string, isMuted?: boolean): VideoEmbedInfo | null {
   if (!url) return null;
-  let clean = url.trim();
+  let clean = toText(url).trim();
   // Strip enclosing quotes if any
   clean = clean.replace(/^["']|["']$/g, '').trim();
   if (!clean) return null;
@@ -292,13 +307,14 @@ export function formatPropertyDescription(property: {
   const floor = property.floor || 'دور متكرر';
   const finishing = property.finishingLabel || (property.finishing === 'finished' ? 'سوبر لوكس جاهز للسكن الفوري' : 'نصف تشطيب على المحارة والحلوق');
   const neighborhood = property.neighborhood || 'الهضبة الوسطى';
-  const address = property.location && property.location.trim().length > 0 
-    ? property.location.trim() 
+  const locationText = toText(property.location).trim();
+  const address = locationText.length > 0
+    ? locationText
     : '[العنوان بالتفصيل: اسم الشارع ورقم العقار]';
 
   let additionalNotes = '';
   if (property.description) {
-    const lines = property.description
+    const lines = toText(property.description)
       .split('\n')
       .map(l => l.replace(/^[\s*•\-#\d.:]+/, '').trim())
       .filter(l => l.length > 0 && !l.startsWith('كود') && !l.startsWith('السعر') && !l.includes('الهضبة الوسطى'));
@@ -317,8 +333,9 @@ export function formatPropertyDescription(property: {
     }
   }
 
-  if (property.note && property.note.trim().length > 0) {
-    additionalNotes += ` ملاحظات إضافية: ${property.note.trim()}.`;
+  const noteText = toText(property.note).trim();
+  if (noteText.length > 0) {
+    additionalNotes += ` ملاحظات إضافية: ${noteText}.`;
   }
 
   const featuresList = property.features && property.features.length > 0

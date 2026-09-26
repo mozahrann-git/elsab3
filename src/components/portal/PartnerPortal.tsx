@@ -274,7 +274,7 @@ const OwnerViewing: React.FC<{ v: UnitViewing }> = ({ v }) => {
           {asking ? (
             <div className="flex flex-col gap-2">
               <WhenPicker value={alt} onChange={setAlt} quick={false} label="الميعاد اللي يناسبك" />
-              <Btn tone="dark" disabled={!alt} onClick={() => respondToViewing(v.id, 'reschedule', alt!.label)}>ابعت الميعاد</Btn>
+              <Btn tone="dark" disabled={!alt} onClick={() => respondToViewing(v.id, 'reschedule', alt!.label, alt!.at)}>ابعت الميعاد</Btn>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">

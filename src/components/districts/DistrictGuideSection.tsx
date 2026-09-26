@@ -14,7 +14,8 @@ export const DistrictGuideSection: React.FC<{
   stats: DistrictStats[];
   content: Record<string, DistrictContent>;
   onOpen: (name: string) => void;
-}> = ({ stats, content, onOpen }) => {
+  onOpenMarketAverages?: () => void;
+}> = ({ stats, content, onOpen, onOpenMarketAverages }) => {
   const rows = useMemo(() => stats.filter((s) => !content[s.name]?.hidden && s.count > 0).sort((a, b) => b.avgPpm - a.avgPpm), [stats, content]);
   const top = rows[0]?.avgPpm || 1;
   const all = stats.filter((s) => s.count > 0);
@@ -45,6 +46,12 @@ export const DistrictGuideSection: React.FC<{
                 <p className="text-[11px] text-[#A3A09A]">في {all.length} أحياء</p>
               </div>
             </div>
+            {onOpenMarketAverages && (
+              <button onClick={onOpenMarketAverages} className="w-full text-right rounded-2xl bg-white/5 border border-white/10 p-4 hover:bg-white/10 transition">
+                <p className="text-[11px] text-[#A3A09A]">مرجع إضافي</p>
+                <p className="font-bold text-sm">متوسطات السوق لكل الأحياء · متشطب ونص تشطيب</p>
+              </button>
+            )}
             {cheapest && (
               <button onClick={() => onOpen(cheapest.name)} className="w-full text-right rounded-2xl bg-[#A07A26]/15 border border-[#A07A26]/40 p-4 hover:bg-[#A07A26]/25 transition">
                 <p className="text-[11px] text-[#D9B864]">أقل سعر متر دلوقتي</p>

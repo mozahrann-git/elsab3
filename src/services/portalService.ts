@@ -38,6 +38,11 @@ export interface UnitViewing {
   ownerName?: string;
   leadId?: string;                 // العميل في الـ CRM (الربط مع المسار)
   leadName?: string;
+  ownerProposedAt?: number;        // الميعاد البديل اللي اقترحه المالك، كوقت حقيقي
+  ownerProposedText?: string;      // نفس الميعاد مكتوب
+  clientAskedAt?: number;          // سارة بعتت الميعاد البديل للسيلز يسأل العميل
+  clientAskedBy?: string;
+  canceledReason?: string;
   createdAt: number;
 }
 
@@ -131,10 +136,79 @@ export function subscribeAllOwnerFeedback(cb: (l: OwnerFeedback[]) => void) {
 }
 
 // ---------- المالك ----------
-export async function respondToViewing(id: string, status: 'confirmed' | 'reschedule', note?: string) {
-  await updateDoc(doc(db, 'unit_viewings', id), cleanFirestoreData({ ownerStatus: status, ownerNote: note || '', ownerRespondedAt: Date.now() }));
+export async function respondToViewing(id: string, status: 'confirmed' | 'reschedule', note?: string, proposedAt?: number) {
+  await updateDoc(doc(db, 'unit_viewings', id), cleanFirestoreData({
+    ownerStatus: status,
+    ownerNote: note || '',
+    ownerRespondedAt: Date.now(),
+    // الميعاد البديل بيتحفظ كوقت حقيقي عشان النظام يقدر يقبله مش يقراه كنص بس
+    ...(status === 'reschedule' ? { ownerProposedText: note || '', ownerProposedAt: proposedAt || null } : {}),
+  }));
   const snap = await getDoc(doc(db, 'unit_viewings', id));
   if (snap.exists()) await syncViewingToLead(snap.data() as UnitViewing, status === 'confirmed');
+}
+
+/** سارة قبلت الميعاد اللي اقترحه المالك: المعاينة بتتأكد عليه والعميل بيتحرك في المسار */
+export async function acceptOwnerProposal(v: UnitViewing) {
+  const label = v.ownerProposedText || v.ownerNote || v.scheduledText;
+  await updateDoc(doc(db, 'unit_viewings', v.id), cleanFirestoreData({
+    scheduledText: label,
+    ...(v.ownerProposedAt ? { scheduledAt: v.ownerProposedAt } : {}),
+    ownerStatus: 'confirmed',
+    brokerConfirmedTime: label,
+    ownerRespondedAt: Date.now(),
+  }));
+  const snap = await getDoc(doc(db, 'unit_viewings', v.id));
+  if (snap.exists()) await syncViewingToLead(snap.data() as UnitViewing, true);
+}
+
+/** سارة بعتت الميعاد البديل للسيلز عشان يسأل العميل، وبيتسجل في رحلة العميل */
+export async function askClientAboutProposal(v: UnitViewing, byName: string) {
+  const label = v.ownerProposedText || v.ownerNote || '';
+  await updateDoc(doc(db, 'unit_viewings', v.id), cleanFirestoreData({
+    clientAskedAt: Date.now(),
+    clientAskedBy: byName,
+  }));
+  if (!v.leadId) return;
+  try {
+    await updateDoc(doc(db, 'crm_leads', v.leadId), cleanFirestoreData({
+      followUpStatus: 'pending',
+      followUpNote: `المالك اقترح ميعاد تاني للمعاينة على ${v.propertyCode}: ${label} — اسأل العميل يناسبه ولا لأ`,
+      ...(v.ownerProposedAt ? { nextActionAt: v.ownerProposedAt } : {}),
+      activity: arrayUnion({
+        at: Date.now(), by: byName,
+        outcome: `المالك اقترح ميعاد تاني · ${v.propertyCode}`,
+        comment: label,
+      }),
+    }));
+  } catch (err) {
+    console.warn('[Viewings] مش قادر يبلّغ السيلز في المسار:', err);
+  }
+}
+
+/** سارة بتقترح ميعاد تالت على المالك: المعاينة بترجع مستنية رده */
+export async function counterProposeToOwner(v: UnitViewing, label: string, at?: number) {
+  await updateDoc(doc(db, 'unit_viewings', v.id), cleanFirestoreData({
+    scheduledText: label,
+    ...(at ? { scheduledAt: at } : {}),
+    ownerStatus: 'pending',
+    ownerNote: '',
+    ownerProposedText: '',
+    ownerProposedAt: null,
+    notifyCount: (v.notifyCount || 0) + 1,
+    lastNotifiedAt: Date.now(),
+  }));
+  const snap = await getDoc(doc(db, 'unit_viewings', v.id));
+  if (snap.exists()) await syncViewingToLead(snap.data() as UnitViewing, false);
+}
+
+/** إلغاء بسبب مكتوب — بديل الحذف عشان الأثر ميضيعش */
+export async function cancelViewing(id: string, reason: string) {
+  await updateDoc(doc(db, 'unit_viewings', id), cleanFirestoreData({
+    ownerStatus: 'canceled',
+    canceledReason: reason || 'من غير سبب',
+    ownerRespondedAt: Date.now(),
+  }));
 }
 
 export async function createChangeRequest(r: Omit<ChangeRequest, 'id' | 'status' | 'createdAt' | 'requesterEmail'>) {

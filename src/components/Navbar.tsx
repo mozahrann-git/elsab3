@@ -194,21 +194,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             تحت الإنشاء
           </button>
 
-          {onOpenPriceMap && (
-            <button
-              onClick={onOpenPriceMap}
-              className="hover:text-[#141414] text-[#A07A26] font-bold transition-colors py-1 cursor-pointer flex items-center gap-1"
-            >
-              <Compass size={14} />
-              <span>مؤشر الأسعار</span>
-            </button>
-          )}
-
           <button
             onClick={handleDistrictGuideClick}
             className="hover:text-[#141414] transition-colors py-1 cursor-pointer"
           >
-            دليل الأحياء
+            الأحياء والأسعار
           </button>
 
           {onOpenValuation && (
@@ -441,18 +431,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="space-y-1">
                   <p className="text-[11px] font-bold text-[#8C827A] px-1 pb-1">قبل ما تشتري</p>
                   <div className="rounded-2xl bg-white border border-[#ECE8DF] overflow-hidden divide-y divide-[#F0ECE4]">
-                    {onOpenPriceMap && (
-                      <button onClick={() => { setMobileMenuOpen(false); onOpenPriceMap(); }}
-                        className="w-full px-3.5 py-3 text-right flex items-center gap-3 hover:bg-[#FAF8F5]">
-                        <Compass size={18} className="text-[#A07A26] shrink-0" />
-                        <span className="flex-1 text-sm font-bold text-[#141414]">مؤشر أسعار الأحياء</span>
-                        <ChevronLeft size={15} className="text-[#C9C4BA]" />
-                      </button>
-                    )}
                     <button onClick={() => { setMobileMenuOpen(false); handleDistrictGuideClick(); }}
                       className="w-full px-3.5 py-3 text-right flex items-center gap-3 hover:bg-[#FAF8F5]">
-                      <BookOpen size={18} className="text-[#A07A26] shrink-0" />
-                      <span className="flex-1 text-sm font-bold text-[#141414]">دليل الأحياء</span>
+                      <Compass size={18} className="text-[#A07A26] shrink-0" />
+                      <span className="flex-1">
+                        <span className="block text-sm font-bold text-[#141414]">الأحياء والأسعار</span>
+                        <span className="block text-[11px] text-[#6B665C]">متوسط المتر في كل حي</span>
+                      </span>
                       <ChevronLeft size={15} className="text-[#C9C4BA]" />
                     </button>
                     {onOpenClosedDeals && (

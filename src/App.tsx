@@ -73,7 +73,6 @@ import { ClientNotificationModal } from './components/ClientNotificationModal';
 import { FollowUpNotificationsModal } from './components/FollowUpNotificationsModal';
 import { BrokerPortalModal } from './components/BrokerPortalModal';
 import { PartnerPortalsModal } from './components/PartnerPortalsModal';
-import { NeighborhoodsGuideSection } from './components/NeighborhoodsGuideSection';
 import { Footer } from './components/Footer';
 import { LionLogo } from './components/LionLogo';
 import { 
@@ -1420,7 +1419,8 @@ export default function App() {
     // Create a live property from submission using latest edited attributes
     const newProperty: Property = {
       id: `prop-${Date.now()}`,
-      code: `SEBA-HW-${Math.floor(100 + Math.random() * 900)}`,
+      // الكود اللي اتكتب في شاشة المراجعة هو اللي بيتنشر. الرقم العشوائي احتياطي بس.
+      code: String((sub as any).code || '').trim().toUpperCase() || `SEBA-HW-${Math.floor(100 + Math.random() * 900)}`,
       title: `شقة ${sub.area}م² بالهضبة الوسطى (${sub.neighborhood}) - ${sub.finishing === 'finished' ? 'متشطبة سوبر لوكس' : 'نصف تشطيب'}`,
       neighborhood: sub.neighborhood,
       propertyType: sub.unitType || 'apartment',
@@ -1708,7 +1708,6 @@ export default function App() {
         onOpenComparison={() => setIsComparisonOpen(true)}
         onOpenResaleSubmit={() => setIsResaleSubmitOpen(true)}
         onOpenGuide={() => document.getElementById('districts-guide-section')?.scrollIntoView({ behavior: 'smooth' })}
-        onOpenPriceMap={() => setIsPriceMapOpen(true)}
         onOpenValuation={() => setIsValuationOpen(true)}
         myPortalLabel={myPortalLabel}
         onLogout={() => { setStaffAccess(null); setActivePortal(null); handleAdminLogout(); handleSalesLogout(); }}
@@ -1807,7 +1806,7 @@ export default function App() {
 
       {/* Dual Interactive Feature Promo Banners (خريطة الأسعار وحاسبة التقييم) */}
       <DualPromoBanners
-        onOpenPriceMap={() => setIsPriceMapOpen(true)}
+        onOpenPriceMap={() => document.getElementById('districts-guide-section')?.scrollIntoView({ behavior: 'smooth' })}
         onOpenValuation={() => setIsValuationOpen(true)}
       />
 
@@ -1985,7 +1984,7 @@ export default function App() {
         />
 
         {/* Dark "دليل الأحياء" Section */}
-        <DistrictGuideSection stats={districtStats} content={districtContent} onOpen={(n) => setOpenDistrict(n)} />
+        <DistrictGuideSection stats={districtStats} content={districtContent} onOpen={(n) => setOpenDistrict(n)} onOpenMarketAverages={() => setIsPriceMapOpen(true)} />
 
       </main>
 
