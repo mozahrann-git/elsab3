@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, Landmark, HardHat, CalendarClock, ChevronLeft, X, MessageCircle, MapPin, Play } from 'lucide-react';
+import { Building2, Landmark, HardHat, CalendarClock, ChevronLeft, X, MessageCircle, MapPin, Play, SlidersHorizontal } from 'lucide-react';
 import { Project, subscribeProjects } from '../services/projectService';
 import { generateWhatsAppLink } from '../utils/helpers';
 import { videoPosterUrl } from '../utils/propertyMedia';
@@ -21,14 +21,45 @@ export const ProjectsSection: React.FC<Props> = ({ whatsappNumber, alwaysShow })
   const [projects, setProjects] = useState<Project[]>([]);
   const [open, setOpen] = useState<Project | null>(null);
   const [kind, setKind] = useState<'all' | 'building' | 'compound'>('all');
+  const [hood, setHood] = useState('all');
+  const [maxDown, setMaxDown] = useState<'all' | 10 | 20 | 35 | 50>('all');
+  const [delivery, setDelivery] = useState('all');
+  const [maxPrice, setMaxPrice] = useState<number | 'all'>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => subscribeProjects(setProjects), []);
 
   const visible = useMemo(() => projects.filter((p) => !p.hidden), [projects]);
-  const shown = useMemo(
-    () => (kind === 'all' ? visible : visible.filter((p) => p.kind === kind)),
-    [visible, kind],
+
+  const hoods = useMemo(
+    () => Array.from(new Set(visible.map((p) => p.neighborhood).filter(Boolean))).sort(),
+    [visible],
   );
+  const deliveries = useMemo(
+    () => Array.from(new Set(visible.map((p) => p.deliveryDate).filter(Boolean) as string[])).sort(),
+    [visible],
+  );
+
+  const shown = useMemo(() => visible.filter((p) => {
+    if (kind !== 'all' && p.kind !== kind) return false;
+    if (hood !== 'all' && p.neighborhood !== hood) return false;
+    if (delivery !== 'all' && p.deliveryDate !== delivery) return false;
+    if (maxPrice !== 'all' && typeof p.startingPrice === 'number' && p.startingPrice > maxPrice) return false;
+    if (maxDown !== 'all') {
+      // أقل مقدم متاح في المشروع: المشروع بيعدّي لو عنده نظام مقدمه في حدود المطلوب
+      const lowest = Math.min(...(p.plans || []).map((pl) => pl.downPaymentPercent ?? 999));
+      if (!isFinite(lowest) || lowest > maxDown) return false;
+    }
+    return true;
+  }), [visible, kind, hood, delivery, maxPrice, maxDown]);
+
+  const activeCount = [
+    kind !== 'all', hood !== 'all', delivery !== 'all', maxPrice !== 'all', maxDown !== 'all',
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setKind('all'); setHood('all'); setDelivery('all'); setMaxPrice('all'); setMaxDown('all');
+  };
 
   const counts = useMemo(() => ({
     building: visible.filter((p) => p.kind === 'building').length,
@@ -54,20 +85,91 @@ export const ProjectsSection: React.FC<Props> = ({ whatsappNumber, alwaysShow })
         </p>
       </div>
 
-      {counts.building > 0 && counts.compound > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <Chip active={kind === 'all'} onClick={() => setKind('all')}>الكل ({visible.length})</Chip>
-          <Chip active={kind === 'building'} onClick={() => setKind('building')}>عمارات ({counts.building})</Chip>
-          <Chip active={kind === 'compound'} onClick={() => setKind('compound')}>كمبوندات ({counts.compound})</Chip>
+      {visible.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {counts.building > 0 && counts.compound > 0 && (
+              <>
+                <Chip active={kind === 'all'} onClick={() => setKind('all')}>الكل ({visible.length})</Chip>
+                <Chip active={kind === 'building'} onClick={() => setKind('building')}>عمارات ({counts.building})</Chip>
+                <Chip active={kind === 'compound'} onClick={() => setKind('compound')}>كمبوندات ({counts.compound})</Chip>
+              </>
+            )}
+            <button
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 cursor-pointer ${
+                activeCount ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white text-[#4A463F] border-[#ECE8DF]'
+              }`}
+            >
+              <SlidersHorizontal size={13} />
+              فلتر{activeCount ? ` (${activeCount})` : ''}
+            </button>
+            <span className="text-xs text-[#6B665C] mr-auto">{shown.length} مشروع</span>
+          </div>
+
+          {filtersOpen && (
+            <div className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block space-y-1">
+                  <span className="text-[11px] text-[#6B665C]">الحي</span>
+                  <select value={hood} onChange={(e) => setHood(e.target.value)} className={selShell}>
+                    <option value="all">كل الأحياء</option>
+                    {hoods.map((h) => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </label>
+
+                <label className="block space-y-1">
+                  <span className="text-[11px] text-[#6B665C]">الاستلام</span>
+                  <select value={delivery} onChange={(e) => setDelivery(e.target.value)} className={selShell}>
+                    <option value="all">أي سنة</option>
+                    {deliveries.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </label>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-[#6B665C]">أقصى مقدم</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {([['all', 'أي مقدم'], [10, '١٠٪'], [20, '٢٠٪'], [35, '٣٥٪'], [50, '٥٠٪']] as const).map(([v, label]) => (
+                    <Chip key={String(v)} active={maxDown === v} onClick={() => setMaxDown(v as any)}>{label}</Chip>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-[#6B665C]">أقصى سعر للبداية</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {([['all', 'أي سعر'], [2000000, '٢ مليون'], [3000000, '٣ مليون'], [5000000, '٥ مليون'], [8000000, '٨ مليون']] as const).map(([v, label]) => (
+                    <Chip key={String(v)} active={maxPrice === v} onClick={() => setMaxPrice(v as any)}>{label}</Chip>
+                  ))}
+                </div>
+              </div>
+
+              {activeCount > 0 && (
+                <button onClick={resetFilters} className="text-xs font-bold text-[#C2412D] cursor-pointer">
+                  شيل الفلاتر
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {shown.length === 0 ? (
         <div className="p-10 text-center bg-white border border-dashed border-[#DCD6CA] rounded-3xl space-y-2">
-          <p className="font-bold text-[#141414]">لسه مفيش مشاريع معروضة هنا</p>
-          <p className="text-sm text-[#6B665C]">
-            بنجهّز المشاريع تحت الإنشاء دلوقتي. كلّمنا وإحنا نقولك على المتاح حالاً.
-          </p>
+          {visible.length === 0 ? (
+            <>
+              <p className="font-bold text-[#141414]">لسه مفيش مشاريع معروضة هنا</p>
+              <p className="text-sm text-[#6B665C]">
+                بنجهّز المشاريع تحت الإنشاء دلوقتي. كلّمنا وإحنا نقولك على المتاح حالاً.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-bold text-[#141414]">مفيش مشروع بالمواصفات دي</p>
+              <button onClick={resetFilters} className="text-sm font-bold text-[#A07A26] cursor-pointer">شيل الفلاتر وشوف الكل</button>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -79,6 +181,8 @@ export const ProjectsSection: React.FC<Props> = ({ whatsappNumber, alwaysShow })
     </section>
   );
 };
+
+const selShell = 'bg-[#FAF8F3] border border-[#ECE8DF] rounded-xl px-3 py-2 w-full text-sm focus:outline-none focus:border-[#141414]';
 
 const Chip: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
   <button
@@ -104,8 +208,11 @@ const ProjectCard: React.FC<{ p: Project; onOpen: () => void }> = ({ p, onOpen }
       className="text-right bg-white border border-[#ECE8DF] rounded-2xl overflow-hidden hover:border-[#141414] transition-colors flex flex-col"
     >
       {cover && (
-        <div className="relative w-full h-40">
-          <img src={cover} alt="" className="w-full h-full object-cover" />
+        /* الصور بتيجي بمقاسات مختلفة — صورة موبايل طولية وصورة مشروع عرضية.
+           فبنحط نسخة مكبّرة ومغبّشة ورا، والصورة الأصلية كاملة فوقها من غير ما يتقص منها حاجة. */
+        <div className="relative w-full h-44 overflow-hidden bg-[#EDE9E0]">
+          <img src={cover} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-60" />
+          <img src={cover} alt="" className="relative w-full h-full object-contain" />
           {hasVideo && (
             <span className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded-full">
               <Play size={10} fill="currentColor" /> فيديو
