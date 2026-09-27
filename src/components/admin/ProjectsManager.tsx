@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Upload, Plus, Trash2, Pencil, Save, X, Building2, Landmark,
-  Eye, EyeOff, AlertTriangle, CheckCircle2,
+  Eye, EyeOff, AlertTriangle, CheckCircle2, ImagePlus, Film,
 } from 'lucide-react';
 import { Project, PaymentPlan, subscribeProjects, saveProject, saveProjects, deleteProject, fetchInternalNotes } from '../../services/projectService';
 import { parseProjectsWorkbook } from '../../utils/projectsExcel';
+import { uploadFile } from '../../services/mediaStorage';
 
 /*
   إدارة المشاريع تحت الإنشاء: عمارات منفصلة وكمبوندات.
@@ -366,9 +367,15 @@ const ProjectForm: React.FC<{
             ))}
           </div>
 
+          <MediaBlock d={d} set={set} />
+
+          <Section title="الموقع">
+            <Field label="لينك الموقع على خرايط جوجل" value={d.locationUrl || ''} onChange={(v) => set('locationUrl', v)} wide mono placeholder="https://maps.app.goo.gl/..." />
+            <Field label="العنوان بالكلام" value={d.address || ''} onChange={(v) => set('address', v)} wide placeholder="الحي الثاني، قطعة ٨٤٣٢، بجوار..." />
+          </Section>
+
           <Section title="العرض">
             <Field label="ميزة المشروع في جملة" value={d.headline || ''} onChange={(v) => set('headline', v)} wide />
-            <Field label="رابط الصور والفيديو" value={d.mediaUrl || ''} onChange={(v) => set('mediaUrl', v)} wide mono />
             <Field label="ملاحظات داخلية (مبتظهرش للزوار)" value={d.internalNotes || ''} onChange={(v) => set('internalNotes', v)} wide />
           </Section>
 
@@ -387,6 +394,98 @@ const ProjectForm: React.FC<{
             <Save size={15} /> {saving ? 'بيحفظ...' : 'احفظ المشروع'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+};
+
+
+/* ============ الصور والفيديو ============ */
+
+const MediaBlock: React.FC<{ d: Project; set: (k: keyof Project, v: unknown) => void }> = ({ d, set }) => {
+  const [busy, setBusy] = useState('');
+  const imgRef = useRef<HTMLInputElement>(null);
+  const vidRef = useRef<HTMLInputElement>(null);
+  const folderId = d.code || 'new';
+
+  const addImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files: File[] = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+
+    const done: string[] = [];
+    for (let i = 0; i < files.length; i += 1) {
+      setBusy(`بيرفع صورة ${i + 1} من ${files.length}...`);
+      try {
+        done.push(await uploadFile(files[i], 'projects', folderId));
+      } catch (err: any) {
+        setBusy(`صورة ${i + 1} ما اترفعتش — ${err?.message || 'جرّب تاني'}`);
+        break;
+      }
+    }
+    if (done.length) set('images', [...(d.images || []), ...done]);
+    if (done.length === files.length) setBusy('');
+  };
+
+  const addVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const mb = Math.round(file.size / (1024 * 1024));
+    try {
+      await uploadFile(file, 'projects', folderId, (p) => setBusy(`بيرفع الفيديو (${mb} ميجا)... ${p}٪`))
+        .then((url) => { set('videoUrl', url); setBusy(''); });
+    } catch (err: any) {
+      setBusy(`الفيديو ما اترفعش — ${err?.message || 'جرّب رابط يوتيوب'}`);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-extrabold text-[#A07A26]">الصور والفيديو</p>
+
+      <div className="bg-white border border-[#ECE8DF] rounded-xl p-3 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => imgRef.current?.click()} className="px-3 py-2 bg-[#141414] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer">
+            <ImagePlus size={14} /> ضيف صور
+          </button>
+          <button onClick={() => vidRef.current?.click()} className="px-3 py-2 bg-white border border-[#ECE8DF] text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer">
+            <Film size={14} /> ارفع فيديو
+          </button>
+          <input ref={imgRef} type="file" accept="image/*" multiple onChange={addImages} className="hidden" />
+          <input ref={vidRef} type="file" accept="video/*" onChange={addVideo} className="hidden" />
+          {busy && <span className="text-[11px] text-[#A07A26] font-bold">{busy}</span>}
+        </div>
+
+        {(d.images || []).length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {(d.images || []).map((img, i) => (
+              <div key={i} className="relative w-20 h-16 rounded-lg overflow-hidden border border-[#ECE8DF] shrink-0">
+                <img src={img} alt="" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => set('images', (d.images || []).filter((_, x) => x !== i))}
+                  className="absolute top-0.5 left-0.5 bg-black/70 text-white rounded p-0.5 cursor-pointer"
+                ><X size={11} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <label className="block space-y-1">
+          <span className="text-[11px] text-[#6B665C]">فيديو مرفوع أو رابط يوتيوب</span>
+          <div className="flex items-center gap-2">
+            <input
+              value={d.videoUrl || ''}
+              onChange={(e) => set('videoUrl', e.target.value)}
+              dir="ltr"
+              placeholder="https://youtube.com/..."
+              className={`${shell} font-mono text-xs`}
+            />
+            {d.videoUrl && (
+              <button onClick={() => set('videoUrl', '')} className="p-2 rounded-lg border border-[#E8C2BA] text-[#C2412D] cursor-pointer shrink-0"><Trash2 size={14} /></button>
+            )}
+          </div>
+        </label>
       </div>
     </div>
   );

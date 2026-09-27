@@ -32,9 +32,11 @@ export interface Project {
   plotOrStreet?: string;       // رقم القطعة / الشارع (للعمارات)
   headline?: string;           // ميزة المشروع في جملة
   internalNotes?: string;      // ملاحظات داخلية — بتتخزن في مستند جوّاني، مش في المستند العام
-  mediaUrl?: string;           // رابط الصور والفيديو
-  images?: string[];
-  videoUrl?: string;
+  mediaUrl?: string;           // رابط خارجي للصور والفيديو (اختياري، للتوافق مع الشيت)
+  images?: string[];           // صور مرفوعة على السحابة
+  videoUrl?: string;           // فيديو مرفوع أو رابط يوتيوب
+  locationUrl?: string;        // لينك الموقع على خرايط جوجل
+  address?: string;            // العنوان بالكلام
 
   // الإنشاء والاستلام
   constructionPercent?: number; // نسبة الإنشاء ٪

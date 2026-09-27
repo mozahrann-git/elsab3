@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, Landmark, HardHat, CalendarClock, ChevronLeft, X, MessageCircle } from 'lucide-react';
+import { Building2, Landmark, HardHat, CalendarClock, ChevronLeft, X, MessageCircle, MapPin, Play } from 'lucide-react';
 import { Project, subscribeProjects } from '../services/projectService';
 import { generateWhatsAppLink } from '../utils/helpers';
+import { videoPosterUrl } from '../utils/propertyMedia';
 
 /*
   قسم "تحت الإنشاء" في الصفحة الرئيسية.
@@ -93,12 +94,30 @@ const Chip: React.FC<{ active: boolean; onClick: () => void; children: React.Rea
 const ProjectCard: React.FC<{ p: Project; onOpen: () => void }> = ({ p, onOpen }) => {
   const plan = p.plans?.[0];
   const isBuilding = p.kind === 'building';
+  const hasVideo = Boolean((p.videoUrl || '').trim());
+  // لو مفيش صور مرفوعة، بناخد لقطة من الفيديو بدل غلاف فاضي
+  const cover = p.images?.[0] || videoPosterUrl(p.videoUrl);
 
   return (
     <button
       onClick={onOpen}
       className="text-right bg-white border border-[#ECE8DF] rounded-2xl overflow-hidden hover:border-[#141414] transition-colors flex flex-col"
     >
+      {cover && (
+        <div className="relative w-full h-40">
+          <img src={cover} alt="" className="w-full h-full object-cover" />
+          {hasVideo && (
+            <span className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded-full">
+              <Play size={10} fill="currentColor" /> فيديو
+            </span>
+          )}
+          {(p.images?.length || 0) > 1 && (
+            <span className="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded-full">
+              {p.images?.length} صور
+            </span>
+          )}
+        </div>
+      )}
       <div className="px-4 pt-4 pb-3 space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
           {isBuilding ? <Building2 size={14} className="text-[#A07A26]" /> : <Landmark size={14} className="text-[#A07A26]" />}
@@ -202,6 +221,44 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
         </div>
 
         <div className="p-5 space-y-5">
+          {(p.images || []).length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {(p.images || []).map((img, i) => (
+                <img key={i} src={img} alt="" className="w-56 h-40 object-cover rounded-2xl border border-[#ECE8DF] shrink-0" />
+              ))}
+            </div>
+          )}
+
+          {p.videoUrl && (
+            <a
+              href={p.videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 bg-white border border-[#ECE8DF] rounded-2xl px-4 py-3 text-sm font-bold text-[#141414]"
+            >
+              <Play size={15} className="text-[#A07A26]" fill="currentColor" /> شوف فيديو المشروع
+            </a>
+          )}
+
+          {(p.locationUrl || p.address) && (
+            <div className="bg-white border border-[#ECE8DF] rounded-2xl px-4 py-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <MapPin size={15} className="text-[#A07A26] shrink-0 mt-0.5" />
+                <p className="text-sm text-[#4A463F] leading-relaxed">{p.address || 'الموقع على الخريطة'}</p>
+              </div>
+              {p.locationUrl && (
+                <a
+                  href={p.locationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-center text-xs font-bold text-[#141414] border border-[#DCD6CA] rounded-xl py-2"
+                >
+                  افتح على خرايط جوجل
+                </a>
+              )}
+            </div>
+          )}
+
           {p.headline && (
             <p className="text-sm text-[#4A463F] bg-white border border-[#ECE8DF] rounded-2xl px-4 py-3 leading-relaxed">{p.headline}</p>
           )}
