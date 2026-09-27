@@ -162,3 +162,39 @@ export async function saveProjects(list: Project[]): Promise<number> {
   }
   return saved;
 }
+
+/* ---------- فلترة المشاريع ---------- */
+
+export interface ProjectFilter {
+  kind: 'all' | ProjectKind;
+  neighborhood: string;       // 'all' أو اسم حي
+  maxDownPercent: 'all' | number;
+  delivery: string;           // 'all' أو سنة
+  maxPrice: 'all' | number;
+}
+
+export const EMPTY_PROJECT_FILTER: ProjectFilter = {
+  kind: 'all', neighborhood: 'all', maxDownPercent: 'all', delivery: 'all', maxPrice: 'all',
+};
+
+/** المشروع بيعدّي فلتر المقدم لو أي نظام من أنظمته في حدود المطلوب */
+export function lowestDownPercent(p: Project): number | undefined {
+  const values = (p.plans || []).map((pl) => pl.downPaymentPercent).filter((v): v is number => typeof v === 'number');
+  return values.length ? Math.min(...values) : undefined;
+}
+
+export function matchProject(p: Project, f: ProjectFilter): boolean {
+  if (p.hidden) return false;
+  if (f.kind !== 'all' && p.kind !== f.kind) return false;
+  if (f.neighborhood !== 'all' && p.neighborhood !== f.neighborhood) return false;
+  if (f.delivery !== 'all' && p.deliveryDate !== f.delivery) return false;
+  if (f.maxPrice !== 'all' && typeof p.startingPrice === 'number' && p.startingPrice > f.maxPrice) return false;
+  if (f.maxDownPercent !== 'all') {
+    const low = lowestDownPercent(p);
+    if (low === undefined || low > f.maxDownPercent) return false;
+  }
+  return true;
+}
+
+export const countActiveProjectFilters = (f: ProjectFilter): number =>
+  [f.kind !== 'all', f.neighborhood !== 'all', f.delivery !== 'all', f.maxPrice !== 'all', f.maxDownPercent !== 'all'].filter(Boolean).length;

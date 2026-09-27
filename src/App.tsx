@@ -55,6 +55,7 @@ import { BudgetDiscoverySection } from './components/BudgetDiscoverySection';
 import { DualPromoBanners } from './components/DualPromoBanners';
 import { RecentlyClosedDealsSection } from './components/RecentlyClosedDealsSection';
 import { ProjectsSection } from './components/ProjectsSection';
+import { Project, ProjectFilter, EMPTY_PROJECT_FILTER, subscribeProjects, matchProject } from './services/projectService';
 import { InstantWhatsAppAlertBanner } from './components/InstantWhatsAppAlertBanner';
 import { PriceHeatmapModal } from './components/PriceHeatmapModal';
 import { PropertyValuationModal } from './components/PropertyValuationModal';
@@ -193,6 +194,9 @@ export default function App() {
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
   // نوع العرض: بيقرر الصفحة بتعرض ريسيل ولا مشاريع تحت الإنشاء
   const [listingMode, setListingMode] = useState<'resale' | 'off_plan'>('resale');
+  const [projectFilter, setProjectFilter] = useState<ProjectFilter>(EMPTY_PROJECT_FILTER);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
+  useEffect(() => subscribeProjects(setAllProjects), []);
   const [isQuotaBannerDismissed, setIsQuotaBannerDismissed] = useState<boolean>(false);
 
   // حساب الشخص الداخل (مالك/بروكر/مسؤولة ملاك/سيلز/أدمن) والبوابة المفتوحة
@@ -1999,7 +2003,12 @@ export default function App() {
         </>)}
 
         {listingMode === 'off_plan' && (
-          <ProjectsSection whatsappNumber={footerConfig?.whatsapp || DEFAULT_FOOTER_CONFIG.whatsapp} alwaysShow />
+          <ProjectsSection
+            whatsappNumber={footerConfig?.whatsapp || DEFAULT_FOOTER_CONFIG.whatsapp}
+            alwaysShow
+            filter={projectFilter}
+            setFilter={setProjectFilter}
+          />
         )}
 
         {/* Recently Closed Deals Section (صفقات حقيقية اتقفلت) */}
@@ -2276,7 +2285,17 @@ export default function App() {
           onOpenProperty={(p) => { setOpenDistrict(null); setSelectedProperty(p); }}
           onShowUnits={(n) => { setOpenDistrict(null); setFilter({ ...filter, category: 'all', neighborhood: n }); setTimeout(() => document.getElementById('properties-grid')?.scrollIntoView({ behavior: 'smooth' }), 80); }} />
       )}
-      <SmartFilterDock filter={filter} setFilter={setFilter} properties={properties} neighborhoods={HADABA_WOSTA_NEIGHBORHOODS as unknown as string[]} resultCount={filteredProperties.length} />
+      <SmartFilterDock
+        filter={filter}
+        setFilter={setFilter}
+        properties={properties}
+        neighborhoods={HADABA_WOSTA_NEIGHBORHOODS as unknown as string[]}
+        resultCount={listingMode === 'off_plan' ? allProjects.filter((p) => matchProject(p, projectFilter)).length : filteredProperties.length}
+        mode={listingMode}
+        projects={allProjects}
+        projectFilter={projectFilter}
+        setProjectFilter={setProjectFilter}
+      />
       <SalesFeedbackInbox isOpen={activePortal === 'sales_feedback'} onClose={() => setActivePortal(null)} agentId={currentSalesAgentId} isAdmin={isAdminLoggedIn} />
       {offerId && <OfferPublicPage offerId={offerId} onClose={() => { setOfferId(null); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }} />}
       {showFieldFeedback && feedbackTripId && <FieldFeedbackPage tripId={feedbackTripId} onClose={() => { setShowFieldFeedback(false); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }} />}

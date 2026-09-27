@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { SlidersHorizontal, X, Search } from 'lucide-react';
 import { FilterState, Property } from '../types';
 import { BudgetRange } from './common/WhenPicker';
+import { Project, ProjectFilter, EMPTY_PROJECT_FILTER, matchProject, countActiveProjectFilters } from '../services/projectService';
 
 /*
   فلتر عائم: بيظهر أول ما الزائر يوصل للشقق وهو بيسكرول.
@@ -17,6 +18,11 @@ interface Props {
   neighborhoods: string[];
   resultCount: number;
   anchorId?: string;
+  /* وضع الصفحة: الفلتر بيتغيّر على أساسه — شقق ريسيل ولا مشاريع تحت الإنشاء */
+  mode?: 'resale' | 'off_plan';
+  projects?: Project[];
+  projectFilter?: ProjectFilter;
+  setProjectFilter?: (f: ProjectFilter) => void;
 }
 
 const match = (p: Property, d: FilterState) => {
@@ -33,10 +39,15 @@ const match = (p: Property, d: FilterState) => {
   return true;
 };
 
-export const SmartFilterDock: React.FC<Props> = ({ filter, setFilter, properties, neighborhoods, resultCount, anchorId = 'properties-grid' }) => {
+export const SmartFilterDock: React.FC<Props> = ({
+  filter, setFilter, properties, neighborhoods, resultCount, anchorId = 'properties-grid',
+  mode = 'resale', projects = [], projectFilter = EMPTY_PROJECT_FILTER, setProjectFilter,
+}) => {
   const [show, setShow] = useState(false);
   const [open, setOpen] = useState(false);
   const [d, setD] = useState<FilterState>(filter);
+  const [pd, setPd] = useState<ProjectFilter>(projectFilter);
+  const isOffPlan = mode === 'off_plan';
 
   useEffect(() => {
     const el = document.getElementById(anchorId);
@@ -45,13 +56,20 @@ export const SmartFilterDock: React.FC<Props> = ({ filter, setFilter, properties
     io.observe(el);
     return () => io.disconnect();
   }, [anchorId]);
-  useEffect(() => { if (open) setD({ ...filter, budgetRange: 'all' }); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { setD({ ...filter, budgetRange: 'all' }); setPd(projectFilter); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // قوائم الأحياء وسنين الاستلام بتتبني من المشاريع الموجودة فعلاً
+  const projectHoods = useMemo(() => Array.from(new Set(projects.filter((p) => !p.hidden).map((p) => p.neighborhood).filter(Boolean))).sort(), [projects]);
+  const projectDeliveries = useMemo(() => Array.from(new Set(projects.filter((p) => !p.hidden).map((p) => p.deliveryDate).filter(Boolean) as string[])).sort(), [projects]);
+  const projectCount = useMemo(() => projects.filter((p) => matchProject(p, pd)).length, [projects, pd]);
 
   const count = useMemo(() => properties.filter((p) => match(p, d)).length, [properties, d]);
-  const active = [filter.search && 'كود', filter.neighborhood !== 'all' && filter.neighborhood, filter.finishing !== 'all' && (filter.finishing === 'finished' ? 'متشطب' : 'نص تشطيب'), filter.bedrooms !== 'all' && `${filter.bedrooms} غرف`, (filter.minPrice > 0 || filter.maxPrice < CEIL) && 'ميزانية'].filter(Boolean) as string[];
+  const activeProjects = countActiveProjectFilters(projectFilter);
+  const active = isOffPlan ? (activeProjects ? [`${activeProjects} فلتر`] : []) : [filter.search && 'كود', filter.neighborhood !== 'all' && filter.neighborhood, filter.finishing !== 'all' && (filter.finishing === 'finished' ? 'متشطب' : 'نص تشطيب'), filter.bedrooms !== 'all' && `${filter.bedrooms} غرف`, (filter.minPrice > 0 || filter.maxPrice < CEIL) && 'ميزانية'].filter(Boolean) as string[];
 
   const apply = () => {
-    setFilter({ ...d, category: d.category === 'off_plan' ? 'all' : d.category, budgetRange: 'all' });
+    if (isOffPlan) setProjectFilter?.(pd);
+    else setFilter({ ...d, category: d.category === 'off_plan' ? 'all' : d.category, budgetRange: 'all' });
     setOpen(false);
     document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -63,7 +81,7 @@ export const SmartFilterDock: React.FC<Props> = ({ filter, setFilter, properties
         onClick={() => setOpen(true)}
         className={`fixed z-40 left-1/2 -translate-x-1/2 bottom-5 sm:bottom-8 flex items-center gap-2.5 pl-2 pr-5 py-2 rounded-full bg-[#141414] text-white shadow-2xl transition-all duration-300 ${show && !open ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6 pointer-events-none'}`}
         style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
-        aria-label="فلترة الشقق"
+        aria-label="فلترة"
       >
         <SlidersHorizontal size={17} className="text-[#D9B864]" />
         <span className="text-sm font-bold">{active.length ? active.slice(0, 2).join(' · ') : 'فلتر'}</span>
@@ -73,15 +91,64 @@ export const SmartFilterDock: React.FC<Props> = ({ filter, setFilter, properties
       {open && createPortal(
         <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center" dir="rtl">
           <button aria-label="إغلاق" className="absolute inset-0 bg-black/55" onClick={() => setOpen(false)} />
-          <section className="relative w-full sm:max-w-lg max-h-[90dvh] bg-[#F6F4EF] rounded-t-3xl sm:rounded-3xl flex flex-col" role="dialog" aria-modal="true" aria-label="فلترة الشقق">
+          <section className="relative w-full sm:max-w-lg max-h-[90dvh] bg-[#F6F4EF] rounded-t-3xl sm:rounded-3xl flex flex-col" role="dialog" aria-modal="true" aria-label="فلترة">
             <div className="flex justify-center pt-2.5 sm:hidden"><span className="w-11 h-1 rounded-full bg-[#CFC7B8]" /></div>
             <header className="flex justify-between items-center px-5 py-3">
-              <p className="text-lg font-bold font-readex">دوّر على شقتك</p>
+              <p className="text-lg font-bold font-readex">{isOffPlan ? 'دوّر على مشروعك' : 'دوّر على شقتك'}</p>
               <div className="flex items-center gap-2">
-                <button onClick={() => setD({ ...d, search: '', neighborhood: 'all', finishing: 'all', bedrooms: 'all', minPrice: 0, maxPrice: CEIL })} className="text-sm font-semibold text-[#A07A26]">مسح الكل</button>
+                <button onClick={() => (isOffPlan ? setPd(EMPTY_PROJECT_FILTER) : setD({ ...d, search: '', neighborhood: 'all', finishing: 'all', bedrooms: 'all', minPrice: 0, maxPrice: CEIL }))} className="text-sm font-semibold text-[#A07A26]">مسح الكل</button>
                 <button onClick={() => setOpen(false)} aria-label="إغلاق" className="p-2"><X size={18} /></button>
               </div>
             </header>
+{isOffPlan ? (
+            <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-5">
+              <div className="space-y-2">
+                <p className="text-sm font-bold">نوع المشروع</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([['all', 'الكل'], ['building', 'عمارات'], ['compound', 'كمبوندات']] as const).map(([k, t]) => (
+                    <button key={k} onClick={() => setPd({ ...pd, kind: k })} className={chip(pd.kind === k)}>{t}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-bold">الحي</p>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setPd({ ...pd, neighborhood: 'all' })} className={chip(pd.neighborhood === 'all')}>كل الأحياء</button>
+                  {projectHoods.map((n) => <button key={n} onClick={() => setPd({ ...pd, neighborhood: n })} className={chip(pd.neighborhood === n)}>{n}</button>)}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-bold">أقصى مقدم</p>
+                <div className="flex flex-wrap gap-2">
+                  {([['all', 'أي مقدم'], [10, '10%'], [20, '20%'], [35, '35%'], [50, '50%']] as const).map(([v, t]) => (
+                    <button key={String(v)} onClick={() => setPd({ ...pd, maxDownPercent: v })} className={chip(pd.maxDownPercent === v)}>{t}</button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-[#8C877D]">المشروع بيظهر لو عنده أي نظام سداد في حدود المقدم ده.</p>
+              </div>
+
+              {projectDeliveries.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-bold">الاستلام</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setPd({ ...pd, delivery: 'all' })} className={chip(pd.delivery === 'all')}>أي سنة</button>
+                    {projectDeliveries.map((y) => <button key={y} onClick={() => setPd({ ...pd, delivery: y })} className={chip(pd.delivery === y)}>{y}</button>)}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-sm font-bold">السعر يبدأ من</p>
+                <div className="flex flex-wrap gap-2">
+                  {([['all', 'أي سعر'], [2000000, 'لحد 2M'], [3000000, 'لحد 3M'], [5000000, 'لحد 5M'], [8000000, 'لحد 8M']] as const).map(([v, t]) => (
+                    <button key={String(v)} onClick={() => setPd({ ...pd, maxPrice: v })} className={chip(pd.maxPrice === v)}>{t}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            ) : (
             <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-5">
               <div className="relative">
                 <Search size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8C877D]" />
@@ -112,8 +179,17 @@ export const SmartFilterDock: React.FC<Props> = ({ filter, setFilter, properties
                 {d.maxPrice >= CEIL && <p className="text-[11px] text-[#8C877D]">الحد الأقصى مفتوح</p>}
               </div>
             </div>
+            )}
             <div className="p-4 border-t border-[#E4DFD4]" style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))' }}>
-              <button onClick={apply} disabled={!count} className="w-full py-4 rounded-2xl bg-[#141414] text-white text-base font-bold disabled:opacity-40">{count ? `اعرض ${count} شقة` : 'مفيش شقق بالمواصفات دي'}</button>
+              <button
+                onClick={apply}
+                disabled={isOffPlan ? !projectCount : !count}
+                className="w-full py-4 rounded-2xl bg-[#141414] text-white text-base font-bold disabled:opacity-40"
+              >
+                {isOffPlan
+                  ? (projectCount ? `اعرض ${projectCount} مشروع` : 'مفيش مشاريع بالمواصفات دي')
+                  : (count ? `اعرض ${count} شقة` : 'مفيش شقق بالمواصفات دي')}
+              </button>
             </div>
           </section>
         </div>,
