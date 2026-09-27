@@ -224,7 +224,7 @@ export const BrokerPortalPage: React.FC<BrokerPortalPageProps> = ({
     }));
 
     if (showToast) showToast('جاري فتح محادثة واتساب مع المالك بالرسالة الجاهزة...');
-    const link = generateWhatsAppLink(`+20${req.ownerPhone.replace(/^0/, '')}`, defaultMsg);
+    const link = generateWhatsAppLink(`+20${req.ownerPhone.replace(/^0/, '')}`, undefined, undefined, defaultMsg);
     window.open(link, '_blank');
   };
 
@@ -350,7 +350,7 @@ export const BrokerPortalPage: React.FC<BrokerPortalPageProps> = ({
   // WhatsApp to Sara / Admin
   const handleContactSara = (msg?: string) => {
     const text = msg || 'مرحباً أستاذة سارة، بخصوص طلبات معاينة شققي المعروضة وتأكيد المواعيد مع العملاء.';
-    const link = generateWhatsAppLink('+201017400078', text);
+    const link = generateWhatsAppLink('+201017400078', undefined, undefined, text);
     window.open(link, '_blank');
   };
 
@@ -714,7 +714,7 @@ export const BrokerPortalPage: React.FC<BrokerPortalPageProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        const link = generateWhatsAppLink(`+20${u.ownerPhone.replace(/^0/, '')}`, `مساء الخير أ. ${u.ownerName}، بخصوص شقتك كود ${u.code}...`);
+                        const link = generateWhatsAppLink(`+20${u.ownerPhone.replace(/^0/, '')}`, undefined, undefined, `مساء الخير أ. ${u.ownerName}، بخصوص شقتك كود ${u.code}...`);
                         window.open(link, '_blank');
                       }}
                       className="px-3 py-1.5 bg-[#15803D] hover:bg-[#166534] text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
@@ -828,7 +828,7 @@ export const BrokerPortalPage: React.FC<BrokerPortalPageProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const link = generateWhatsAppLink('+201017400078', 'مرحباً أ. محمود السبع، بخصوص تحويل عمولة الشقة الأخيرة.');
+                      const link = generateWhatsAppLink('+201017400078', undefined, undefined, 'مرحباً أ. محمود السبع، بخصوص تحويل عمولة الشقة الأخيرة.');
                       window.open(link, '_blank');
                     }}
                     className="px-3 py-1.5 bg-[#141414] text-white text-xs font-bold rounded-lg hover:bg-stone-800 transition-colors cursor-pointer"

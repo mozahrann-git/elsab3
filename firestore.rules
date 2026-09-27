@@ -99,6 +99,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // المشاريع تحت الإنشاء: الزوار بيقروا، الأدمن بس اللي بيضيف ويعدّل ويمسح
+    match /projects/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+      // الملاحظات الداخلية: الأدمن بس — الزائر ميقدرش يقراها
+      match /private/{docId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
     // ---------- بوابات الملاك والبروكرز ----------
     match /unit_viewings/{id} {
       allow read: if isBoss();

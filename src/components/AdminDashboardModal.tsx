@@ -83,6 +83,7 @@ import { ExcelImportModal } from './ExcelImportModal';
 import { downloadExcelTemplate, exportPropertiesToExcel } from '../utils/excelHelper';
 import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { safeLocalStorageSet } from '../utils/storageHelper';
+import { ProjectsManager } from './admin/ProjectsManager';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -178,7 +179,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [isChangePassOpen, setIsChangePassOpen] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings'>('manage');
+  const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'projects' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings'>('manage');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterNeighborhood, setFilterNeighborhood] = useState<string>('all');
   const [filterFinishing, setFilterFinishing] = useState<string>('all');
@@ -1088,6 +1089,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('projects')}
+              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+                activeTab === 'projects'
+                  ? 'bg-[#141414] text-white shadow-sm'
+                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Building size={16} className={activeTab === 'projects' ? 'text-[#D9B864]' : 'text-stone-400'} />
+                <span>تحت الإنشاء</span>
+              </div>
+            </button>
+
+            <button
               onClick={() => setActiveTab('submissions')}
               className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
                 activeTab === 'submissions'
@@ -1261,6 +1276,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <h1 className="text-xs sm:text-sm md:text-base font-black font-readex text-[#141414] truncate">
                   {activeTab === 'manage' && 'إدارة الشقق والوحدات'}
                   {activeTab === 'add' && (editingPropertyId ? 'تعديل بيانات الشقة' : 'إضافة شقة جديدة')}
+                  {activeTab === 'projects' && 'المشاريع تحت الإنشاء'}
                   {activeTab === 'submissions' && 'عروض وطلبات الملاك'}
                   {activeTab === 'sales_team' && 'فريق المبيعات والمستشارين'}
                   {activeTab === 'market_pricing' && 'خريطة الأسعار ومؤشرات السوق'}
@@ -2125,6 +2141,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {/* TAB 3: OWNER SUBMISSIONS (RESALE REQUESTS)                       */}
           {/* ================================================================ */}
+          {activeTab === 'projects' && (
+            <ProjectsManager showToast={showToast} neighborhoods={[...HADABA_WOSTA_NEIGHBORHOODS]} />
+          )}
+
           {activeTab === 'submissions' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -2266,7 +2286,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     <Phone size={12} />
                                   </a>
                                   <a
-                                    href={generateWhatsAppLink(sub.inspectionContactPhone, `مرحباً، بخصوص تنسيق موعد معاينة شقة الهضبة الوسطى (${sub.neighborhood})...`)}
+                                    href={generateWhatsAppLink(sub.inspectionContactPhone, undefined, undefined, `مرحباً، بخصوص تنسيق موعد معاينة شقة الهضبة الوسطى (${sub.neighborhood})...`)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
@@ -2370,7 +2390,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         )}
 
                         <a
-                          href={generateWhatsAppLink(sub.ownerPhone, `مرحباً أستاذ ${sub.ownerName}، بخصوص شقتك المعروضة بالهضبة الوسطى (${sub.neighborhood})...`)}
+                          href={generateWhatsAppLink(sub.ownerPhone, undefined, undefined, `مرحباً أستاذ ${sub.ownerName}، بخصوص شقتك المعروضة بالهضبة الوسطى (${sub.neighborhood})...`)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"

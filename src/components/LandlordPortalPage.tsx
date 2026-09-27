@@ -129,7 +129,7 @@ export const LandlordPortalPage: React.FC<LandlordPortalPageProps> = ({
 
   const handleSaraWhatsApp = (customText?: string) => {
     const message = customText || `مرحباً سارة، بخصوص شقتي المعروضة كود (${currentProperty.code || 'H1705'}) في ${currentProperty.neighborhood}.. حابب أستفسر عن تفاصيل المعاينات.`;
-    const link = generateWhatsAppLink('+201099887766', message);
+    const link = generateWhatsAppLink('+201099887766', undefined, undefined, message);
     window.open(link, '_blank');
   };
 

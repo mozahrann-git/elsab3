@@ -54,6 +54,7 @@ import { HeroDoorSelector } from './components/HeroDoorSelector';
 import { BudgetDiscoverySection } from './components/BudgetDiscoverySection';
 import { DualPromoBanners } from './components/DualPromoBanners';
 import { RecentlyClosedDealsSection } from './components/RecentlyClosedDealsSection';
+import { ProjectsSection } from './components/ProjectsSection';
 import { InstantWhatsAppAlertBanner } from './components/InstantWhatsAppAlertBanner';
 import { PriceHeatmapModal } from './components/PriceHeatmapModal';
 import { PropertyValuationModal } from './components/PropertyValuationModal';
@@ -1977,6 +1978,9 @@ export default function App() {
           }}
           onOpenResaleSubmit={() => setIsResaleSubmitOpen(true)}
         />
+
+        {/* المشاريع تحت الإنشاء — بيظهر بس لما يكون فيه مشاريع متضافة من الأدمن */}
+        <ProjectsSection whatsappNumber={footerConfig?.whatsapp || DEFAULT_FOOTER_CONFIG.whatsapp} />
 
         {/* WhatsApp Real-time Alert Banner (مش لاقي اللي عايزه؟) */}
         <InstantWhatsAppAlertBanner
