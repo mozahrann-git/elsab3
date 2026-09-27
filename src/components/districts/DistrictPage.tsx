@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Pencil, Save, Plus, Trash2, Eye, EyeOff, ArrowLeft, MapPin, GraduationCap, ThumbsUp, AlertTriangle, Users } from 'lucide-react';
+import { X, Pencil, Save, Plus, Trash2, Eye, EyeOff, ArrowLeft, MapPin, GraduationCap, ThumbsUp, AlertTriangle, Users, Play } from 'lucide-react';
 import { Property } from '../../types';
 import { DistrictStats, DistrictContent, saveDistrictContent } from '../../services/districtService';
 import { uploadFile } from '../../services/mediaStorage';
+import { videoPosterUrl } from '../../utils/propertyMedia';
 
 /*
   صفحة الحي: أرقام حقيقية من الشقق + محتوى الأدمن بيكتبه ويعدّله ويمسحه.
@@ -168,16 +169,29 @@ export const DistrictPage: React.FC<Props> = ({ name, stats, content, properties
               <div className="space-y-3">
                 <p className="font-bold text-lg">شقق في {name}</p>
                 <div className="flex gap-3 overflow-x-auto pb-2 snap-x max-w-full">
-                  {units.slice(0, 10).map((p) => (
+                  {units.slice(0, 10).map((p) => {
+                    const hasVideo = Boolean((p.videoUrl || '').trim());
+                    // لو مفيش صور، بنجيب لقطة من الفيديو نفسه بدل الخلفية الفاضية
+                    const cover = p.images?.[0] || videoPosterUrl(p.videoUrl);
+                    return (
                     <button key={p.id} onClick={() => onOpenProperty(p)} className="snap-start shrink-0 w-56 text-right rounded-2xl bg-white border border-[#ECE8DF] overflow-hidden">
-                      {p.images?.[0] ? <img src={p.images[0]} alt="" className="w-full h-32 object-cover" /> : <div className="w-full h-32" style={{ background: 'repeating-linear-gradient(135deg,#E7E2D8 0 10px,#EFEBE3 10px 20px)' }} />}
+                      <div className="relative w-full h-32">
+                        {cover ? <img src={cover} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full" style={{ background: 'repeating-linear-gradient(135deg,#E7E2D8 0 10px,#EFEBE3 10px 20px)' }} />}
+                        {hasVideo && (
+                          <span className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded-full">
+                            <Play size={10} fill="currentColor" />
+                            <span>فيديو</span>
+                          </span>
+                        )}
+                      </div>
                       <div className="p-3 space-y-1">
                         <span className="text-[10px] font-mono bg-[#141414] text-white px-1.5 py-0.5 rounded">{p.code}</span>
                         <p className="font-bold">{f(p.price)} ج.م</p>
                         <p className="text-xs text-[#6B665C]">{p.area} م² · {p.bedrooms} غرف · {p.finishing === 'finished' ? 'متشطبة' : 'نص تشطيب'}</p>
                       </div>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

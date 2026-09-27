@@ -145,6 +145,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   ownerSubmissions,
   onApproveSubmission,
   onRejectSubmission,
+  onDeleteSubmission,
   onLogout,
   adminCredentials,
   onUpdateCredentials,

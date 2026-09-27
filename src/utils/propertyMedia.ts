@@ -49,6 +49,25 @@ ALL_HADABA_PROPERTIES.forEach(p => {
   if (p.code) masterByCode.set(p.code.toUpperCase(), p);
 });
 
+/**
+ * صورة ثابتة من الفيديو عشان نعرضها في الكروت الصغيرة.
+ * Cloudinary بيطلّع لقطة من الفيديو لو غيّرنا الامتداد لـ jpg، ويوتيوب عنده صورة جاهزة.
+ * بترجع '' لو الرابط مش مفهوم — ساعتها الكارت بيعرض خلفيته العادية.
+ */
+export function videoPosterUrl(videoUrl?: string): string {
+  const url = (videoUrl || '').trim();
+  if (!url) return '';
+
+  const yt = url.match(/(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i);
+  if (yt) return `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg`;
+
+  if (url.includes('res.cloudinary.com') && url.includes('/video/upload/')) {
+    return url.replace(/\.(mp4|mov|webm|m4v|ogg)(\?.*)?$/i, '.jpg');
+  }
+
+  return '';
+}
+
 /** الصور الحقيقية للشقة: اللي مرفوعة فعلاً، من غير صور Unsplash البديلة */
 export function realImages(property: Partial<Property>): string[] {
   return Array.isArray(property.images)
