@@ -186,33 +186,52 @@ export interface ParseResult {
   errors: string[];
 }
 
-/**
- * بيفتح ملف الإكسل.
- * بنستخدم نفس طريقة استيراد الشقق (FileReader + binary + codepage) لأنها مجرّبة وشغالة،
- * والطريقة التانية (arrayBuffer على طول) بتفشل على بعض المتصفحات وخصوصاً الموبايل
- * وبتطلّع رسالة زي "Unsupported ZIP Compression method".
- */
-function readWorkbook(file: File): Promise<XLSX.WorkBook> {
-  return new Promise((resolve, reject) => {
+/* ---------- فتح الملف ---------- */
+
+const readAs = (file: File, how: 'buffer' | 'binary'): Promise<ArrayBuffer | string> =>
+  new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('المتصفح مقدرش يقرا الملف. جرّب تنزّله على الجهاز الأول وبعدين ارفعه.'));
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        if (!data) throw new Error('الملف فاضي أو مقفول.');
-        resolve(XLSX.read(data, { type: 'binary', cellDates: false, codepage: 65001 }));
-      } catch (err: any) {
-        // نجرّب الطريقة التانية قبل ما نستسلم
-        try {
-          const buf = new Uint8Array(e.target?.result as ArrayBuffer);
-          resolve(XLSX.read(buf, { type: 'array', cellDates: false }));
-        } catch {
-          reject(new Error(`الملف ده مش ملف إكسل سليم (${err?.message || 'مش مقروء'}). افتحه في إكسل واحفظه باسم جديد بصيغة .xlsx وجرّب تاني.`));
-        }
-      }
+    reader.onerror = () => reject(new Error('المتصفح مقدرش يقرا الملف'));
+    reader.onload = () => {
+      const r = reader.result;
+      if (!r) reject(new Error('الملف رجع فاضي'));
+      else resolve(r);
     };
-    reader.readAsBinaryString(file);
+    if (how === 'buffer') reader.readAsArrayBuffer(file);
+    else reader.readAsBinaryString(file);
   });
+
+/**
+ * بيفتح ملف الإكسل بطريقتين مختلفتين.
+ * كل طريقة بتقرا الملف من الأول بشكلها الخاص — مينفعش نقرا مرة ونفسّر القراءة بشكلين،
+ * لأن النص والبيانات الخام مش نفس الحاجة.
+ * الأولى (بيانات خام) هي الموصى بيها للـ xlsx، والتانية (نص) هي اللي استيراد الشقق شغال بيها.
+ */
+async function readWorkbook(file: File): Promise<XLSX.WorkBook> {
+  const sizeKb = Math.round(file.size / 1024);
+  if (!file.size) {
+    throw new Error('الملف حجمه صفر. غالباً لسه بيتحمّل من الدرايف — نزّله على الجهاز الأول وبعدين ارفعه.');
+  }
+
+  const attempts: string[] = [];
+
+  try {
+    const buf = new Uint8Array((await readAs(file, 'buffer')) as ArrayBuffer);
+    return XLSX.read(buf, { type: 'array', cellDates: false });
+  } catch (e: any) {
+    attempts.push(e?.message || 'فشل');
+  }
+
+  try {
+    const bin = (await readAs(file, 'binary')) as string;
+    return XLSX.read(bin, { type: 'binary', cellDates: false, codepage: 65001 });
+  } catch (e: any) {
+    attempts.push(e?.message || 'فشل');
+  }
+
+  throw new Error(
+    `مقدرتش أفتح "${file.name}" (${sizeKb} كيلو). افتحه في إكسل واعمل "حفظ باسم" واختار صيغة .xlsx وارفعه تاني. [${attempts.join(' | ')}]`,
+  );
 }
 
 /** بيقرا ملف الشيت ويرجّع المشاريع الجاهزة للحفظ */

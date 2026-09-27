@@ -14,6 +14,12 @@ import { parseProjectsWorkbook } from '../../utils/projectsExcel';
 const f = (n?: number) => (typeof n === 'number' && isFinite(n) ? Math.round(n).toLocaleString('en-US') : '—');
 const pct = (n?: number) => (typeof n === 'number' && isFinite(n) ? `${n}٪` : '—');
 
+/* نفس قوائم الاختيار اللي في شيت المشاريع، عشان اللي يتكتب بالإيد
+   يبقى مطابق للي بيتقرا من الشيت — من غير كده هيبقى عندنا "نصف تشطيب" و"نص تشطيب". */
+const FACADES = ['بحري', 'قبلي', 'شرقي', 'غربي', 'ناصية'];
+const FINISHINGS = ['بدون تشطيب', 'نصف تشطيب', 'تشطيب كامل', 'سوبر لوكس'];
+const LICENSES = ['مرخصة', 'تحت الترخيص', 'تصالح'];
+
 const emptyProject = (kind: Project['kind']): Project => ({
   id: '', kind, code: '', name: '', neighborhood: '', plans: [{ label: 'نظام ١' }],
 });
@@ -303,9 +309,9 @@ const ProjectForm: React.FC<{
             <Section title="مواصفات العمارة">
               <NumField label="عدد الأدوار" value={d.floors} onChange={(v) => set('floors', v)} />
               <NumField label="شقق في الدور" value={d.unitsPerFloor} onChange={(v) => set('unitsPerFloor', v)} />
-              <Field label="الواجهة" value={d.facade || ''} onChange={(v) => set('facade', v)} />
-              <Field label="التشطيب" value={d.finishing || ''} onChange={(v) => set('finishing', v)} />
-              <Field label="الترخيص" value={d.licenseStatus || ''} onChange={(v) => set('licenseStatus', v)} />
+              <SelectField label="الواجهة" value={d.facade || ''} options={FACADES} onChange={(v) => set('facade', v)} />
+              <SelectField label="التشطيب" value={d.finishing || ''} options={FINISHINGS} onChange={(v) => set('finishing', v)} />
+              <SelectField label="الترخيص" value={d.licenseStatus || ''} options={LICENSES} onChange={(v) => set('licenseStatus', v)} />
               <BoolField label="أسانسير" value={d.hasElevator} onChange={(v) => set('hasElevator', v)} />
               <BoolField label="جراج" value={d.hasGarage} onChange={(v) => set('hasGarage', v)} />
             </Section>
@@ -418,15 +424,20 @@ const NumField: React.FC<{ label: string; value?: number; onChange: (v: number |
   </label>
 );
 
-const SelectField: React.FC<{ label: string; value: string; options: string[]; onChange: (v: string) => void }> = ({ label, value, options, onChange }) => (
-  <label className="block space-y-1">
-    <span className="text-[11px] text-[#6B665C]">{label}</span>
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={shell}>
-      <option value="">— اختار —</option>
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
-    </select>
-  </label>
-);
+const SelectField: React.FC<{ label: string; value: string; options: string[]; onChange: (v: string) => void }> = ({ label, value, options, onChange }) => {
+  /* لو الشيت جاب قيمة مش في القائمة (حد كتبها بالإيد في إكسل)، بنضيفها للقائمة
+     عشان متتمسحش من غير ما حد ياخد باله لما نفتح المشروع ونحفظه. */
+  const all = value && !options.includes(value) ? [value, ...options] : options;
+  return (
+    <label className="block space-y-1">
+      <span className="text-[11px] text-[#6B665C]">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={shell}>
+        <option value="">— اختار —</option>
+        {all.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </label>
+  );
+};
 
 const BoolField: React.FC<{ label: string; value?: boolean; onChange: (v: boolean) => void }> = ({ label, value, onChange }) => (
   <label className="flex items-center gap-2 bg-white border border-[#ECE8DF] rounded-xl px-3 py-2.5 cursor-pointer">
