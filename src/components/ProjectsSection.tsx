@@ -12,9 +12,11 @@ const f = (n?: number) => (typeof n === 'number' && isFinite(n) ? Math.round(n).
 
 interface Props {
   whatsappNumber?: string;
+  /** في وضع "تحت الإنشاء" لازم القسم يظهر حتى لو فاضي، عشان الصفحة ما تبقاش بيضا */
+  alwaysShow?: boolean;
 }
 
-export const ProjectsSection: React.FC<Props> = ({ whatsappNumber }) => {
+export const ProjectsSection: React.FC<Props> = ({ whatsappNumber, alwaysShow }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [open, setOpen] = useState<Project | null>(null);
   const [kind, setKind] = useState<'all' | 'building' | 'compound'>('all');
@@ -32,8 +34,8 @@ export const ProjectsSection: React.FC<Props> = ({ whatsappNumber }) => {
     compound: visible.filter((p) => p.kind === 'compound').length,
   }), [visible]);
 
-  // مفيش مشاريع؟ القسم مبيظهرش خالص بدل ما يبان فاضي
-  if (visible.length === 0) return null;
+  // مفيش مشاريع؟ القسم مبيظهرش خالص — إلا لو الصفحة كلها في وضع "تحت الإنشاء"
+  if (visible.length === 0 && !alwaysShow) return null;
 
   return (
     <section className="px-4 sm:px-6 py-10 sm:py-14 max-w-6xl mx-auto space-y-6">
@@ -59,9 +61,18 @@ export const ProjectsSection: React.FC<Props> = ({ whatsappNumber }) => {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {shown.map((p) => <ProjectCard key={p.id} p={p} onOpen={() => setOpen(p)} />)}
-      </div>
+      {shown.length === 0 ? (
+        <div className="p-10 text-center bg-white border border-dashed border-[#DCD6CA] rounded-3xl space-y-2">
+          <p className="font-bold text-[#141414]">لسه مفيش مشاريع معروضة هنا</p>
+          <p className="text-sm text-[#6B665C]">
+            بنجهّز المشاريع تحت الإنشاء دلوقتي. كلّمنا وإحنا نقولك على المتاح حالاً.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {shown.map((p) => <ProjectCard key={p.id} p={p} onOpen={() => setOpen(p)} />)}
+        </div>
+      )}
 
       {open && <ProjectDetail p={open} whatsappNumber={whatsappNumber} onClose={() => setOpen(null)} />}
     </section>

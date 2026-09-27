@@ -126,50 +126,7 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
       {/* 1. Top Control Bar: Category Switcher, Search Input & Total Results */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-4 border-b border-[#ECE8DF]">
         
-        {/* Category Selector (Pills) */}
-        <div className="flex items-center gap-1.5 bg-[#F6F4EF] p-1.5 rounded-2xl shrink-0">
-          <button
-            type="button"
-            onClick={() => onFilterChange({ 
-              ...filter, 
-              category: 'resale', 
-              downPayment: 'all', 
-              installmentYears: 'all', 
-              offPlanType: 'standalone_building' 
-            })}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold font-readex flex items-center gap-2 transition-all cursor-pointer ${
-              activeCategory === 'resale'
-                ? 'bg-[#141414] text-white shadow-xs'
-                : 'text-[#6B665C] hover:text-[#141414] hover:bg-[#ECE8DF]/60'
-            }`}
-          >
-            <Home size={14} className={activeCategory === 'resale' ? "text-[#E9DFCA]" : "text-[#8C827A]"} />
-            <span>شقق ريسيل (استلام فوري)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onFilterChange({ 
-              ...filter, 
-              category: 'off_plan', 
-              offPlanType: activeOffPlanType,
-              downPaymentPercentMax: isCompound ? 20 : 50,
-              installmentYearsMax: isCompound ? 10 : 3,
-              deliveryYearMax: isCompound ? 2030 : 2027,
-              downPayment: 'all',
-              installmentYears: 'all',
-              neighborhood: '' 
-            })}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold font-readex flex items-center gap-2 transition-all cursor-pointer ${
-              activeCategory === 'off_plan'
-                ? 'bg-[#141414] text-white shadow-xs'
-                : 'text-[#6B665C] hover:text-[#141414] hover:bg-[#ECE8DF]/60'
-            }`}
-          >
-            <Building size={14} className={activeCategory === 'off_plan' ? "text-[#A07A26]" : "text-[#8C827A]"} />
-            <span>تحت الإنشاء (Off-plan)</span>
-          </button>
-        </div>
+        {/* مفتاح نوع العرض اتشال من هنا — بقى فوق على مستوى الصفحة كلها */}
 
         {/* Integrated Quick Search Input */}
         <div className="relative flex-1 max-w-xl">

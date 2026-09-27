@@ -191,6 +191,8 @@ export default function App() {
   // Database Connection & Quota State Indicator
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
+  // نوع العرض: بيقرر الصفحة بتعرض ريسيل ولا مشاريع تحت الإنشاء
+  const [listingMode, setListingMode] = useState<'resale' | 'off_plan'>('resale');
   const [isQuotaBannerDismissed, setIsQuotaBannerDismissed] = useState<boolean>(false);
 
   // حساب الشخص الداخل (مالك/بروكر/مسؤولة ملاك/سيلز/أدمن) والبوابة المفتوحة
@@ -1783,6 +1785,8 @@ export default function App() {
         properties={properties}
         currentMaxPrice={filter.maxPrice}
         onSelectBudgetAndDistrict={(neighborhood, budget, finishing, category, bedrooms, downPayment) => {
+          // أداة الميزانية بتحرّك مفتاح الصفحة كمان، عشان الاتنين ما يتعارضوش
+          setListingMode(category === 'off_plan' ? 'off_plan' : 'resale');
           setFilter({
             ...filter,
             neighborhood,
@@ -1849,6 +1853,32 @@ export default function App() {
           </div>
         )}
 
+        {/* مفتاح نوع العرض: بيقرر الصفحة بتعرض إيه أصلاً، مش فلتر جوّه الفلاتر */}
+        <div className="pt-2">
+          <div className="inline-flex w-full sm:w-auto bg-white border border-[#ECE8DF] rounded-2xl p-1 gap-1">
+            <button
+              onClick={() => setListingMode('resale')}
+              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                listingMode === 'resale' ? 'bg-[#141414] text-white' : 'text-[#4A463F] hover:bg-[#FAF4E5]'
+              }`}
+            >
+              شقق ريسيل
+              <span className="block text-[10px] font-medium opacity-70">استلام فوري</span>
+            </button>
+            <button
+              onClick={() => setListingMode('off_plan')}
+              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                listingMode === 'off_plan' ? 'bg-[#141414] text-white' : 'text-[#4A463F] hover:bg-[#FAF4E5]'
+              }`}
+            >
+              تحت الإنشاء
+              <span className="block text-[10px] font-medium opacity-70">تقسيط</span>
+            </button>
+          </div>
+        </div>
+
+
+        {listingMode === 'resale' && (<>
         {/* Catalog Section Header from Screenshot 1 */}
         <div className="flex flex-row items-end justify-between gap-4 pt-4 pb-2 border-b border-[#ECE8DF]">
           <div className="text-right space-y-1">
@@ -1966,6 +1996,11 @@ export default function App() {
             )}
           </div>
         )}
+        </>)}
+
+        {listingMode === 'off_plan' && (
+          <ProjectsSection whatsappNumber={footerConfig?.whatsapp || DEFAULT_FOOTER_CONFIG.whatsapp} alwaysShow />
+        )}
 
         {/* Recently Closed Deals Section (صفقات حقيقية اتقفلت) */}
         <OwnerPortalPromo onSubmit={() => setIsResaleSubmitOpen(true)} onLogin={() => setIsClientAuthOpen(true)} />
@@ -1978,9 +2013,6 @@ export default function App() {
           }}
           onOpenResaleSubmit={() => setIsResaleSubmitOpen(true)}
         />
-
-        {/* المشاريع تحت الإنشاء — بيظهر بس لما يكون فيه مشاريع متضافة من الأدمن */}
-        <ProjectsSection whatsappNumber={footerConfig?.whatsapp || DEFAULT_FOOTER_CONFIG.whatsapp} />
 
         {/* WhatsApp Real-time Alert Banner (مش لاقي اللي عايزه؟) */}
         <InstantWhatsAppAlertBanner

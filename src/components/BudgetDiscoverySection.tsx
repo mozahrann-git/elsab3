@@ -349,34 +349,7 @@ export const BudgetDiscoverySection: React.FC<BudgetDiscoverySectionProps> = ({
           {/* Left: Interactive Filters, Budget Slider & Toggle Button */}
           <div className="lg:col-span-7 space-y-3.5 bg-[#F6F4EF] p-5 sm:p-6 rounded-2xl border border-[#ECE8DF]">
             
-            {/* 1. Category Switcher (ريسيل / تحت الإنشاء) */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <label className="text-xs font-bold text-[#4A463F] flex items-center gap-1">
-                <Layers size={13} className="text-[#A07A26]" />
-                <span>نوع العرض:</span>
-              </label>
-              
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#ECE8DF] text-xs shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setCategory('resale')}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer text-center ${
-                    category === 'resale' ? 'bg-[#141414] text-white shadow-2xs' : 'text-[#6B665C] hover:text-[#141414]'
-                  }`}
-                >
-                  شقق ريسيل (استلام فوري)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCategory('off_plan')}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer text-center ${
-                    category === 'off_plan' ? 'bg-[#141414] text-white shadow-2xs' : 'text-[#6B665C] hover:text-[#141414]'
-                  }`}
-                >
-                  تحت الإنشاء (تقسيط)
-                </button>
-              </div>
-            </div>
+            {/* نوع العرض اتشال من هنا — بقى مفتاح واحد فوق على مستوى الصفحة، عشان ما يبقاش عندنا مكانين بيقولوا حاجتين */}
 
             {/* 2. Conditional Sub-Filter: Finishing (for Resale) OR Down Payment Slider (for Off-Plan) */}
             {category === 'resale' ? (
