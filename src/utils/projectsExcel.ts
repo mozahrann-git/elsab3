@@ -186,9 +186,42 @@ export interface ParseResult {
   errors: string[];
 }
 
+/**
+ * بيفتح ملف الإكسل.
+ * بنستخدم نفس طريقة استيراد الشقق (FileReader + binary + codepage) لأنها مجرّبة وشغالة،
+ * والطريقة التانية (arrayBuffer على طول) بتفشل على بعض المتصفحات وخصوصاً الموبايل
+ * وبتطلّع رسالة زي "Unsupported ZIP Compression method".
+ */
+function readWorkbook(file: File): Promise<XLSX.WorkBook> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('المتصفح مقدرش يقرا الملف. جرّب تنزّله على الجهاز الأول وبعدين ارفعه.'));
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        if (!data) throw new Error('الملف فاضي أو مقفول.');
+        resolve(XLSX.read(data, { type: 'binary', cellDates: false, codepage: 65001 }));
+      } catch (err: any) {
+        // نجرّب الطريقة التانية قبل ما نستسلم
+        try {
+          const buf = new Uint8Array(e.target?.result as ArrayBuffer);
+          resolve(XLSX.read(buf, { type: 'array', cellDates: false }));
+        } catch {
+          reject(new Error(`الملف ده مش ملف إكسل سليم (${err?.message || 'مش مقروء'}). افتحه في إكسل واحفظه باسم جديد بصيغة .xlsx وجرّب تاني.`));
+        }
+      }
+    };
+    reader.readAsBinaryString(file);
+  });
+}
+
 /** بيقرا ملف الشيت ويرجّع المشاريع الجاهزة للحفظ */
 export async function parseProjectsWorkbook(file: File): Promise<ParseResult> {
-  const wb = XLSX.read(await file.arrayBuffer(), { cellDates: false });
+  return projectsFromWorkbook(await readWorkbook(file));
+}
+
+/** التحويل نفسه، منفصل عن قراءة الملف عشان نقدر نجرّبه لوحده */
+export function projectsFromWorkbook(wb: XLSX.WorkBook): ParseResult {
   const errors: string[] = [];
 
   if (!wb.Sheets[BUILDINGS_SHEET] && !wb.Sheets[COMPOUNDS_SHEET]) {
