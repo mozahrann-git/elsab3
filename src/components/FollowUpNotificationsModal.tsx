@@ -32,6 +32,8 @@ interface FollowUpNotificationsModalProps {
   currentAgent: SalesAgent;
   onUpdateLead: (updatedLead: Lead) => void;
   onSelectLead: (lead: Lead) => void;
+  /* الإدارة بس اللي بتشوف تنبيهات الفريق كله. السيلز بيشوف عملاءه هو. */
+  canSeeTeam?: boolean;
 }
 
 export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProps> = ({
@@ -41,10 +43,14 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
   agents,
   currentAgent,
   onUpdateLead,
-  onSelectLead
+  onSelectLead,
+  canSeeTeam = false
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'urgent' | 'today' | 'upcoming'>('all');
-  const [filterScope, setFilterScope] = useState<'my_leads' | 'all_team'>('my_leads');
+  const [rawScope, setRawScope] = useState<'my_leads' | 'all_team'>('my_leads');
+  /* حتى لو الحالة اتغيّرت بأي طريقة، السيلز بيفضل على عملاءه هو */
+  const filterScope: 'my_leads' | 'all_team' = canSeeTeam ? rawScope : 'my_leads';
+  const setFilterScope = (v: 'my_leads' | 'all_team') => { if (canSeeTeam) setRawScope(v); };
   const [searchQuery, setSearchQuery] = useState('');
 
   // Generate alerts dynamically from leads data
@@ -288,6 +294,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                 <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8C877D]" />
               </div>
 
+              {canSeeTeam && (
               <div className="flex bg-[#F6F4EF] p-1 rounded-xl border border-[#ECE8DF] text-[11px] font-bold shrink-0">
                 <button
                   onClick={() => setFilterScope('my_leads')}
@@ -306,6 +313,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                   الفريق
                 </button>
               </div>
+              )}
             </div>
           </div>
         </header>

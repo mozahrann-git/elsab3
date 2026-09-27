@@ -179,7 +179,11 @@ service cloud.firestore {
     }
     match /field_feedback/{id} {
       allow read: if isBoss();
-      allow read, update: if isOps() || isStaff();
+      allow read, update: if isOps();
+      // السيلز بيشوف ويأكد فيدباك المعاينات اللي هو طلبها بس — مش فيدباك زمايله
+      allow read, update: if isStaff()
+                          && resource.data.salesAgentId is string
+                          && get(/databases/$(database)/documents/sales_agents/$(resource.data.salesAgentId)).data.email.lower() == staffEmail();
       allow create: if exists(/databases/$(database)/documents/field_trips/$(request.resource.data.tripId))
                     && request.resource.data.stage == 'submitted';
     }

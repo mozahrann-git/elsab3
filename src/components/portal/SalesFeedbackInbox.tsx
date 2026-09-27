@@ -11,8 +11,10 @@ export const SalesFeedbackInbox: React.FC<{ isOpen: boolean; onClose: () => void
   useEffect(() => (isOpen ? subscribeBrokerFeedbackForSales(agentId || null, !!isAdmin, setBrokerFbs) : undefined), [isOpen, agentId, isAdmin]);
   useEffect(() => { if (!isOpen) return; const a = subscribeFieldFeedback(setFbs); const b = subscribeFieldAgents(setAgents); return () => { a(); b(); }; }, [isOpen]);
   if (!isOpen) return null;
-  // كل سيلز بيشوف فيدباك المعاينات اللي هو طلبها بس
-  const list = fbs.filter((f) => f.stage === 'sara_confirmed' && (isAdmin || !f.salesAgentId || f.salesAgentId === agentId));
+  /* كل سيلز بيشوف فيدباك المعاينات اللي هو طلبها هو بس.
+     الفيدباك اللي مالوش سيلز مسجّل (طلبات قديمة) بيروح للإدارة بس — مش لكل الفريق. */
+  const list = fbs.filter((f) => f.stage === 'sara_confirmed' && (isAdmin ? true : Boolean(agentId) && f.salesAgentId === agentId));
+  const orphans = isAdmin ? fbs.filter((f) => f.stage === 'sara_confirmed' && !f.salesAgentId) : [];
   return createPortal(
     <div className="fixed inset-0 z-[70] bg-black/60 flex items-end sm:items-center justify-center" dir="rtl">
       <div className="bg-[#F6F4EF] w-full sm:max-w-2xl max-h-[92dvh] rounded-t-3xl sm:rounded-3xl flex flex-col">
@@ -30,10 +32,27 @@ export const SalesFeedbackInbox: React.FC<{ isOpen: boolean; onClose: () => void
               ))}
             </div>
           )}
-          {!list.length && <p className="text-center text-sm text-[#6B665C] py-10">مفيش فيدباك معاينات مستني تأكيدك</p>}
+          {!list.length && !orphans.length && <p className="text-center text-sm text-[#6B665C] py-10">مفيش فيدباك معاينات مستني تأكيدك</p>}
+
+          {orphans.length > 0 && (
+            <div className="space-y-2">
+              <p className="font-bold text-sm text-[#A07A26]">فيدباك من غير سيلز مسجّل ({orphans.length})</p>
+              <p className="text-[11px] text-[#6B665C] leading-relaxed">
+                دول طلبات معاينة قديمة مش متسجّل عليها مين السيلز اللي طلبها، فمش بتظهر لحد غير الإدارة.
+              </p>
+              {orphans.map((f) => (
+                <section key={f.id} className="bg-white border border-dashed border-[#DCD6CA] rounded-2xl p-4 space-y-2">
+                  <div className="flex justify-between"><span className="font-bold">{f.code} · خرج {f.agentName}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating)}</span></div>
+                  {f.voiceUrl && <audio controls src={f.voiceUrl} className="w-full" />}
+                  <p className="leading-7">"{f.text}"</p>
+                  <button onClick={() => salesConfirmFeedback(f, agents)} className="w-full rounded-xl py-3 bg-[#1E7A45] text-white font-bold">تأكيد ونشر للمالك</button>
+                </section>
+              ))}
+            </div>
+          )}
           {list.map((f) => (
             <section key={f.id} className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">
-              <div className="flex justify-between"><span className="font-bold">{f.code} · خرج {f.agentName}{f.salesAgentName ? ` · طلبك انت` : ''}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating)}</span></div>
+              <div className="flex justify-between"><span className="font-bold">{f.code} · خرج {f.agentName}{isAdmin && f.salesAgentName ? ` · للسيلز ${f.salesAgentName}` : ''}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating)}</span></div>
               {f.voiceUrl && <audio controls src={f.voiceUrl} className="w-full" />}
               <p className="leading-7">"{f.text}"</p>
               <button onClick={() => salesConfirmFeedback(f, agents)} className="w-full rounded-xl py-3 bg-[#1E7A45] text-white font-bold">تأكيد ونشر للمالك</button>

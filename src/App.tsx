@@ -73,6 +73,7 @@ import { ClientShowcaseView } from './components/ClientShowcaseView';
 import { ClientAuthModal } from './components/ClientAuthModal';
 import { ClientNotificationModal } from './components/ClientNotificationModal';
 import { FollowUpNotificationsModal } from './components/FollowUpNotificationsModal';
+import { FollowUpPopup } from './components/FollowUpPopup';
 import { BrokerPortalModal } from './components/BrokerPortalModal';
 import { PartnerPortalsModal } from './components/PartnerPortalsModal';
 import { Footer } from './components/Footer';
@@ -2339,6 +2340,16 @@ export default function App() {
       />
 
       {/* 13. Sales Follow-Ups & Notifications Modal */}
+      {/* تنبيه المتابعة المنبثق — بيظهر لوحده أول ما الميعاد يعدّي */}
+      {staffAccess && (staffAccess.role === 'sales' || staffAccess.role === 'admin') && (
+        <FollowUpPopup
+          leads={crmLeads}
+          currentAgentId={currentAgent?.id}
+          seeAll={staffAccess.role === 'admin'}
+          onOpenLead={() => { setIsSalesNotificationsOpen(false); setIsCrmOpen(true); }}
+        />
+      )}
+
       <FollowUpNotificationsModal
         isOpen={isSalesNotificationsOpen}
         onClose={() => setIsSalesNotificationsOpen(false)}
@@ -2346,6 +2357,7 @@ export default function App() {
         agents={salesAgents}
         currentAgent={currentAgent}
         onUpdateLead={handleUpdateLead}
+        canSeeTeam={staffAccess?.role === 'admin' || staffAccess?.role === 'company_owner'}
         onSelectLead={(lead) => {
           setIsSalesNotificationsOpen(false);
           setIsCrmOpen(true);

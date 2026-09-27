@@ -68,7 +68,14 @@ export const WhenPicker: React.FC<Props> = ({ value, onChange, quick = true, lab
     return { o, t: o === 0 ? 'النهارده' : o === 1 ? 'غداً' : DAYS[d.getDay()] };
   });
   const chip = (on: boolean) => `px-3 py-2 rounded-xl text-sm font-semibold border ${on ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4] text-[#141414]'}`;
-  const now = new Date();
+
+  /* الوقت اللي هيطلع لو اختار الساعة دي في اليوم المختار.
+     بنقفل أي ميعاد عدّى — مفيش معنى لمتابعة محددة في الماضي. */
+  const atOf = (h24: number, mm: number) => {
+    const d = new Date(base); d.setDate(d.getDate() + dayOffset); d.setHours(h24, mm, 0, 0);
+    return d.getTime();
+  };
+  const isPast = (h24: number, mm: number) => atOf(h24, mm) < Date.now();
 
   return (
     <div className="space-y-2">
@@ -85,8 +92,15 @@ export const WhenPicker: React.FC<Props> = ({ value, onChange, quick = true, lab
           min={new Date(base).toISOString().slice(0, 10)}
           onChange={(e) => { if (!e.target.value) return; const d = new Date(e.target.value + 'T00:00:00'); const off = Math.round((d.getTime() - base.getTime()) / 86400000); setDayOffset(off); emit(off, slot); }} />
       </div>
-      <ClockDial slot={slot} onPick={(v) => { setSlot(v); emit(dayOffset, v); }} />
-      {value?.at ? <p className="text-sm font-bold text-[#1E7A45]">✓ {formatWhen(value.at)} · {relTime(value.at)}</p> : null}
+      <ClockDial slot={slot} isPast={isPast} onPick={(v) => { setSlot(v); emit(dayOffset, v); }} />
+      {dayOffset === 0 && isPast(23, 45) && (
+        <p className="text-xs font-bold text-[#A07A26]">النهارده خلص — اختار غداً أو يوم تاني.</p>
+      )}
+      {value?.at ? (
+        <p className={`text-sm font-bold ${value.at < Date.now() ? 'text-[#C2412D]' : 'text-[#1E7A45]'}`}>
+          {value.at < Date.now() ? '⚠' : '✓'} {formatWhen(value.at)} · {relTime(value.at)}
+        </p>
+      ) : null}
     </div>
   );
 };
@@ -120,12 +134,21 @@ export const BudgetRange: React.FC<{ min: number; max: number; onChange: (min: n
 };
 
 /* ساعة بعقارب: تختار الساعة من الدائرة، وص/م، والدقايق */
-const ClockDial: React.FC<{ slot: string; onPick: (s: string) => void }> = ({ slot, onPick }) => {
+const ClockDial: React.FC<{ slot: string; onPick: (s: string) => void; isPast?: (h24: number, mm: number) => boolean }> = ({ slot, onPick, isPast }) => {
   const [h0, m0] = slot ? slot.split(':').map(Number) : [NaN, 0];
   const [pm, setPm] = useState<boolean>(isNaN(h0) ? new Date().getHours() >= 12 : h0 >= 12);
   const [min, setMin] = useState<number>(m0 || 0);
   const hour12 = isNaN(h0) ? null : h0 % 12 === 0 ? 12 : h0 % 12;
-  const pick = (h12: number, isPm = pm, mm = min) => onPick(`${(h12 % 12) + (isPm ? 12 : 0)}:${mm}`);
+  const h24Of = (h12: number, isPm: boolean) => (h12 % 12) + (isPm ? 12 : 0);
+  /* الساعة مقفولة لو كل دقايقها عدّت (يعني حتى :45 عدّت) */
+  const hourDead = (h12: number, isPm = pm) => Boolean(isPast?.(h24Of(h12, isPm), 45));
+  const minDead = (mm: number) => Boolean(hour12 && isPast?.(h24Of(hour12, pm), mm));
+  const halfDead = (isPm: boolean) => Array.from({ length: 12 }, (_, i) => i + 1).every((h) => hourDead(h, isPm));
+
+  const pick = (h12: number, isPm = pm, mm = min) => {
+    if (isPast?.(h24Of(h12, isPm), mm)) return;   // الماضي مش بيتاخد
+    onPick(`${h24Of(h12, isPm)}:${mm}`);
+  };
   const R = 88, C = 110;
   const ang = hour12 ? ((hour12 % 12) / 12) * 2 * Math.PI - Math.PI / 2 : 0;
   return (
@@ -138,25 +161,33 @@ const ClockDial: React.FC<{ slot: string; onPick: (s: string) => void }> = ({ sl
           const a = (h / 12) * 2 * Math.PI - Math.PI / 2;
           const x = C + R * Math.cos(a), y = C + R * Math.sin(a);
           const on = hour12 === h;
+          const dead = hourDead(h);
           return (
-            <g key={h} onClick={() => pick(h)} style={{ cursor: 'pointer' }}>
+            <g key={h} onClick={() => { if (!dead) pick(h); }} style={{ cursor: dead ? 'not-allowed' : 'pointer' }} aria-disabled={dead}>
               <circle cx={x} cy={y} r={17} fill={on ? '#141414' : 'transparent'} />
-              <text x={x} y={y + 5} textAnchor="middle" fontSize="15" fontWeight={700} fill={on ? '#fff' : '#141414'}>{h}</text>
+              <text x={x} y={y + 5} textAnchor="middle" fontSize="15" fontWeight={700} fill={on ? '#fff' : dead ? '#C9C3B8' : '#141414'}>{h}</text>
+              {dead && <line x1={x - 9} y1={y + 9} x2={x + 9} y2={y - 9} stroke="#DCD6CA" strokeWidth={2} />}
             </g>
           );
         })}
       </svg>
       <div className="flex gap-2 w-full">
-        {[false, true].map((v) => (
-          <button key={String(v)} type="button" onClick={() => { setPm(v); if (hour12) pick(hour12, v); }}
-            className={`flex-1 py-2 rounded-xl text-sm font-bold border ${pm === v ? 'bg-[#141414] text-white border-[#141414]' : 'border-[#E4DFD4]'}`}>{v ? 'مساءً' : 'صباحاً'}</button>
-        ))}
+        {[false, true].map((v) => {
+          const dead = halfDead(v);
+          return (
+            <button key={String(v)} type="button" disabled={dead} onClick={() => { setPm(v); if (hour12) pick(hour12, v); }}
+              className={`flex-1 py-2 rounded-xl text-sm font-bold border disabled:opacity-35 disabled:line-through ${pm === v ? 'bg-[#141414] text-white border-[#141414]' : 'border-[#E4DFD4]'}`}>{v ? 'مساءً' : 'صباحاً'}</button>
+          );
+        })}
       </div>
       <div className="grid grid-cols-4 gap-2 w-full" dir="ltr">
-        {[0, 15, 30, 45].map((mm) => (
-          <button key={mm} type="button" onClick={() => { setMin(mm); if (hour12) pick(hour12, pm, mm); }}
-            className={`py-2 rounded-xl text-sm font-bold border ${min === mm ? 'bg-[#A07A26] text-white border-[#A07A26]' : 'border-[#E4DFD4]'}`}>:{String(mm).padStart(2, '0')}</button>
-        ))}
+        {[0, 15, 30, 45].map((mm) => {
+          const dead = minDead(mm);
+          return (
+            <button key={mm} type="button" disabled={dead} onClick={() => { setMin(mm); if (hour12) pick(hour12, pm, mm); }}
+              className={`py-2 rounded-xl text-sm font-bold border disabled:opacity-35 disabled:line-through ${min === mm ? 'bg-[#A07A26] text-white border-[#A07A26]' : 'border-[#E4DFD4]'}`}>:{String(mm).padStart(2, '0')}</button>
+          );
+        })}
       </div>
     </div>
   );
