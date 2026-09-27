@@ -16,24 +16,67 @@ const safe = (s: string) => (s || 'general').replace(/[^\w-]/g, '_').slice(0, 40
 const optimize = (url: string, isImage: boolean) =>
   isImage ? url.replace('/upload/', '/upload/f_auto,q_auto,w_1600/') : url;
 
-async function send(payload: Blob | string, folder: string, id: string, kind: 'image' | 'video'): Promise<string> {
+/* بنستخدم XMLHttpRequest مش fetch عشان نعرف نطلّع نسبة الرفع للمستخدم،
+   وعشان نمسك رسالة الخطأ الحقيقية اللي Cloudinary بيرجّعها بدل رسالة عامة. */
+function send(
+  payload: Blob | string,
+  folder: string,
+  id: string,
+  kind: 'image' | 'video',
+  onProgress?: (percent: number) => void,
+): Promise<string> {
   if (CLOUDINARY_CLOUD_NAME.startsWith('اكتب')) {
-    throw new Error('Cloudinary مش متظبط: اكتب CLOUDINARY_CLOUD_NAME في mediaStorage.ts');
+    return Promise.reject(new Error('Cloudinary مش متظبط: اكتب CLOUDINARY_CLOUD_NAME في mediaStorage.ts'));
   }
   const form = new FormData();
   form.append('file', payload);
   form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
   form.append('folder', `elsab3/${folder}/${safe(id)}`);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${kind}/upload`, { method: 'POST', body: form });
-  const data = await res.json();
-  if (!res.ok || !data.secure_url) throw new Error(data?.error?.message || `فشل الرفع (${res.status})`);
-  return optimize(data.secure_url, kind === 'image');
+
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${kind}/upload`);
+    xhr.timeout = 15 * 60 * 1000; // ربع ساعة: الفيديو الكبير على نت ضعيف بياخد وقت
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+
+    xhr.onload = () => {
+      let data: any = null;
+      try { data = JSON.parse(xhr.responseText || '{}'); } catch { /* رد مش JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300 && data?.secure_url) {
+        resolve(optimize(data.secure_url, kind === 'image'));
+        return;
+      }
+      // الرسالة الحقيقية من Cloudinary — دي اللي بتقول السبب بالظبط
+      const raw = data?.error?.message || (xhr.responseText || '').slice(0, 200);
+      reject(new Error(raw ? `Cloudinary (${xhr.status}): ${raw}` : `فشل الرفع (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error('الاتصال بالسحابة اتقطع. اتأكد من النت وجرّب تاني.'));
+    xhr.ontimeout = () => reject(new Error('الرفع خد وقت طويل جداً واتوقف. جرّب فيديو أصغر أو رابط يوتيوب.'));
+    xhr.onabort = () => reject(new Error('الرفع اتلغى.'));
+
+    xhr.send(form);
+  });
 }
 
 /** رفع ملف (صورة أو فيديو) والرجوع برابط مباشر */
-export async function uploadFile(file: File, folder: string, id: string): Promise<string> {
+export async function uploadFile(
+  file: File,
+  folder: string,
+  id: string,
+  onProgress?: (percent: number) => void,
+): Promise<string> {
   const kind = file.type.startsWith('video') || file.type.startsWith('audio') ? 'video' : 'image';
-  return send(file, folder, id, kind);
+  // حد Cloudinary للرفع المباشر من غير توقيع: 100 ميجا. أكبر من كده بيترفض من عندهم.
+  if (kind === 'video' && file.size > 100 * 1024 * 1024) {
+    const mb = Math.round(file.size / (1024 * 1024));
+    throw new Error(`الفيديو حجمه ${mb} ميجا، والحد الأقصى ١٠٠ ميجا. صغّره أو ارفعه على يوتيوب (غير مدرج) والصق الرابط.`);
+  }
+  return send(file, folder, id, kind, onProgress);
 }
 
 /** رفع صورة موجودة كـ base64 والرجوع برابط */

@@ -689,20 +689,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 20 * 1024 * 1024) {
-      showToast('تنبيه: حجم الفيديو أكبر من 20MB. للأداء الأفضل وتوفير المساحة يُنصح بلصق رابط YouTube أو Google Drive');
-    }
+    const mb = Math.round(file.size / (1024 * 1024));
+    showToast(`جاري رفع الفيديو (${mb} ميجا)... ٠٪`);
 
-    showToast('جاري رفع الفيديو على السحابة...');
-    uploadFile(file, 'videos', formData.id || 'new')
+    // بنوّري نسبة الرفع عشان حد ميفتكرش إن الشاشة واقفة
+    uploadFile(file, 'videos', formData.id || 'new', (percent) => {
+      showToast(`جاري رفع الفيديو (${mb} ميجا)... ${percent}٪`);
+    })
       .then((url) => {
         setFormData((prev) => ({ ...prev, videoUrl: url, videoMuted: true }));
         showToast('تم رفع الفيديو بنجاح');
       })
       .catch((err) => {
         console.error(err);
-        showToast('فشل رفع الفيديو. جرّب رابط يوتيوب بدل الملف');
+        // بنعرض السبب الحقيقي مش رسالة عامة، عشان نعرف نصلّح
+        showToast(`فشل رفع الفيديو — ${err?.message || 'سبب غير معروف'}`);
       });
+
+    // بنفضّي الخانة عشان لو اختار نفس الملف تاني يشتغل الرفع من جديد
+    e.target.value = '';
   };
 
   const resetForm = () => {
