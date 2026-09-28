@@ -248,8 +248,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Notifications if logged in */}
-          {clientProfile && onOpenClientNotifications && (
+          {/* جرس إشعارات العميل — مبيظهرش خالص لو الداخل موظف */}
+          {clientProfile && !isAdminLoggedIn && !isSalesLoggedIn && onOpenClientNotifications && (
             <button
               onClick={onOpenClientNotifications}
               className="p-2 bg-white text-[#141414] border border-[#ECE8DF] rounded-xl hover:border-stone-400 transition-all cursor-pointer relative"
@@ -264,7 +264,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {isSalesLoggedIn && onOpenSalesNotifications && (
+          {/* جرس تنبيهات المتابعات — للسيلز وللأدمن */}
+          {(isSalesLoggedIn || isAdminLoggedIn) && onOpenSalesNotifications && (
             <button
               onClick={onOpenSalesNotifications}
               className="p-2 bg-white text-emerald-800 border border-emerald-300 rounded-xl hover:bg-emerald-50 transition-all cursor-pointer relative"

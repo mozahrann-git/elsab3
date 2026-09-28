@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bell, BellRing, Phone, MessageCircle, Clock, X, CheckCircle2 } from 'lucide-react';
 import { Lead } from '../types';
@@ -59,7 +59,9 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
   );
   const [askDismissed, setAskDismissed] = useState(false);
-  const seenRef = useRef<Set<string>>(readSeen());
+  /* لازم تكون state مش ref: لو ref، الحساب اللي تحت مبيتعادش لما نقفل التنبيه،
+     فبيلاقي نفس المتابعة لسه مستحقة ويفتح تاني على طول — وده اللي كان بيخلّيه يعلّق. */
+  const [seen, setSeen] = useState<Set<string>>(() => readSeen());
   const [tick, setTick] = useState(0);
 
   // بنراجع كل نص دقيقة: الميعاد ممكن يعدّي والصفحة مفتوحة
@@ -79,9 +81,9 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
     return mine
       .filter((l) => typeof l.nextActionAt === 'number' && l.nextActionAt! <= now)
       .filter((l) => l.followUpStatus !== 'completed' && l.status !== 'closed' && l.status !== 'lost')
-      .filter((l) => !seenRef.current.has(`${l.id}:${l.nextActionAt}`))
+      .filter((l) => !seen.has(`${l.id}:${l.nextActionAt}`))
       .sort((a, b) => (a.nextActionAt || 0) - (b.nextActionAt || 0))[0] || null;
-  }, [mine, tick]);
+  }, [mine, tick, seen]);
 
   useEffect(() => {
     if (!nextDue || due) return;
@@ -102,8 +104,12 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
   }, [nextDue, due]);
 
   const dismiss = (lead: Lead) => {
-    seenRef.current.add(`${lead.id}:${lead.nextActionAt}`);
-    writeSeen(seenRef.current);
+    setSeen((prev) => {
+      const next = new Set<string>(prev);
+      next.add(`${lead.id}:${lead.nextActionAt}`);
+      writeSeen(next);
+      return next;
+    });
     setDue(null);
   };
 

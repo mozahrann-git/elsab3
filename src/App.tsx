@@ -743,6 +743,23 @@ export default function App() {
 
   const [isClientAuthOpen, setIsClientAuthOpen] = useState<boolean>(false);
   const [isClientNotificationsOpen, setIsClientNotificationsOpen] = useState<boolean>(false);
+
+  /* لما موظف يسجّل دخول، جلسة "العميل المميز" لازم تتقفل بالكامل —
+     مش بس من الذاكرة المحلية، لأن إشعارات العميل كانت بتفضل ظاهرة للأدمن. */
+  /* حماية للجلسات القديمة: لو فيه موظف داخل وجلسة عميل لسه متسجّلة، بنقفلها */
+  useEffect(() => {
+    if ((isAdminLoggedIn || isSalesLoggedIn || staffAccess) && clientProfile) {
+      setClientProfile(null);
+      setIsClientNotificationsOpen(false);
+      try { localStorage.removeItem('hadaba_current_client'); } catch { /* الوضع الخاص */ }
+    }
+  }, [isAdminLoggedIn, isSalesLoggedIn, staffAccess, clientProfile]);
+
+  const clearClientSession = React.useCallback(() => {
+    setClientProfile(null);
+    setIsClientNotificationsOpen(false);
+    try { localStorage.removeItem('hadaba_current_client'); } catch { /* الوضع الخاص */ }
+  }, []);
   const [isSalesNotificationsOpen, setIsSalesNotificationsOpen] = useState<boolean>(false);
   
   // 6. Mobile-First Broker Portal Modal State & Handlers
@@ -998,13 +1015,18 @@ export default function App() {
   };
 
   // Sales CRM Alerts and Follow-ups Count for Today
+  /* عدّاد الجرس: بيتحسب من الميعاد الحقيقي (nextActionAt) مش من نص مكتوب،
+     وبيعد عملاء الشخص الداخل هو بس — الأدمن بس اللي بيشوف الكل. */
   const salesAlertsCount = useMemo(() => {
-    return crmLeads.filter(l => 
-      l.followUpScheduledAt && 
-      l.followUpStatus !== 'completed' && 
-      (l.followUpUrgency === 'urgent' || l.followUpUrgency === 'today' || l.followUpScheduledAt.includes('اليوم') || l.followUpScheduledAt.includes('الآن'))
-    ).length;
-  }, [crmLeads]);
+    const now = Date.now();
+    const seeAll = isAdminLoggedIn || staffAccess?.role === 'admin';
+    const agentId = currentSalesAgentId;
+    return crmLeads.filter((l) => {
+      if (!seeAll && (!agentId || l.assignedAgentId !== agentId)) return false;
+      if (l.followUpStatus === 'completed' || l.status === 'closed' || l.status === 'lost') return false;
+      return typeof l.nextActionAt === 'number' && l.nextActionAt <= now;
+    }).length;
+  }, [crmLeads, isAdminLoggedIn, staffAccess, currentSalesAgentId]);
 
   // Current active sales agent session
   const currentAgent = useMemo(() => {
@@ -2307,15 +2329,18 @@ export default function App() {
         currentClient={clientProfile}
         onSaveClient={handleSaveClientProfile}
         onLoginAdminSuccess={() => {
+          clearClientSession();
           handleAdminLogin(true);
           setIsClientAuthOpen(false);
           setIsAdminDashboardOpen(true);
         }}
         onLoginSalesSuccess={(agent) => {
+          clearClientSession();
           handleSalesLoginSuccess(agent);
           setIsClientAuthOpen(false);
         }}
         onPortalLogin={(acc) => {
+          clearClientSession();
           setStaffAccess(acc);
           setIsClientAuthOpen(false);
           setActivePortal(acc.role === 'owner' ? 'owner' : acc.role === 'broker' ? 'broker' : acc.role === 'company_owner' ? 'company' : acc.role === 'marketing' ? 'marketing' : 'coordinator');

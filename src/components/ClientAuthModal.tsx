@@ -201,22 +201,10 @@ export const ClientAuthModal: React.FC<ClientAuthModalProps> = ({
       // fallback
     }
 
-    // If not found in registered clients, create instant client profile
-    const instantProfile: ClientProfile = {
-      id: `client_${Date.now()}`,
-      name: identifier.includes('@') ? identifier.split('@')[0] : 'عميل مميز',
-      phone: identifier,
-      whatsapp: identifier,
-      preferredNeighborhoods: ['الحي الأول', 'الحي الثاني', 'الحي الثالث', 'الحي الرابع'],
-      preferredFinishing: 'all',
-      budgetMax: 4500000,
-      enableNewListingAlerts: true,
-      enablePriceDropAlerts: true,
-      registeredAt: new Date().toISOString()
-    };
-    onSaveClient(instantProfile);
-    setSuccessMsg('تم تسجيل دخولك بنجاح!');
-    setTimeout(() => onClose(), 800);
+    /* مفيش حساب بالبيانات دي.
+       قبل كده كان النظام بيعمل حساب فوري لأي إيميل وباسورد — يعني أي حد يكتب أي حاجة يدخل.
+       ده اتقفل: الدخول بقى للحسابات المسجّلة بس. */
+    setErrorMsg('مفيش حساب بالبيانات دي. لو عندك حساب اتأكد من الرقم أو الإيميل، ولو مش عندك اعمل حساب جديد.');
   };
 
   return (
