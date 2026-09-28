@@ -203,7 +203,7 @@ export interface Lead {
   name: string;
   phone: string;
   whatsapp?: string;
-  source: 'facebook_group' | 'website_whatsapp' | 'cold_call' | 'referral' | 'direct';
+  source: 'facebook_group' | 'website_whatsapp' | 'cold_call' | 'referral' | 'direct' | 'campaign';
   interestedPropertyCode?: string;
   interestedPropertyTitle?: string;
   budgetMin?: number;
@@ -232,6 +232,9 @@ export interface Lead {
   fieldViewingRecordedAt?: string;
   coordinatorName?: string;
   nextActionAt?: number | null;     // ميعاد الأكشن الجاي بالظبط (تنبيه حقيقي)
+  campaignName?: string;            // اسم الكامبين اللي الليد جه منه
+  isFresh?: boolean;                // ليد فريش لسه محدش كلّمه — بيتشال أول اتصال
+  distributedAt?: number;           // وقت توزيعه على السيلز
   activity?: { at: number; by: string; outcome: string; comment: string; nextAt?: number; transferTo?: string }[];
   transferredFrom?: string;
   snoozeCount?: number;             // كام مرة اتأجل، بيظهر في تقرير الليدر

@@ -1187,13 +1187,25 @@ export default function App() {
   ]);
 
   const handleUpdateLead = (updatedLead: Lead) => {
-    setCrmLeads((prev) => prev.map((l) => (l.id === updatedLead.id ? updatedLead : l)));
-    saveLeadToDb(updatedLead).catch(err => console.error('[Firebase] Error saving lead:', err));
+    /* علامة "فريش" بتتشال أول ما حد يتحرّك على الليد فعلاً:
+       يسجّل نشاط، أو ينقله من خانة "جديد". */
+    const touched = (updatedLead.activity?.length || 0) > 0 || updatedLead.status !== 'new';
+    const lead: Lead = updatedLead.isFresh && touched ? { ...updatedLead, isFresh: false } : updatedLead;
+    setCrmLeads((prev) => prev.map((l) => (l.id === lead.id ? lead : l)));
+    saveLeadToDb(lead).catch(err => console.error('[Firebase] Error saving lead:', err));
   };
 
   const handleAddLead = (newLead: Lead) => {
     setCrmLeads((prev) => [newLead, ...prev]);
     saveLeadToDb(newLead).catch(err => console.error('[Firebase] Error adding lead:', err));
+  };
+
+  /* توزيع ليدات الكامبين دفعة واحدة */
+  const handleAddLeadsBulk = (newLeads: Lead[]) => {
+    setCrmLeads((prev) => [...newLeads, ...prev]);
+    newLeads.forEach((l) => {
+      saveLeadToDb(l).catch(err => console.error('[Firebase] Error adding campaign lead:', err));
+    });
   };
 
   const handleUpdateAgent = (updatedAgent: SalesAgent) => {
@@ -2224,6 +2236,7 @@ export default function App() {
         onLogout={handleSalesLogout}
         onUpdateLead={handleUpdateLead}
         onAddLead={handleAddLead}
+        onAddLeadsBulk={handleAddLeadsBulk}
         onUpdateAgent={handleUpdateAgent}
         emergencyAlerts={emergencyAlerts}
         onSendEmergencyAlert={handleSendEmergencyAlert}
@@ -2256,6 +2269,7 @@ export default function App() {
           currentAgent={currentAgent}
           onRecordAction={handleRecordAgentAction}
           onAddLead={handleAddLead}
+          onAddLeadsBulk={handleAddLeadsBulk}
           customLogoUrl={customLogoUrl}
           bannerPhotoUrl={bannerPhotoUrl}
           onOpenAdmin={() => {

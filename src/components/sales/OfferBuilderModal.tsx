@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, ArrowUp, ArrowDown, Trash2, Send, Copy } from 'lucide-react';
+import { X, Plus, ArrowUp, ArrowDown, Trash2, Send, Copy, ImageDown } from 'lucide-react';
+import { downloadOfferCards } from '../../utils/offerCards';
 import { Lead, Property } from '../../types';
 import { VoiceRecorder } from '../portal/VoiceRecorder';
 import { SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveOffer, OfferUnit, createTrackedLink, linkUrl } from '../../services/salesToolsService';
@@ -31,6 +32,7 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
   const [question, setQuestion] = useState('قولّي رأيك في الأول والتاني وأنا أرتبلك المعاينة');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ link: string; wa: string } | null>(null);
+  const [imgBusy, setImgBusy] = useState('');
   const [search, setSearch] = useState('');
   useEffect(() => subscribeSalesForms(setForms), []);
 
@@ -104,6 +106,44 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
               <a href={done.wa} target="_blank" rel="noopener noreferrer" className="py-3 rounded-xl bg-[#1FA85D] text-white text-center font-bold">ابعته واتساب</a>
               <button onClick={() => navigator.clipboard?.writeText(done.link)} className="py-3 rounded-xl bg-[#F6F4EF] font-bold flex items-center justify-center gap-2"><Copy size={16} />انسخ اللينك</button>
             </div>
+            {/* للعملاء اللي مش بيفتحوا لينكات: العرض بينزل صور تتبعت في الشات على طول */}
+            <div className="rounded-2xl bg-white border border-[#ECE8DF] p-4 space-y-2">
+              <p className="font-bold text-sm">العميل مش بيفتح لينكات؟</p>
+              <p className="text-xs text-[#6B665C] leading-relaxed">
+                نزّل الشقق كصور وابعتهالُه في الشات عادي. كل شقة صورة فيها الكود والسعر والمساحة ولوجو السبع.
+              </p>
+              <button
+                onClick={async () => {
+                  setImgBusy('جاري التجهيز...');
+                  try {
+                    const n = await downloadOfferCards(
+                      picked.map((u) => ({
+                        code: u.code,
+                        title: u.title,
+                        note: u.note,
+                        property: properties.find((p) => p.id === u.propertyId || p.code === u.code),
+                      })),
+                      {
+                        agentName,
+                        agentPhone,
+                        leadName: lead.name,
+                        onProgress: (i, t) => setImgBusy(`بيجهّز صورة ${i} من ${t}...`),
+                      },
+                    );
+                    setImgBusy(n ? `نزلت ${n} صورة` : 'محصلش تنزيل');
+                  } catch {
+                    setImgBusy('الصور ما اتجهزتش، جرّب تاني');
+                  }
+                  setTimeout(() => setImgBusy(''), 3000);
+                }}
+                disabled={!!imgBusy || picked.length === 0}
+                className="w-full py-3 rounded-xl bg-[#A07A26] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                <ImageDown size={16} />
+                {imgBusy || `نزّل العرض كصور (${picked.length})`}
+              </button>
+            </div>
+
             <button onClick={onClose} className="w-full py-3 rounded-xl bg-[#141414] text-white font-bold">تمام</button>
           </div>
         ) : (

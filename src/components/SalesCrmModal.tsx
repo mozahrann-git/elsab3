@@ -36,8 +36,9 @@ import {
   ArrowLeftRight,
   MapPin,
   DollarSign,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
+import { CampaignLeadsModal } from './crm/CampaignLeadsModal';
 import { LionLogo } from './LionLogo';
 import { formatPrice, formatNumber, generateCallLink, generateWhatsAppLink } from '../utils/helpers';
 import { SpinWheelModal } from './SpinWheelModal';
@@ -62,6 +63,8 @@ interface SalesCrmModalProps {
   leads: Lead[];
   onUpdateLead: (updatedLead: Lead) => void;
   onAddLead: (newLead: Lead) => void;
+  /* توزيع ليدات الكامبين دفعة واحدة — الأدمن بس */
+  onAddLeadsBulk?: (leads: Lead[]) => void;
   onUpdateAgent: (updatedAgent: SalesAgent) => void;
   emergencyAlerts: BroadcastEmergencyAlert[];
   onSendEmergencyAlert: (alert: Omit<BroadcastEmergencyAlert, 'id' | 'createdAt'>) => void;
@@ -103,6 +106,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   leads,
   onUpdateLead,
   onAddLead,
+  onAddLeadsBulk,
   onUpdateAgent,
   emergencyAlerts,
   onSendEmergencyAlert,
@@ -126,6 +130,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   // Modals inside CRM
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
+  const [isCampaignOpen, setIsCampaignOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [selectedLeadForDetails, setSelectedLeadForDetails] = useState<Lead | null>(null);
   const [leadToChangeStatus, setLeadToChangeStatus] = useState<Lead | null>(null);
@@ -580,6 +585,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             <span>إضافة عميل جديد</span>
           </button>
 
+          {isAdmin && onAddLeadsBulk && (
+            <button
+              onClick={() => setIsCampaignOpen(true)}
+              className="w-full py-2.5 px-3 bg-white/10 hover:bg-white/15 text-white font-readex font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Flame size={15} className="text-[#FF7A1A]" />
+              <span>وزّع ليدات كامبين</span>
+            </button>
+          )}
+
           <button
             onClick={onClose}
             className="w-full py-2 px-3 bg-white/5 hover:bg-white/10 text-stone-300 hover:text-white text-xs font-medium rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
@@ -1028,18 +1043,32 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 return (
                   <div 
                     key={lead.id}
-                    className="bg-white border border-[#ECE8DF] rounded-2xl p-4 shadow-2xs space-y-3 hover:border-[#A07A26] transition-all"
+                    className={`rounded-2xl p-4 shadow-2xs space-y-3 transition-all ${
+                      lead.isFresh
+                        ? 'bg-[#FFF8F2] border-2 border-[#FF7A1A] hover:border-[#C2412D]'
+                        : 'bg-white border border-[#ECE8DF] hover:border-[#A07A26]'
+                    }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#ECE8DF] pb-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-[#FAF4E5] text-[#A07A26] font-bold flex items-center justify-center font-readex text-sm">
+                        <div className={`w-10 h-10 rounded-2xl font-bold flex items-center justify-center font-readex text-sm ${
+                          lead.isFresh ? 'bg-[#FF7A1A] text-white' : 'bg-[#FAF4E5] text-[#A07A26]'
+                        }`}>
                           {lead.name.charAt(0)}
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="font-readex font-bold text-sm text-[#141414]">{lead.name}</h4>
                             <span className="font-mono text-xs text-[#6B665C] dir-ltr">{lead.phone}</span>
+                            {lead.isFresh && (
+                              <span className="bg-[#FF7A1A] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Flame size={10} /> ليد فريش
+                              </span>
+                            )}
                           </div>
+                          {lead.isFresh && lead.campaignName && (
+                            <p className="text-[11px] text-[#C2412D] font-bold">من كامبين: {lead.campaignName}</p>
+                          )}
                           <p className="text-xs text-[#8C877D]">
                             المستشار المسؤول: <strong className="text-[#141414]">{lead.assignedAgentName || 'سارة حنفي'}</strong>
                           </p>
@@ -1568,6 +1597,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       {/* ========================================================= */}
       {/* ADD NEW LEAD MODAL */}
       {/* ========================================================= */}
+      {onAddLeadsBulk && (
+        <CampaignLeadsModal
+          isOpen={isCampaignOpen}
+          onClose={() => setIsCampaignOpen(false)}
+          agents={agents}
+          existingLeads={leads}
+          onDistribute={onAddLeadsBulk}
+        />
+      )}
+
       {isAddLeadOpen && (
         <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div 
