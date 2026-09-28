@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Offer, getOffer, logOfferOpen } from '../../services/salesToolsService';
+import { waLink } from '../../utils/helpers';
 
 /* صفحة العرض اللي العميل بيشوفها: شقق العرض بس، بصوت السيلز واسمه */
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -12,7 +13,7 @@ export const OfferPublicPage: React.FC<{ offerId: string; onClose: () => void }>
 
   const expired = offer && offer.expiresAt < Date.now();
   const hoursLeft = offer ? Math.max(0, Math.round((offer.expiresAt - Date.now()) / 3600000)) : 0;
-  const wa = offer ? `https://wa.me/${(offer.agentPhone || '201021242871').replace(/\D/g, '').replace(/^0/, '20')}?text=${encodeURIComponent(`بخصوص العرض اللي بعتهولي: `)}` : '#';
+  const wa = offer ? waLink(offer.agentPhone || '201021242871', 'بخصوص العرض اللي بعتهولي: ') : '#';
 
   return (
     <div className="fixed inset-0 z-[90] bg-[#F6F4EF] overflow-y-auto" dir="rtl" style={{ fontFamily: "'IBM Plex Sans Arabic', Tahoma, sans-serif" }}>

@@ -43,7 +43,29 @@ export function generateWhatsAppLink(
       message = 'استفسار عن شقق ريسيل الهضبة الوسطى';
     }
   }
-  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message.trim())}`;
+  const text = encodeURIComponent(message.trim());
+  const web = `https://wa.me/${cleanPhone}?text=${text}`;
+
+  /* لينك wa.me العادي بيسيب الأندرويد يختار: واتساب ولا واتساب بيزنس.
+     ولو البيزنس متسجّل كافتراضي بيفتح هو دايماً.
+     على الأندرويد بنستخدم intent عشان نحدد تطبيق الواتساب العادي بالاسم،
+     ولو مش متسطّب بيرجع للينك العادي لوحده. */
+  if (isAndroid()) {
+    return `intent://send?phone=${cleanPhone}&text=${text}#Intent;scheme=whatsapp;package=com.whatsapp;`
+      + `S.browser_fallback_url=${encodeURIComponent(web)};end`;
+  }
+  return web;
+}
+
+/** نفس الفكرة بس بتاخد الرقم والرسالة على طول — للأماكن اللي بتبني اللينك بنفسها */
+export function waLink(phone: string, message: string): string {
+  return generateWhatsAppLink(phone, undefined, undefined, message);
+}
+
+/** الأندرويد بس — الآيفون مبيسمحش نحدد التطبيق */
+function isAndroid(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /android/i.test(navigator.userAgent);
 }
 
 export function generateCallLink(phone: string = '01021242871'): string {

@@ -20,7 +20,7 @@ import {
   User,
   Eye
 } from 'lucide-react';
-import { formatPrice, generateWhatsAppLink, generateCallLink } from '../utils/helpers';
+import { formatPrice, generateWhatsAppLink, generateCallLink, waLink } from '../utils/helpers';
 import { createUnitViewing } from '../services/portalService';
 
 interface LeadDetailsModalProps {
@@ -192,7 +192,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
           </a>
 
           <a
-            href={`https://wa.me/2${cleanPhone}`}
+            href={waLink(`2${cleanPhone}`, '')}
             target="_blank"
             rel="noopener noreferrer"
             className="p-2.5 bg-[#1E7A45] hover:bg-[#166534] text-white rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-2xs"

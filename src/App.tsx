@@ -74,6 +74,7 @@ import { ClientAuthModal } from './components/ClientAuthModal';
 import { ClientNotificationModal } from './components/ClientNotificationModal';
 import { FollowUpNotificationsModal } from './components/FollowUpNotificationsModal';
 import { FollowUpPopup } from './components/FollowUpPopup';
+import { saveUiSession, loadUiSession } from './utils/uiSession';
 import { BrokerPortalModal } from './components/BrokerPortalModal';
 import { PartnerPortalsModal } from './components/PartnerPortalsModal';
 import { Footer } from './components/Footer';
@@ -1185,6 +1186,31 @@ export default function App() {
     isClientNotificationsOpen,
     isSalesNotificationsOpen
   ]);
+
+  /* بنفضل حافظين "إنت كنت فين" عشان لو المتصفح قفل التاب وانت في واتساب،
+     ترجع لنفس الشاشة مش للصفحة الرئيسية. */
+  useEffect(() => {
+    saveUiSession({
+      screen: isAdminDashboardOpen ? 'admin' : isCrmOpen ? 'crm' : isSalesNotificationsOpen ? 'sales_notifications' : null,
+      portal: activePortal,
+    });
+  }, [isAdminDashboardOpen, isCrmOpen, isSalesNotificationsOpen, activePortal]);
+
+  /* الرجوع بيحصل مرة واحدة بس، وبعد ما نعرف الشخص داخل بأنهي صفة */
+  const restoredRef = React.useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    const signedIn = isAdminLoggedIn || isSalesLoggedIn || Boolean(staffAccess);
+    if (!signedIn) return;
+    restoredRef.current = true;
+
+    const s = loadUiSession();
+    if (!s) return;
+    if (s.portal && staffAccess) { setActivePortal(s.portal); return; }
+    if (s.screen === 'admin' && isAdminLoggedIn) setIsAdminDashboardOpen(true);
+    else if (s.screen === 'crm' && (isAdminLoggedIn || isSalesLoggedIn)) setIsCrmOpen(true);
+    else if (s.screen === 'sales_notifications' && (isAdminLoggedIn || isSalesLoggedIn)) setIsSalesNotificationsOpen(true);
+  }, [isAdminLoggedIn, isSalesLoggedIn, staffAccess]);
 
   const handleUpdateLead = (updatedLead: Lead) => {
     /* علامة "فريش" بتتشال أول ما حد يتحرّك على الليد فعلاً:

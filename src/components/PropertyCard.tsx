@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Property } from '../types';
 import { Heart, ArrowLeftRight, Edit3, Briefcase, CheckCircle2, Play, Video, ChevronLeft, ChevronRight, Volume2, VolumeX, Image as ImageIcon } from 'lucide-react';
-import { formatPrice, getVideoEmbedInfo } from '../utils/helpers';
+import { formatPrice, getVideoEmbedInfo, waLink } from '../utils/helpers';
 import { INITIAL_PRICE_MAP_DATA } from '../data/marketPriceData';
 import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { hydratePropertyMedia } from '../utils/propertyMedia';
@@ -398,7 +398,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
               التفاصيل
             </button>
             <a
-              href={`https://wa.me/${'201021242871'}?text=${encodeURIComponent(`مساء الخير، ممكن فيديو للشقة كود ${property.code}؟`)}`}
+              href={waLink('201021242871', `مساء الخير، ممكن فيديو للشقة كود ${property.code}؟`)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}

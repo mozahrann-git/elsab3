@@ -6,6 +6,7 @@ import { Lead, Property } from '../../types';
 import { VoiceRecorder } from '../portal/VoiceRecorder';
 import { SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveOffer, OfferUnit, createTrackedLink, linkUrl } from '../../services/salesToolsService';
 import { formatWhen } from '../common/WhenPicker';
+import { waLink } from '../../utils/helpers';
 
 /*
   العرض المخصوص: الفلترة آلية من مكالمة الاكتشاف، والاختيار والترتيب والسطور بشرية.
@@ -81,7 +82,7 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
         lastContactDate: new Date().toISOString(),
         notes: [`عرض مخصوص اتبعت: ${link}`, ...(lead.notes || [])],
       } as Lead;
-      const wa = `https://wa.me/${(lead.phone || '').replace(/\D/g, '').replace(/^0/, '20')}?text=${encodeURIComponent(`أهلاً أستاذ ${lead.name}، جهزتلك عرض مخصوص فيه ${picked.length} شقق بعد كلامنا. العرض صالح ${forms.offerHours} ساعة:\n${link}`)}`;
+      const wa = waLink(lead.phone || '', `أهلاً أستاذ ${lead.name}، جهزتلك عرض مخصوص فيه ${picked.length} شقق بعد كلامنا. العرض صالح ${forms.offerHours} ساعة:\n${link}`);
       setDone({ link, wa });
       onSent(updated, link);
     } finally { setBusy(false); }

@@ -13,6 +13,7 @@ import {
   saraConfirmFeedback, rejectFeedback,
 } from '../../services/portalService';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
+import { waLink } from '../../utils/helpers';
 
 /*
   لوحة سارة (مسؤولة الملاك) والأدمن:
@@ -31,7 +32,7 @@ interface Props {
   onLogout: () => void;
 }
 
-const wa = (phone: string, text: string) => `https://wa.me/${phone.replace(/\D/g, '').replace(/^0/, '20')}?text=${encodeURIComponent(text)}`;
+const wa = (phone: string, text: string) => waLink(phone, text);
 const input = 'w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm';
 const mapLink = (p: Property) => {
   const loc = (p.location || '').trim();

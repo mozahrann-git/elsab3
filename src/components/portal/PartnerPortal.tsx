@@ -14,6 +14,7 @@ import {
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { ChangePasswordModal } from '../ChangePasswordModal';
 import { WhenPicker, WhenValue, formatWhen } from '../common/WhenPicker';
+import { waLink } from '../../utils/helpers';
 
 /*
   بوابة المالك والبروكر (نفس الهيكل):
@@ -354,7 +355,7 @@ const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: st
           {step === 2 && (
             <>
               <div className="rounded-xl bg-[#F6F4EF] p-3 text-sm leading-7">{msg}</div>
-              <a href={`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer" onClick={() => brokerMarkMessaged(v.id)}
+              <a href={waLink(phone, msg)} target="_blank" rel="noopener noreferrer" onClick={() => brokerMarkMessaged(v.id)}
                 className="rounded-xl px-4 py-3 text-sm font-semibold flex items-center justify-center gap-2 bg-[#1E7A45] text-white"><Phone size={16} />ابعت على واتساب</a>
             </>
           )}

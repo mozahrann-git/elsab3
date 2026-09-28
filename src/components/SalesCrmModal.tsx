@@ -39,8 +39,9 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { CampaignLeadsModal } from './crm/CampaignLeadsModal';
+import { saveDraft, loadDraft, clearDraft } from '../utils/uiSession';
 import { LionLogo } from './LionLogo';
-import { formatPrice, formatNumber, generateCallLink, generateWhatsAppLink } from '../utils/helpers';
+import { formatPrice, formatNumber, generateCallLink, generateWhatsAppLink, waLink } from '../utils/helpers';
 import { SpinWheelModal } from './SpinWheelModal';
 import { LeadDetailsModal } from './LeadDetailsModal';
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
@@ -125,7 +126,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [activeMobileStageFilter, setActiveMobileStageFilter] = useState<string>('all');
   
   // Smart Matching Lead Selection & State
-  const [matchingLeadId, setMatchingLeadId] = useState<string>(() => leads[0]?.id || 'lead_101');
+  /* بيتحدد من عملاء الشخص الداخل بس — مش من كل ليدات الشركة */
+  const [matchingLeadId, setMatchingLeadId] = useState<string>('');
   const [highlightedPropCode, setHighlightedPropCode] = useState<string | null>(null);
 
   // Modals inside CRM
@@ -139,7 +141,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [previewProperty, setPreviewProperty] = useState<Property | null>(null);
 
   // New Lead Form State
-  const [newLeadForm, setNewLeadForm] = useState({
+  /* المسوّدة بتتحفظ مع كل حرف، عشان لو المتصفح قفل التاب وانت في واتساب
+     ترجع تلاقي اللي كتبته مكانه. بتتمسح بعد الحفظ. */
+  const EMPTY_LEAD_FORM = {
     name: '',
     phone: '',
     source: 'facebook_group' as Lead['source'],
@@ -154,7 +158,20 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     followUpUrgency: 'urgent' as 'urgent' | 'today' | 'upcoming',
     assignedAgentId: '',
     nextAt: null as WhenValue | null,
-  });
+  };
+
+  const [newLeadForm, setNewLeadForm] = useState(() => loadDraft('new_lead', EMPTY_LEAD_FORM));
+
+  useEffect(() => {
+    const hasAnything = newLeadForm.name.trim() || newLeadForm.phone.trim() || newLeadForm.notes.trim();
+    if (hasAnything) saveDraft('new_lead', newLeadForm);
+  }, [newLeadForm]);
+
+  // لو فيه مسوّدة، الفورم بيفتح لوحده عشان الشخص يلاقي شغله
+  useEffect(() => {
+    if (isOpen && (newLeadForm.name.trim() || newLeadForm.phone.trim())) setIsAddLeadOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Active Sales Agent for current session
   const currentSalesAgent = useMemo(() => {
@@ -210,10 +227,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     return scopedLeads.filter((l) => (l.nextActionAt && l.nextActionAt <= end.getTime() && l.followUpStatus !== 'completed') || (l.status === 'new' && !l.nextActionAt)).length;
   }, [scopedLeads]);
 
-  // Selected Lead for Smart Matching
+  // Selected Lead for Smart Matching — من عملاء الشخص الداخل بس
   const selectedMatchingLead = useMemo(() => {
-    return leads.find((l) => l.id === matchingLeadId) || leads[0] || null;
-  }, [leads, matchingLeadId]);
+    return scopedLeads.find((l) => l.id === matchingLeadId) || scopedLeads[0] || null;
+  }, [scopedLeads, matchingLeadId]);
 
   // Matched Properties List for the selected lead
   const [matchTolerance, setMatchTolerance] = useState<number>(0);   // 0 = بالظبط، 0.05، 0.1
@@ -262,7 +279,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     const agentParam = currentSalesAgent?.id ? `&agent=${currentSalesAgent.id}` : '';
     const shareUrl = `${origin}/?property=${prop.code}${agentParam}`;
     const msg = `مرحباً ${lead?.name || 'يا فندم'}، بناءً على طلبك لشقة في ${prop.neighborhood}، دي شقة مطابقة لمواصفاتك:\nكود: ${prop.code}\nالمساحة: ${prop.area}م² · ${prop.bedrooms} غرف\nالسعر: ${formatPrice(prop.price)}\nللمعاينة والتفاصيل: ${shareUrl}`;
-    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    return waLink(cleanPhone, msg);
   };
 
   const [compactView, setCompactView] = useState<boolean>(() => { try { return localStorage.getItem('lion_crm_compact') === '1'; } catch { return false; } });
@@ -360,6 +377,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     };
 
     onAddLead(newLead);
+    clearDraft('new_lead');
     setIsAddLeadOpen(false);
     setNewLeadForm({
       name: '',
@@ -1237,7 +1255,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               {/* Client Quick Switcher */}
               <div className="pt-2 border-t border-[#ECE8DF]/80 flex items-center gap-2 overflow-x-auto no-scrollbar">
                 <span className="text-[11px] font-bold text-stone-500 shrink-0">تبديل العميل:</span>
-                {leads.map((ld) => (
+                {scopedLeads.map((ld) => (
                   <button
                     key={ld.id}
                     onClick={() => setMatchingLeadId(ld.id)}
@@ -1617,7 +1635,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               <h3 className="text-base font-bold text-[#141414] font-readex">إضافة عميل جديد لمسار المتابعة</h3>
               <button
                 type="button"
-                onClick={() => setIsAddLeadOpen(false)}
+                onClick={() => { clearDraft('new_lead'); setNewLeadForm(EMPTY_LEAD_FORM); setIsAddLeadOpen(false); }}
                 className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg"
               >
                 <X size={18} />
@@ -1707,7 +1725,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               <div className="pt-3 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddLeadOpen(false)}
+                  onClick={() => { clearDraft('new_lead'); setNewLeadForm(EMPTY_LEAD_FORM); setIsAddLeadOpen(false); }}
                   className="px-4 py-2.5 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] font-bold rounded-xl cursor-pointer"
                 >
                   إلغاء

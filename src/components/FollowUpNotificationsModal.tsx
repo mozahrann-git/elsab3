@@ -21,7 +21,7 @@ import {
   Search,
   Filter
 } from 'lucide-react';
-import { generateCallLink, generateWhatsAppLink, formatPrice } from '../utils/helpers';
+import { generateCallLink, generateWhatsAppLink, formatPrice, waLink } from '../utils/helpers';
 import { formatWhen } from './common/WhenPicker';
 
 interface FollowUpNotificationsModalProps {
@@ -180,7 +180,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
 تحياتي لحضرتك.`;
 
     const cleanPhone = lead.phone.replace(/\D/g, '');
-    window.open(`https://wa.me/2${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+    window.open(waLink(`2${cleanPhone}`, message), '_blank');
   };
 
   const urgentCount = alerts.filter(a => a.urgency === 'urgent' && (filterScope === 'all_team' || a.assignedAgentId === currentAgent.id)).length;
