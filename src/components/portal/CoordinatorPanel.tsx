@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, Users, MessageSquareText, FilePen, Home, Plus, Phone, Send, LogOut, FileSpreadsheet } from 'lucide-react';
+import { CalendarClock, Users, MessageSquareText, FilePen, Home, Plus, Phone, Send, LogOut, FileSpreadsheet, Sun } from 'lucide-react';
 import { Property, OwnerSubmission } from '../../types';
 import { fetchPropertyPrivateOwner, subscribeToViewingRequests, saveAccount } from '../../services/firebaseService';
 import { WhenPicker, WhenValue, formatWhen } from '../common/WhenPicker';
@@ -14,6 +14,7 @@ import {
 } from '../../services/portalService';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { waLink } from '../../utils/helpers';
+import { MorningRollCall } from './MorningRollCall';
 
 /*
   لوحة سارة (مسؤولة الملاك) والأدمن:
@@ -68,6 +69,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       tabs={[
         { key: 'viewings', label: 'المعاينات', icon: <CalendarClock size={18} />, badge: pendingV },
         { key: 'agents', label: 'المندوبين', icon: <Users size={18} /> },
+        { key: 'rollcall', label: 'نداء الصباح', icon: <Sun size={18} /> },
         { key: 'feedback', label: 'الفيدباك', icon: <MessageSquareText size={18} />, badge: pendingF },
         { key: 'changes', label: 'التعديلات', icon: <FilePen size={18} />, badge: pendingC },
         { key: 'units', label: 'شقق جديدة', icon: <Home size={18} />, badge: pendingS },
@@ -78,6 +80,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
     >
       {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} isAdmin={isAdmin} byName={name} onSendToAgent={(code, label, at) => { setTripSeed({ code, label, at }); setTab('agents'); }} />}
       {tab === 'agents' && <AgentsTab agents={agents} trips={trips} fbs={fbs} viewings={viewings} properties={properties} isAdmin={isAdmin} seed={tripSeed} />}
+      {tab === 'rollcall' && <MorningRollCall agents={agents} />}
       {tab === 'feedback' && <FeedbackTab fbs={fbs} />}
       {tab === 'changes' && <ChangesTab changes={changes} />}
       {tab === 'excel' && isAdmin && <OwnersExcelTab properties={properties} />}

@@ -22,6 +22,7 @@ import { formatPrice, generateWhatsAppLink, generateCallLink } from '../utils/he
 import { LionLogo } from './LionLogo';
 import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { hydratePropertyMedia } from '../utils/propertyMedia';
+import { logEvent } from '../services/analyticsService';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -66,6 +67,15 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     ? validPropImages 
     : (property ? (hasVideo ? [] : (hydratePropertyMedia(property).images || [])) : []);
   const hasImages = rawImages.length > 0;
+
+  /* تسجيل المشاهدة: مرة واحدة لكل وحدة في الجلسة، ومعاها الحي عشان نقدر
+     نحسب بعدين أنهي حي بيتحرّك وأنهي وحدة بتتشاف ومحدش بيسأل عليها. */
+  useEffect(() => {
+    if (!property?.id) return;
+    logEvent('unit_view', {
+      propertyId: property.id, code: property.code, neighborhood: property.neighborhood,
+    }, { onceKey: `view_${property.id}` });
+  }, [property?.id]);
 
   useEffect(() => {
     setActivePhotoIdx(0);
@@ -120,6 +130,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
   const handleWhatsApp = () => {
     onTrackClick(property.id, 'whatsapp');
+    logEvent('unit_whatsapp', { propertyId: property.id, code: property.code, neighborhood: property.neighborhood, value: property.price });
     if (onRequestViewing) {
       onRequestViewing(property, 'النهارده أو بكرة بعد 5 مساءً');
     }
@@ -129,6 +140,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
   const handleCall = () => {
     onTrackClick(property.id, 'call');
+    logEvent('unit_call', { propertyId: property.id, code: property.code, neighborhood: property.neighborhood, value: property.price });
     window.location.href = generateCallLink('01021242871');
   };
 
@@ -517,6 +529,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   onClick={() => {
                     onToggleFavorite(property.id);
                     onTrackClick(property.id, 'favorites');
+                    logEvent('unit_favorite', { propertyId: property.id, code: property.code, neighborhood: property.neighborhood });
                   }}
                   className="py-2 px-2 bg-[#F6F4EF] hover:bg-stone-200 text-[#141414] text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >

@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { db, auth, cleanFirestoreData, savePropertyPrivateOwner } from './firebaseService';
+import { logEvent } from './analyticsService';
 
 export type OwnerViewingStatus = 'pending' | 'confirmed' | 'reschedule' | 'done' | 'canceled';
 
@@ -429,4 +430,77 @@ export async function brokerUpdateUnitImages(propertyId: string, images: string[
 /** الأدمن بيمسح معاينة خلاص مش محتاجينها */
 export async function deleteUnitViewing(id: string) {
   await deleteDoc(doc(db, 'unit_viewings', id));
+}
+
+/* ---------- نداء الصباح: المندوب يأكد إنه متاح النهارده ---------- */
+
+export type CheckInStatus = 'available' | 'busy' | 'off';
+
+export interface FieldCheckIn {
+  id: string;            // `${agentId}_${yyyy-mm-dd}` — مستحيل يتكرر في نفس اليوم
+  agentId: string;
+  agentName: string;
+  day: string;           // yyyy-mm-dd
+  status: CheckInStatus;
+  note?: string;
+  at: number;
+  askedAt?: number;      // امتى اتبعتله النداء
+}
+
+/** تاريخ النهارده بتوقيت مصر، بصيغة ثابتة نبني عليها الـ id */
+export function todayKey(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export const checkInId = (agentId: string, day = todayKey()) => `${agentId}_${day}`;
+
+export function subscribeCheckIns(day: string, cb: (map: Record<string, FieldCheckIn>) => void) {
+  return onSnapshot(
+    query(collection(db, 'field_checkins'), where('day', '==', day)),
+    (snap) => {
+      const m: Record<string, FieldCheckIn> = {};
+      snap.forEach((d) => { const v = { id: d.id, ...(d.data() as any) } as FieldCheckIn; m[v.agentId] = v; });
+      cb(m);
+    },
+    () => cb({}),
+  );
+}
+
+export async function getCheckIn(agentId: string, day = todayKey()): Promise<FieldCheckIn | null> {
+  try {
+    const snap = await getDoc(doc(db, 'field_checkins', checkInId(agentId, day)));
+    return snap.exists() ? ({ id: snap.id, ...(snap.data() as any) } as FieldCheckIn) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** المندوب بيأكد من اللينك من غير تسجيل دخول */
+export async function submitCheckIn(agent: { id: string; name: string }, status: CheckInStatus, note?: string): Promise<void> {
+  const day = todayKey();
+  logEvent('field_checkin', { actorId: agent.id, actorName: agent.name, meta: { status } }).catch(() => {});
+  await setDoc(doc(db, 'field_checkins', checkInId(agent.id, day)), cleanFirestoreData({
+    id: checkInId(agent.id, day), agentId: agent.id, agentName: agent.name,
+    day, status, note: note || '', at: Date.now(),
+  }), { merge: true });
+}
+
+/** بنسجّل إن النداء اتبعت، عشان نعرف مين اتبعتله ومين لأ */
+export async function markCheckInAsked(agent: { id: string; name: string }): Promise<void> {
+  const day = todayKey();
+  await setDoc(doc(db, 'field_checkins', checkInId(agent.id, day)), cleanFirestoreData({
+    id: checkInId(agent.id, day), agentId: agent.id, agentName: agent.name, day, askedAt: Date.now(),
+  }), { merge: true });
+}
+
+export async function getFieldAgent(id: string): Promise<FieldAgent | null> {
+  try {
+    const snap = await getDoc(doc(db, 'field_agents', id));
+    return snap.exists() ? ({ id: snap.id, ...(snap.data() as any) } as FieldAgent) : null;
+  } catch {
+    return null;
+  }
 }

@@ -177,6 +177,22 @@ service cloud.firestore {
       allow get: if true;                      // الـ id نفسه هو لينك الفيدباك
       allow list, create, update, delete: if isOps();
     }
+    // سجل الأحداث: الكتابة مفتوحة (الزائر بيسجّل مشاهداته)، القراءة للإدارة بس
+    match /events/{id} {
+      allow create: if true;
+      allow read: if isOps() || isStaff() || isBoss() || isMkt();
+      allow update, delete: if isAdmin();
+    }
+
+    // نداء الصباح: المندوب بيأكد من لينك من غير تسجيل دخول، فالكتابة مفتوحة
+    // بس على مستند اليوم بتاعه بالظبط، والقراءة للإدارة ومسؤولة الملاك بس
+    match /field_checkins/{id} {
+      allow read: if isOps() || isStaff() || isBoss();
+      allow create, update: if exists(/databases/$(database)/documents/field_agents/$(request.resource.data.agentId))
+                            && id == request.resource.data.agentId + '_' + request.resource.data.day;
+      allow delete: if isAdmin();
+    }
+
     match /field_feedback/{id} {
       allow read: if isBoss();
       allow read, update: if isOps();

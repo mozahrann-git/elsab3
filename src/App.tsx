@@ -74,7 +74,9 @@ import { ClientAuthModal } from './components/ClientAuthModal';
 import { ClientNotificationModal } from './components/ClientNotificationModal';
 import { FollowUpNotificationsModal } from './components/FollowUpNotificationsModal';
 import { FollowUpPopup } from './components/FollowUpPopup';
+import { FieldCheckInPage } from './components/portal/FieldCheckInPage';
 import { saveUiSession, loadUiSession } from './utils/uiSession';
+import { logEvent } from './services/analyticsService';
 import { BrokerPortalModal } from './components/BrokerPortalModal';
 import { PartnerPortalsModal } from './components/PartnerPortalsModal';
 import { Footer } from './components/Footer';
@@ -205,6 +207,8 @@ export default function App() {
   const [staffAccess, setStaffAccess] = useState<StaffAccess | null>(null);
   const [activePortal, setActivePortal] = useState<null | 'owner' | 'broker' | 'coordinator' | 'company' | 'marketing' | 'sales_feedback'>(null);
   const [feedbackTripId] = useState<string | null>(() => { try { return new URLSearchParams(window.location.search).get('fb'); } catch { return null; } });
+  // نداء الصباح: المندوب بيأكد إنه متاح من لينك واتساب من غير تسجيل دخول
+  const [checkInAgentId, setCheckInAgentId] = useState<string | null>(() => { try { return new URLSearchParams(window.location.search).get('checkin'); } catch { return null; } });
   // لينك العرض المخصوص واللينك المتتبّع
   const [offerId, setOfferId] = useState<string | null>(() => { try { return new URLSearchParams(window.location.search).get('offer'); } catch { return null; } });
   useEffect(() => {
@@ -837,6 +841,9 @@ export default function App() {
   };
 
   const handleRequestViewing = (property: Property, preferredTime: string = 'النهارده أو بكرة بعد 5 مساءً') => {
+    logEvent('viewing_request', {
+      propertyId: property.id, code: property.code, neighborhood: property.neighborhood, value: property.price,
+    });
     try {
       const assignedBrokerId = property.brokerId || 'broker_ahmed';
       const newReq: ViewingRequest = {
@@ -1217,17 +1224,47 @@ export default function App() {
        يسجّل نشاط، أو ينقله من خانة "جديد". */
     const touched = (updatedLead.activity?.length || 0) > 0 || updatedLead.status !== 'new';
     const lead: Lead = updatedLead.isFresh && touched ? { ...updatedLead, isFresh: false } : updatedLead;
+
+    /* بنقارن بالقديم عشان نسجّل التغيير الحقيقي بس:
+       أول تواصل، والانتقال بين المراحل، والإقفال أو الخسارة. */
+    const before = crmLeads.find((l) => l.id === lead.id);
+    const base = {
+      leadId: lead.id, actorId: lead.assignedAgentId, actorName: lead.assignedAgentName,
+      source: lead.campaignName || lead.source,
+    };
+    const beforeActivity = before?.activity?.length || 0;
+    const afterActivity = lead.activity?.length || 0;
+
+    if (afterActivity > beforeActivity) {
+      logEvent('lead_activity', base);
+      // أول نشاط مسجّل = أول تواصل. ده اللي بنقيس عليه سرعة الرد.
+      if (beforeActivity === 0) logEvent('lead_first_contact', base);
+    }
+    if (before && before.status !== lead.status) {
+      logEvent('lead_stage', { ...base, meta: { from: before.status, to: lead.status } });
+      if (lead.status === 'closed') logEvent('lead_won', { ...base, value: lead.dealValue });
+      if (lead.status === 'lost') logEvent('lead_lost', base);
+    }
+
     setCrmLeads((prev) => prev.map((l) => (l.id === lead.id ? lead : l)));
     saveLeadToDb(lead).catch(err => console.error('[Firebase] Error saving lead:', err));
   };
 
   const handleAddLead = (newLead: Lead) => {
+    logEvent('lead_created', {
+      leadId: newLead.id, actorId: newLead.assignedAgentId, actorName: newLead.assignedAgentName,
+      source: newLead.campaignName || newLead.source,
+    });
     setCrmLeads((prev) => [newLead, ...prev]);
     saveLeadToDb(newLead).catch(err => console.error('[Firebase] Error adding lead:', err));
   };
 
   /* توزيع ليدات الكامبين دفعة واحدة */
   const handleAddLeadsBulk = (newLeads: Lead[]) => {
+    newLeads.forEach((l) => logEvent('lead_created', {
+      leadId: l.id, actorId: l.assignedAgentId, actorName: l.assignedAgentName,
+      source: l.campaignName || 'كامبين',
+    }));
     setCrmLeads((prev) => [...newLeads, ...prev]);
     newLeads.forEach((l) => {
       saveLeadToDb(l).catch(err => console.error('[Firebase] Error adding campaign lead:', err));
@@ -1317,14 +1354,17 @@ export default function App() {
   }, [crmLeads, isSalesLoggedIn, isAdminLoggedIn, currentSalesAgentId]);
 ;
 
-  // Click tracking function (WhatsApp, Calls, Views, Favorites)
+  /* العدّادات كانت بتزيد في ذاكرة المتصفح بس، يعني بتتصفّر مع كل ريفريش
+     ومختلفة من جهاز للتاني. دلوقتي بتتحفظ على السيرفر فبتتجمع فعلاً. */
   const handleTrackClick = (propertyId: string, type: 'whatsapp' | 'call' | 'views' | 'favorites') => {
     setProperties((prev) =>
       prev.map((prop) => {
         if (prop.id !== propertyId) return prop;
         const clicks = { ...(prop.clicks || { whatsapp: 0, call: 0, views: 0, favorites: 0 }) };
         clicks[type] = (clicks[type] || 0) + 1;
-        return { ...prop, clicks };
+        const updated = { ...prop, clicks };
+        savePropertyToDb(updated).catch(() => { /* العدّاد مايعطّلش الشغل */ });
+        return updated;
       })
     );
   };
@@ -1457,6 +1497,7 @@ export default function App() {
 
   // Owner Submission Actions
   const handleAddSubmission = (submission: OwnerSubmission) => {
+    logEvent('owner_submission', { neighborhood: (submission as any).neighborhood, value: (submission as any).price });
     setOwnerSubmissions((prev) => [submission, ...prev]);
     saveOwnerSubmissionToDb(submission).catch(err => console.error('[Firebase] Error saving submission:', err));
   };
@@ -2361,6 +2402,13 @@ export default function App() {
       />
       <SalesFeedbackInbox isOpen={activePortal === 'sales_feedback'} onClose={() => setActivePortal(null)} agentId={currentSalesAgentId} isAdmin={isAdminLoggedIn} />
       {offerId && <OfferPublicPage offerId={offerId} onClose={() => { setOfferId(null); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }} />}
+      {checkInAgentId && (
+        <FieldCheckInPage
+          agentId={checkInAgentId}
+          onClose={() => { setCheckInAgentId(null); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }}
+        />
+      )}
+
       {showFieldFeedback && feedbackTripId && <FieldFeedbackPage tripId={feedbackTripId} onClose={() => { setShowFieldFeedback(false); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }} />}
 
       <ClientAuthModal

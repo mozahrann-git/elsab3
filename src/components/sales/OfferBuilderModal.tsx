@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, ArrowUp, ArrowDown, Trash2, Send, Copy, ImageDown } from 'lucide-react';
 import { downloadOfferCards } from '../../utils/offerCards';
+import { logEvent } from '../../services/analyticsService';
 import { Lead, Property } from '../../types';
 import { VoiceRecorder } from '../portal/VoiceRecorder';
 import { SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveOffer, OfferUnit, createTrackedLink, linkUrl } from '../../services/salesToolsService';
@@ -70,6 +71,10 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
       const id = await saveOffer({ leadId: lead.id, leadName: lead.name, agentId, agentName, agentPhone, intro: intro.trim(), voiceUrl: voice || undefined, question: question.trim(), units: picked, expiresAt });
       await createTrackedLink({ agentId, agentName, kind: 'offer', target: `/?offer=${id}`, title: `عرض ${lead.name}` }).catch(() => {});
       const link = `${window.location.origin}/?offer=${id}`;
+      logEvent('offer_sent', {
+        offerId: id, leadId: lead.id, actorId: agentId, actorName: agentName,
+        value: picked.length, source: (lead as any).campaignName || lead.source,
+      });
       const nextAt = Date.now() + 24 * 3600000;
       const updated: Lead = {
         ...lead,

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Offer, getOffer, logOfferOpen } from '../../services/salesToolsService';
 import { waLink } from '../../utils/helpers';
+import { logEvent } from '../../services/analyticsService';
 
 /* صفحة العرض اللي العميل بيشوفها: شقق العرض بس، بصوت السيلز واسمه */
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -8,7 +9,15 @@ const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 export const OfferPublicPage: React.FC<{ offerId: string; onClose: () => void }> = ({ offerId, onClose }) => {
   const [offer, setOffer] = useState<Offer | null | undefined>(undefined);
   useEffect(() => {
-    getOffer(offerId).then((o) => { setOffer(o); if (o) logOfferOpen(offerId); }).catch(() => setOffer(null));
+    getOffer(offerId).then((o) => {
+      setOffer(o);
+      if (o) {
+        logOfferOpen(offerId);
+        logEvent('offer_opened', {
+          offerId, leadId: o.leadId, actorId: o.agentId, actorName: o.agentName, value: o.units?.length,
+        }, { onceKey: `offer_open_${offerId}` });
+      }
+    }).catch(() => setOffer(null));
   }, [offerId]);
 
   const expired = offer && offer.expiresAt < Date.now();
@@ -47,7 +56,11 @@ export const OfferPublicPage: React.FC<{ offerId: string; onClose: () => void }>
           <main className="max-w-lg mx-auto p-4 space-y-4 pb-28">
             {offer.units.map((u, i) => (
               <article key={u.propertyId} className="bg-white border border-[#ECE8DF] rounded-2xl overflow-hidden"
-                onClick={() => logOfferOpen(offerId, u.code)}>
+                onClick={() => {
+                  logOfferOpen(offerId, u.code);
+                  // أنهي وحدة وقف عندها العميل — معلومة مهمة للسيلز في المكالمة الجاية
+                  logEvent('offer_unit_view', { offerId, code: u.code, propertyId: u.propertyId, leadId: offer.leadId });
+                }}>
                 {u.image ? <img src={u.image} alt="" className="w-full h-44 object-cover" />
                   : <div className="w-full h-44" style={{ background: 'repeating-linear-gradient(135deg,#E7E2D8 0 12px,#EFEBE3 12px 24px)' }} />}
                 <div className="p-4 space-y-2">
