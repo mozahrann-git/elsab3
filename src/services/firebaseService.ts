@@ -1115,3 +1115,13 @@ export async function changeMyPassword(currentPassword: string, newPassword: str
   // نحدّث النسخة اللي الأدمن بيشوفها
   await updateDoc(doc(db, 'staff_access', user.email.toLowerCase()), { password: newPassword.trim(), updatedAt: new Date().toISOString() }).catch(() => {});
 }
+
+/* ---------- مسح الحسابات والليدات ---------- */
+
+export async function deleteSalesAgentFromDb(agentId: string): Promise<void> {
+  await deleteDoc(doc(db, 'sales_agents', agentId));
+}
+
+export async function deleteLeadFromDb(leadId: string): Promise<void> {
+  await deleteDoc(doc(db, 'crm_leads', leadId));
+}

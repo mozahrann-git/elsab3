@@ -69,7 +69,8 @@ export const OfferPublicPage: React.FC<{ offerId: string; onClose: () => void }>
                     <span className="font-bold" style={{ fontFamily: "'Readex Pro', sans-serif" }}>{fmt(u.price)} ج.م</span>
                   </div>
                   {u.note && <p className="leading-7 text-[13.5px] bg-[#FBF8F1] border-r-4 border-[#A07A26] rounded-lg p-3">« {u.note} »</p>}
-                  <a href={`/?property=${u.code}`} className="inline-block text-sm font-bold text-[#A07A26]">شوف التفاصيل والصور ←</a>
+                  {/* بيرجع للعرض نفسه، مش للموقع — العميل يفضل جوه شغل السيلز */}
+                  <a href={`/?property=${u.code}&offer=${offerId}${offer.agentId ? `&agent=${offer.agentId}` : ''}`} className="inline-block text-sm font-bold text-[#A07A26]">شوف التفاصيل والصور ←</a>
                 </div>
               </article>
             ))}
@@ -78,7 +79,7 @@ export const OfferPublicPage: React.FC<{ offerId: string; onClose: () => void }>
               <p className="leading-8">{offer.question || 'قولّي رأيك وأنا أرتبلك المعاينة'}</p>
               <a href={wa} target="_blank" rel="noopener noreferrer" className="block w-full py-3.5 rounded-xl bg-[#1FA85D] font-bold">رد على {offer.agentName} واتساب</a>
             </div>
-            <button onClick={onClose} className="w-full text-sm text-[#6B665C] py-3">تصفّح كل شقق السبع</button>
+            {/* مفيش لينك للموقع هنا بقصد — العرض المخصوص شغل السيلز، والعميل يفضل فيه */}
           </main>
         </>
       )}

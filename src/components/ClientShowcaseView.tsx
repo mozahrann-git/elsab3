@@ -28,12 +28,15 @@ interface ClientShowcaseViewProps {
   property: Property;
   agent?: SalesAgent;
   onClose?: () => void;
+  /* لما العميل جاي من عرض مخصوص، الزرار بيرجّعه للعرض مش للموقع */
+  backLabel?: string;
 }
 
 export const ClientShowcaseView: React.FC<ClientShowcaseViewProps> = ({
   property,
   agent,
-  onClose
+  onClose,
+  backLabel
 }) => {
   const rawImages = property.images && property.images.length > 0 ? property.images.filter(img => img && img.trim().length > 0) : [];
   const hasVideo = Boolean(property.videoUrl && property.videoUrl.trim().length > 0);
@@ -136,7 +139,7 @@ export const ClientShowcaseView: React.FC<ClientShowcaseViewProps> = ({
               onClick={onClose}
               className="px-4 py-1.5 bg-[#9E782F] hover:bg-[#856525] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
             >
-              الرجوع للرئيسية
+              {backLabel || 'الرجوع للرئيسية'}
             </button>
           )}
         </div>

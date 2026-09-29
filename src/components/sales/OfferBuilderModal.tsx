@@ -8,6 +8,7 @@ import { VoiceRecorder } from '../portal/VoiceRecorder';
 import { SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveOffer, OfferUnit, createTrackedLink, linkUrl } from '../../services/salesToolsService';
 import { formatWhen } from '../common/WhenPicker';
 import { waLink } from '../../utils/helpers';
+import { matchProperties, briefLine, briefGaps } from '../../services/clientBrief';
 
 /*
   العرض المخصوص: الفلترة آلية من مكالمة الاكتشاف، والاختيار والترتيب والسطور بشرية.
@@ -22,11 +23,13 @@ interface Props {
   agentPhone?: string;
   onClose: () => void;
   onSent: (updated: Lead, link: string) => void;
+  /* لما السيلز ييجي من المطابقة وهو معلّم على شقق */
+  preselectedIds?: string[];
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
-export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, agentId, agentName, agentPhone, onClose, onSent }) => {
+export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, agentId, agentName, agentPhone, onClose, onSent, preselectedIds }) => {
   const [forms, setForms] = useState<SalesForms>(DEFAULT_FORMS);
   const [picked, setPicked] = useState<OfferUnit[]>([]);
   const [voice, setVoice] = useState('');
@@ -38,24 +41,22 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
   const [search, setSearch] = useState('');
   useEffect(() => subscribeSalesForms(setForms), []);
 
-  const d = (lead as any).discovery || {};
-  const suggested = useMemo(() => {
-    const districts: string[] = d.districts || (lead.preferredNeighborhood ? [lead.preferredNeighborhood] : []);
-    const min = lead.budgetMin || 0, max = lead.budgetMax || Infinity;
-    return properties
-      .filter((p) => p.category !== 'off_plan' && !(p as any).viewingsPaused)
-      .filter((p) => (!districts.length || districts.includes(p.neighborhood)))
-      .filter((p) => p.price >= min * 0.95 && p.price <= max * 1.05)
-      .filter((p) => (!lead.preferredBedrooms || (p.bedrooms || 0) >= lead.preferredBedrooms))
-      .sort((a, b) => Math.abs(a.price - (max || a.price)) - Math.abs(b.price - (max || b.price)));
-  }, [properties, lead, d]);
+  // نفس محرك المطابقة الذكية بالظبط — فالشاشتين بيدّوا نفس النتيجة
+  const suggested = useMemo(
+    () => matchProperties(lead, properties.filter((p) => p.category !== 'off_plan'), { tolerance: 0.05 }),
+    [properties, lead],
+  );
 
   useEffect(() => {
     if (!isOpen) return;
-    setPicked(suggested.slice(0, forms.offerUnits).map((p) => ({ propertyId: p.id, code: p.code, title: `${p.neighborhood} · ${p.area}م²`, price: p.price, image: p.images?.[0], note: '' })));
+    // لو السيلز جه من المطابقة وهو معلّم على شقق، بنبدأ باللي هو اختاره
+    const start = preselectedIds && preselectedIds.length
+      ? preselectedIds.map((id) => properties.find((p) => p.id === id)).filter(Boolean) as typeof suggested
+      : suggested.slice(0, forms.offerUnits);
+    setPicked(start.map((p) => ({ propertyId: p.id, code: p.code, title: `${p.neighborhood} · ${p.area}م²`, price: p.price, image: p.images?.[0], note: '' })));
     setDone(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, forms.offerUnits]);
+  }, [isOpen, forms.offerUnits, preselectedIds]);
 
   if (!isOpen) return null;
 
@@ -100,10 +101,17 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
           <div>
             <p className="font-bold">عرض مخصوص</p>
             <p className="text-xs text-[#CFCBC2]">لـ {lead.name} · صالح {forms.offerHours} ساعة</p>
+            {/* نفس السطر اللي بيظهر فوق المطابقة — عشان السيلز يشوف إنهم نفس الطلب */}
+            <p className="text-[11px] text-[#D9B864] mt-0.5">{briefLine(lead)}</p>
           </div>
           <button onClick={onClose} aria-label="إغلاق" className="p-2 rounded-xl hover:bg-white/10"><X size={18} /></button>
         </header>
 
+        {!done && briefGaps(lead).length > 0 && (
+          <p className="mx-4 mt-3 text-[11px] bg-[#FFF8E6] border border-[#EBD9A6] text-[#7A5E12] rounded-xl px-3 py-2 leading-relaxed">
+            طلبه لسه ناقص: <b>{briefGaps(lead).map((g) => g.label).join('، ')}</b> — الاقتراحات دي تقريبية لحد ما تعمل مكالمة اكتشاف.
+          </p>
+        )}
         {done ? (
           <div className="p-6 space-y-4 overflow-y-auto">
             <div className="rounded-2xl bg-[#EEF5F0] border border-[#BFE0CC] p-4 text-[#1E7A45] font-bold">العرض جاهز، واتسجّل في ملف العميل ومتابعة بكرة.</div>

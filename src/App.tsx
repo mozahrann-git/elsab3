@@ -77,6 +77,8 @@ import { FollowUpPopup } from './components/FollowUpPopup';
 import { FieldCheckInPage } from './components/portal/FieldCheckInPage';
 import { saveUiSession, loadUiSession } from './utils/uiSession';
 import { logEvent } from './services/analyticsService';
+import { alertCount } from './utils/followUpAlerts';
+import { seedOnce } from './services/seedGuard';
 import { BrokerPortalModal } from './components/BrokerPortalModal';
 import { PartnerPortalsModal } from './components/PartnerPortalsModal';
 import { Footer } from './components/Footer';
@@ -116,6 +118,8 @@ import {
   testFirestoreConnection,
   subscribeToProperties,
   savePropertyToDb,
+  deleteSalesAgentFromDb,
+  deleteLeadFromDb,
   deletePropertyFromDb,
   clearAllPropertiesFromDb,
   seedPropertiesToDb,
@@ -309,7 +313,9 @@ export default function App() {
         setSalesAgents(liveAgents);
         safeLocalStorageSet('lion_sales_agents', JSON.stringify(liveAgents));
       } else {
-        seedSalesAgentsToDb(INITIAL_SALES_AGENTS);
+        // بيزرع مرة واحدة بس. لو حد مسحهم بقصد، مبيرجعوش.
+        setSalesAgents([]);
+        seedOnce('agents', () => seedSalesAgentsToDb(INITIAL_SALES_AGENTS));
       }
     }, (_err, isQuota) => {
       if (isQuota) setIsQuotaExceeded(true);
@@ -321,7 +327,8 @@ export default function App() {
         setCrmLeads(liveLeads);
         safeLocalStorageSet('lion_crm_leads', JSON.stringify(liveLeads));
       } else {
-        seedCrmLeadsToDb(INITIAL_LEADS);
+        setCrmLeads([]);
+        seedOnce('leads', () => seedCrmLeadsToDb(INITIAL_LEADS));
       }
     }, (_err, isQuota) => {
       if (isQuota) setIsQuotaExceeded(true);
@@ -363,7 +370,7 @@ export default function App() {
         setBrokersList(liveBrokers);
         safeLocalStorageSet('lion_brokers_list', JSON.stringify(liveBrokers));
       } else {
-        seedBrokersToDb(DEFAULT_BROKERS).catch(err => console.warn('[Firebase] Initial brokers seed:', err));
+        seedOnce('brokers', () => seedBrokersToDb(DEFAULT_BROKERS)).catch(err => console.warn('[Firebase] Initial brokers seed:', err));
       }
     }, (_err, isQuota) => {
       if (isQuota) setIsQuotaExceeded(true);
@@ -588,6 +595,8 @@ export default function App() {
   
   // CRM & Sales Gamification States
   const [isCrmOpen, setIsCrmOpen] = useState(false);
+  // ليد جاي من تنبيه المتابعة: بيتفتح ملفه على طول جوّه الـCRM
+  const [pendingLeadId, setPendingLeadId] = useState<string | null>(null);
   const [isSalesLoginOpen, setIsSalesLoginOpen] = useState(false);
   const [salesToolkitProperty, setSalesToolkitProperty] = useState<Property | null>(null);
 
@@ -1023,18 +1032,14 @@ export default function App() {
   };
 
   // Sales CRM Alerts and Follow-ups Count for Today
-  /* عدّاد الجرس: بيتحسب من الميعاد الحقيقي (nextActionAt) مش من نص مكتوب،
-     وبيعد عملاء الشخص الداخل هو بس — الأدمن بس اللي بيشوف الكل. */
-  const salesAlertsCount = useMemo(() => {
-    const now = Date.now();
-    const seeAll = isAdminLoggedIn || staffAccess?.role === 'admin';
-    const agentId = currentSalesAgentId;
-    return crmLeads.filter((l) => {
-      if (!seeAll && (!agentId || l.assignedAgentId !== agentId)) return false;
-      if (l.followUpStatus === 'completed' || l.status === 'closed' || l.status === 'lost') return false;
-      return typeof l.nextActionAt === 'number' && l.nextActionAt <= now;
-    }).length;
-  }, [crmLeads, isAdminLoggedIn, staffAccess, currentSalesAgentId]);
+  /* عدّاد الجرس: نفس الدالة اللي الشاشة جوه بتستخدمها بالظبط،
+     فالرقم اللي على الجرس هو نفسه اللي في "الكل" جوه. */
+  const [alertTick, setAlertTick] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setAlertTick(Date.now()), 30000); return () => clearInterval(t); }, []);
+  const salesAlertsCount = useMemo(
+    () => alertCount(crmLeads, currentSalesAgentId, isAdminLoggedIn || staffAccess?.role === 'admin', alertTick),
+    [crmLeads, currentSalesAgentId, isAdminLoggedIn, staffAccess, alertTick],
+  );
 
   // Current active sales agent session
   const currentAgent = useMemo(() => {
@@ -1794,8 +1799,14 @@ export default function App() {
       <ClientShowcaseView
         property={showcaseProperty}
         agent={showcaseAgent}
+        backLabel={offerId ? 'الرجوع للعرض' : undefined}
         onClose={() => {
-          window.history.pushState({}, '', window.location.pathname);
+          // العميل اللي جاي من عرض مخصوص بيرجع للعرض، مش للموقع
+          if (offerId) {
+            window.history.pushState({}, '', `${window.location.pathname}?offer=${encodeURIComponent(offerId)}`);
+          } else {
+            window.history.pushState({}, '', window.location.pathname);
+          }
           setShowcasePropertyCode(null);
         }}
       />
@@ -2226,6 +2237,22 @@ export default function App() {
 
       {/* 7. Full Admin Dashboard (Add/Edit/Delete Properties with 5 photos, Review Owner Submissions, Track Clicks) */}
       <AdminDashboardModal
+        onCleanupDemo={{
+          deleteAgents: async (ids) => {
+            for (const id of ids) await deleteSalesAgentFromDb(id);
+            setSalesAgents((prev) => prev.filter((a) => !ids.includes(a.id)));
+          },
+          deleteLeads: async (ids) => {
+            for (const id of ids) await deleteLeadFromDb(id);
+            setCrmLeads((prev) => prev.filter((l) => !ids.includes(l.id)));
+          },
+          resetClicks: async () => {
+            const zero = { whatsapp: 0, call: 0, views: 0, favorites: 0 };
+            const cleared = properties.map((p) => ({ ...p, clicks: { ...zero } }));
+            setProperties(cleared);
+            for (const p of cleared) await savePropertyToDb(p);
+          },
+        }}
         crmLeads={crmLeads}
         isOpen={isAdminDashboardOpen}
         onClose={() => setIsAdminDashboardOpen(false)}
@@ -2305,6 +2332,8 @@ export default function App() {
         onUpdateLead={handleUpdateLead}
         onAddLead={handleAddLead}
         onAddLeadsBulk={handleAddLeadsBulk}
+        openLeadId={pendingLeadId}
+        onOpenLeadHandled={() => setPendingLeadId(null)}
         onUpdateAgent={handleUpdateAgent}
         emergencyAlerts={emergencyAlerts}
         onSendEmergencyAlert={handleSendEmergencyAlert}
@@ -2338,6 +2367,8 @@ export default function App() {
           onRecordAction={handleRecordAgentAction}
           onAddLead={handleAddLead}
           onAddLeadsBulk={handleAddLeadsBulk}
+          openLeadId={pendingLeadId}
+          onOpenLeadHandled={() => setPendingLeadId(null)}
           customLogoUrl={customLogoUrl}
           bannerPhotoUrl={bannerPhotoUrl}
           onOpenAdmin={() => {
@@ -2460,7 +2491,11 @@ export default function App() {
           leads={crmLeads}
           currentAgentId={currentAgent?.id}
           seeAll={staffAccess.role === 'admin'}
-          onOpenLead={() => { setIsSalesNotificationsOpen(false); setIsCrmOpen(true); }}
+          onOpenLead={(lead) => {
+            setIsSalesNotificationsOpen(false);
+            setPendingLeadId(lead.id);
+            setIsCrmOpen(true);
+          }}
         />
       )}
 
@@ -2474,6 +2509,7 @@ export default function App() {
         canSeeTeam={staffAccess?.role === 'admin' || staffAccess?.role === 'company_owner'}
         onSelectLead={(lead) => {
           setIsSalesNotificationsOpen(false);
+          setPendingLeadId(lead.id);
           setIsCrmOpen(true);
         }}
       />

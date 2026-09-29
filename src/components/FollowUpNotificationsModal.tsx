@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { generateCallLink, generateWhatsAppLink, formatPrice, waLink } from '../utils/helpers';
 import { formatWhen } from './common/WhenPicker';
+import { buildAlerts, scopeAlerts } from '../utils/followUpAlerts';
 
 interface FollowUpNotificationsModalProps {
   isOpen: boolean;
@@ -57,44 +58,18 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
   // التنبيهات من الوقت الحقيقي بس: ميعاد الأكشن (nextActionAt) قصاد الساعة دلوقتي
   const [nowTick, setNowTick] = useState(Date.now());
   React.useEffect(() => { const t = setInterval(() => setNowTick(Date.now()), 30000); return () => clearInterval(t); }, []);
-  const alerts: FollowUpAlert[] = useMemo(() => {
-    const now = nowTick;
-    const endOfDay = new Date(); endOfDay.setHours(23, 59, 59, 999);
-    const fmt = (at: number) => {
-      const d = new Date(at), t = d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
-      const m = Math.round((at - now) / 60000), a = Math.abs(m);
-      const rel = a < 60 ? `${a} د` : a < 1440 ? `${Math.round(a / 60)} س` : `${Math.round(a / 1440)} يوم`;
-      return { t: at <= endOfDay.getTime() ? `النهارده ${t}` : d.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'short' }) + ` ${t}`, rel: m < 0 ? `متأخر ${rel}` : `بعد ${rel}` };
-    };
-    const list: FollowUpAlert[] = [];
-    leads.forEach((lead) => {
-      const at = lead.nextActionAt || 0;
-      if (at && lead.followUpStatus !== 'completed') {
-        const f = fmt(at);
-        list.push({
-          id: `followup_${lead.id}`, leadId: lead.id, leadName: lead.name, leadPhone: lead.phone, leadStatus: lead.status,
-          assignedAgentId: lead.assignedAgentId, assignedAgentName: lead.assignedAgentName, type: 'follow_up',
-          title: `متابعة ${lead.name}`, dueTime: f.t, note: lead.followUpNote || '',
-          urgency: at <= now ? 'urgent' : at <= endOfDay.getTime() ? 'today' : 'upcoming',
-          relativeTimeText: f.rel, isOverdue: at <= now,
-        });
-      } else if (lead.status === 'new' && !at) {
-        list.push({
-          id: `newlead_${lead.id}`, leadId: lead.id, leadName: lead.name, leadPhone: lead.phone, leadStatus: lead.status,
-          assignedAgentId: lead.assignedAgentId, assignedAgentName: lead.assignedAgentName, type: 'urgent_lead',
-          title: `عميل جديد محتاج أول تواصل`, dueTime: 'دلوقتي', note: '', urgency: 'urgent', relativeTimeText: 'دلوقتي', isOverdue: true,
-        });
-      }
-    });
-    return list.sort((x, y) => (leads.find((l) => l.id === x.leadId)?.nextActionAt || 0) - (leads.find((l) => l.id === y.leadId)?.nextActionAt || 0));
-  }, [leads, nowTick]);
+  /* نفس الدالة اللي الجرس بيستخدمها — عشان الرقمين ما يختلفوش تاني */
+  const alerts = useMemo(() => buildAlerts(leads, nowTick), [leads, nowTick]);
 
   // Filter alerts by agent scope, urgency, and search
-  const filteredAlerts = useMemo(() => {
-    return alerts.filter((alert) => {
-      // Scope filter
-      const matchesScope = filterScope === 'all_team' || alert.assignedAgentId === currentAgent.id;
+  /* تنبيهات الشخص الداخل — الأساس اللي كل العدادات بتتبني منه */
+  const scoped = useMemo(
+    () => scopeAlerts(alerts, currentAgent?.id, filterScope === 'all_team'),
+    [alerts, currentAgent, filterScope],
+  );
 
+  const filteredAlerts = useMemo(() => {
+    return scoped.filter((alert) => {
       // Urgency filter
       const matchesUrgency = 
         filterType === 'all' || 
@@ -109,9 +84,9 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
         alert.leadPhone.includes(searchQuery) ||
         (alert.note && alert.note.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      return matchesScope && matchesUrgency && matchesSearch;
+      return matchesUrgency && matchesSearch;
     });
-  }, [alerts, filterScope, currentAgent.id, filterType, searchQuery]);
+  }, [scoped, filterType, searchQuery]);
 
   if (!isOpen) return null;
 
@@ -183,8 +158,8 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
     window.open(waLink(`2${cleanPhone}`, message), '_blank');
   };
 
-  const urgentCount = alerts.filter(a => a.urgency === 'urgent' && (filterScope === 'all_team' || a.assignedAgentId === currentAgent.id)).length;
-  const todayCount = alerts.filter(a => a.urgency === 'today' && (filterScope === 'all_team' || a.assignedAgentId === currentAgent.id)).length;
+  const urgentCount = scoped.filter((a) => a.urgency === 'urgent').length;
+  const todayCount = scoped.filter((a) => a.urgency === 'today').length;
 
   return (
     <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-hidden text-right font-ibm animate-in fade-in duration-150" dir="rtl">
@@ -209,7 +184,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                     مركز تنبيهات المتابعات والمعاينات
                   </h2>
                   <span className="text-xs font-bold px-2.5 py-0.5 rounded-xl bg-[#FAF4E5] text-[#A07A26] border border-[#E9DFCA]">
-                    {filteredAlerts.length} تنبيه
+                    {scoped.length} تنبيه
                   </span>
                   {urgentCount > 0 && (
                     <span className="text-xs font-bold px-2.5 py-0.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
@@ -244,7 +219,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                     : 'bg-[#F6F4EF] text-[#6B665C] hover:text-[#141414]'
                 }`}
               >
-                الكل ({alerts.filter(a => filterScope === 'all_team' || a.assignedAgentId === currentAgent.id).length})
+                الكل ({scoped.length})
               </button>
 
               <button

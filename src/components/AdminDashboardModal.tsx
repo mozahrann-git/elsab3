@@ -84,6 +84,7 @@ import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import { ProjectsManager } from './admin/ProjectsManager';
 import { DeepAnalytics } from './admin/DeepAnalytics';
+import { DemoDataCleanup } from './admin/DemoDataCleanup';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -91,6 +92,12 @@ interface AdminDashboardModalProps {
   properties: Property[];
   /* للتحليلات العميقة */
   crmLeads?: Lead[];
+  /* تنضيف البيانات التجريبية */
+  onCleanupDemo?: {
+    deleteAgents: (ids: string[]) => Promise<void>;
+    deleteLeads: (ids: string[]) => Promise<void>;
+    resetClicks: () => Promise<void>;
+  };
   onAddProperty: (newProp: Property) => void;
   onUpdateProperty: (updatedProp: Property) => void;
   onDeleteProperty: (id: string) => void;
@@ -147,6 +154,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onImportProperties,
   ownerSubmissions,
   crmLeads,
+  onCleanupDemo,
   onApproveSubmission,
   onRejectSubmission,
   onDeleteSubmission,
@@ -3062,7 +3070,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {activeTab === 'settings' && (
             <div className="space-y-6">
-              
+
+              {/* تنضيف البيانات التجريبية */}
+              {onCleanupDemo && (
+                <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+                  <DemoDataCleanup
+                    agents={salesAgentsList}
+                    leads={crmLeads || []}
+                    properties={properties}
+                    onDeleteAgents={onCleanupDemo.deleteAgents}
+                    onDeleteLeads={onCleanupDemo.deleteLeads}
+                    onResetClicks={onCleanupDemo.resetClicks}
+                    showToast={showToast}
+                  />
+                </div>
+              )}
+
               {/* Admin Credentials */}
               <div className="bg-white rounded-3xl p-6 sm:p-7 space-y-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
                 <div className="flex items-center gap-2.5">

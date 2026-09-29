@@ -48,6 +48,7 @@ import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
+import { matchProperties, briefLine, briefGaps } from '../services/clientBrief';
 import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
 import { OfferBuilderModal } from './sales/OfferBuilderModal';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
@@ -66,6 +67,9 @@ interface SalesCrmModalProps {
   onAddLead: (newLead: Lead) => void;
   /* توزيع ليدات الكامبين دفعة واحدة — الأدمن بس */
   onAddLeadsBulk?: (leads: Lead[]) => void;
+  /* ليد معيّن يتفتح ملفه على طول (جاي من تنبيه المتابعة) */
+  openLeadId?: string | null;
+  onOpenLeadHandled?: () => void;
   onUpdateAgent: (updatedAgent: SalesAgent) => void;
   emergencyAlerts: BroadcastEmergencyAlert[];
   onSendEmergencyAlert: (alert: Omit<BroadcastEmergencyAlert, 'id' | 'createdAt'>) => void;
@@ -108,6 +112,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   onUpdateLead,
   onAddLead,
   onAddLeadsBulk,
+  openLeadId,
+  onOpenLeadHandled,
   onUpdateAgent,
   emergencyAlerts,
   onSendEmergencyAlert,
@@ -135,6 +141,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [isCampaignOpen, setIsCampaignOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [selectedLeadForDetails, setSelectedLeadForDetails] = useState<Lead | null>(null);
+
+  /* جاي من تنبيه المتابعة: نفتح ملف الليد نفسه مش الـCRM عموماً */
+  useEffect(() => {
+    if (!isOpen || !openLeadId) return;
+    const found = leads.find((l) => l.id === openLeadId);
+    if (found) { setSelectedLeadForDetails(found); onOpenLeadHandled?.(); }
+  }, [isOpen, openLeadId, leads]);
   const [leadToChangeStatus, setLeadToChangeStatus] = useState<Lead | null>(null);
   const [spinModalOpen, setSpinModalOpen] = useState(false);
   const [celebrationDealData, setCelebrationDealData] = useState<{ lead: Lead; value: number; commission: number } | null>(null);
@@ -235,28 +248,19 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   // Matched Properties List for the selected lead
   const [matchTolerance, setMatchTolerance] = useState<number>(0);   // 0 = بالظبط، 0.05، 0.1
   const [matchStrictHood, setMatchStrictHood] = useState<boolean>(true);
+  // نفس المحرك اللي بيبني العرض المخصوص — فالشاشتين مستحيل يختلفوا
   const matchedProperties = useMemo(() => {
     if (!selectedMatchingLead) return [];
-    const L = selectedMatchingLead;
-    const tol = matchTolerance;
-    const minB = L.budgetMin ? L.budgetMin * (1 - tol) : 0;
-    const maxB = L.budgetMax ? L.budgetMax * (1 + tol) : Infinity;
-    const list = properties.filter((p) => {
-      if ((p as any).viewingsPaused) return false;
-      if (matchStrictHood && L.preferredNeighborhood && p.neighborhood !== L.preferredNeighborhood) return false;
-      if (p.price < minB || p.price > maxB) return false;
-      if (L.preferredBedrooms && p.bedrooms < L.preferredBedrooms) return false;
-      if (L.preferredFinishing && L.preferredFinishing !== 'all' && p.finishing && p.finishing !== L.preferredFinishing) return false;
-      return true;
-    });
-    // الأقرب للميزانية والطلب الأول
-    const target = L.budgetMax ? ((L.budgetMin || L.budgetMax) + L.budgetMax) / 2 : 0;
-    return list.sort((a, b) => {
-      const sa = (a.neighborhood === L.preferredNeighborhood ? 0 : 1) * 1e9 + Math.abs(a.price - target) + Math.abs((a.bedrooms || 0) - (L.preferredBedrooms || 0)) * 1e5;
-      const sb = (b.neighborhood === L.preferredNeighborhood ? 0 : 1) * 1e9 + Math.abs(b.price - target) + Math.abs((b.bedrooms || 0) - (L.preferredBedrooms || 0)) * 1e5;
-      return sa - sb;
+    return matchProperties(selectedMatchingLead, properties, {
+      tolerance: matchTolerance,
+      strictDistrict: matchStrictHood,
     });
   }, [selectedMatchingLead, properties, matchTolerance, matchStrictHood]);
+
+  // الشقق اللي السيلز معلّم عليها عشان يبعتها عرض مخصوص
+  const [offerPicks, setOfferPicks] = useState<string[]>([]);
+  useEffect(() => { setOfferPicks([]); }, [matchingLeadId]);
+  const togglePick = (id: string) => setOfferPicks((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
 
   const scrollToProperty = (code: string) => {
     setHighlightedPropCode(code);
@@ -379,6 +383,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     onAddLead(newLead);
     clearDraft('new_lead');
     setIsAddLeadOpen(false);
+    // عميل الكامبين بييجي بالجملة فبيتضاف بسرعة. العميل اللي السيلز كلّمه بنفسه،
+    // مكالمة الاكتشاف بتفتح على طول عشان الطلب يبقى كامل من أول لحظة.
+    if (newLead.source !== 'campaign') setTimeout(() => setDiscoveryLead(newLead), 220);
     setNewLeadForm({
       name: '',
       phone: '',
@@ -1183,10 +1190,25 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         </a>
 
                         <button
-                          onClick={() => ((lead as any).discovery ? setOfferLead(lead) : setDiscoveryLead(lead))}
+                          onClick={() => (briefGaps(lead).length === 0 ? setOfferLead(lead) : setDiscoveryLead(lead))}
                           className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl"
                         >
-                          {(lead as any).discovery ? 'عرض مخصوص' : 'مكالمة اكتشاف'}
+                          {briefGaps(lead).length === 0 ? 'عرض مخصوص' : 'كمّل طلبه'}
+                        </button>
+                        {/* الطلب الناقص بيفضل باين لحد ما يتكمّل — مش بيضيع في الزحمة */}
+                        {briefGaps(lead).length > 0 && (
+                          <button
+                            onClick={() => setDiscoveryLead(lead)}
+                            className="px-2.5 py-1.5 bg-[#FFF8E6] text-[#7A5E12] text-[11px] font-bold rounded-xl border border-[#EBD9A6]"
+                          >
+                            ناقص {briefGaps(lead).map((g) => g.label).join('، ')}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { setMatchingLeadId(lead.id); setActiveTab('matching'); }}
+                          className="px-3 py-1.5 bg-[#E6F7ED] text-[#0E7A5A] text-xs font-bold rounded-xl border border-[#B3E8C8]"
+                        >
+                          شقق مناسبة له
                         </button>
                         <button
                           onClick={() => setSelectedLeadForDetails(lead)}
@@ -1235,8 +1257,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     </span>
                   </h3>
                   <p className="text-xs text-[#6B665C]">
-                    الطلب: <span className="font-bold text-[#141414]">{selectedMatchingLead?.preferredNeighborhood || 'الحي الثاني'}</span> · <span className="font-bold text-[#141414]">{selectedMatchingLead?.preferredBedrooms || 3} غرف</span> · ميزانية: <span className="font-bold text-[#0E7A5A]">{selectedMatchingLead?.budgetMax ? formatPrice(selectedMatchingLead.budgetMax) : '3,600,000 ج.م'}</span>
+                    الطلب: <span className="font-bold text-[#141414]">{selectedMatchingLead ? briefLine(selectedMatchingLead) : '—'}</span>
                   </p>
+                  {selectedMatchingLead && briefGaps(selectedMatchingLead).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDiscoveryLead(selectedMatchingLead)}
+                      className="text-[11px] bg-[#FFF8E6] border border-[#EBD9A6] text-[#7A5E12] rounded-xl px-2.5 py-1.5 font-bold cursor-pointer text-right leading-relaxed"
+                    >
+                      طلبه ناقص: {briefGaps(selectedMatchingLead).map((g) => g.label).join('، ')} — افتح مكالمة الاكتشاف
+                    </button>
+                  )}
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {[[0, 'الميزانية بالظبط'], [0.05, '±5%'], [0.1, '±10%']].map(([v, t]) => (
                       <button key={String(v)} type="button" onClick={() => setMatchTolerance(v as number)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${matchTolerance === v ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>{t}</button>
@@ -1302,6 +1333,30 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
             </div>
 
+            {/* من المطابقة للعرض المخصوص مباشرة — نفس الشقق، مفيش اختيار من الأول */}
+            {selectedMatchingLead && matchedProperties.length > 0 && (
+              <div className="bg-[#141414] text-white rounded-2xl p-3.5 flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <p className="font-bold text-sm">ابعتله عرض مخصوص</p>
+                  <p className="text-[11px] text-[#CFCBC2]">
+                    {offerPicks.length ? `معلّم على ${offerPicks.length} شقة` : 'علّم على اللي عاجبك، أو ابعت أحسن الاقتراحات على طول'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {offerPicks.length > 0 && (
+                    <button type="button" onClick={() => setOfferPicks([])} className="text-[11px] font-bold text-[#CFCBC2] cursor-pointer">امسح</button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setOfferLead(selectedMatchingLead)}
+                    className="px-4 py-2.5 rounded-xl bg-[#D9B864] text-[#141414] font-bold text-xs cursor-pointer"
+                  >
+                    {offerPicks.length ? `ابني العرض بـ ${offerPicks.length}` : 'ابني العرض'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Matched Properties Cards List (Exact layout from Screenshot 1) */}
             <div className="space-y-3 sm:space-y-3.5 pt-1">
               {matchedProperties.map((prop) => (
@@ -1320,6 +1375,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     <div className="space-y-1.5 flex-1 min-w-0">
                       {/* Tags row */}
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        <input
+                          type="checkbox"
+                          aria-label={`علّم على ${prop.code} للعرض المخصوص`}
+                          checked={offerPicks.includes(prop.id)}
+                          onChange={() => togglePick(prop.id)}
+                          className="accent-[#0E7A5A] w-4 h-4 cursor-pointer shrink-0"
+                        />
                         <span className="font-mono font-bold text-xs text-[#0E7A5A] bg-[#E6F7ED] px-2.5 py-0.5 rounded-lg border border-[#B3E8C8]">
                           #{prop.code}
                         </span>
@@ -1861,7 +1923,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           onBuildOffer={(u) => { setDiscoveryLead(null); setOfferLead(u); }} />
       )}
       {offerLead && (
-        <OfferBuilderModal isOpen={!!offerLead} lead={offerLead} properties={properties}
+        <OfferBuilderModal isOpen={!!offerLead} lead={offerLead} properties={properties} preselectedIds={offerPicks}
           agentId={currentAgent?.id || ''} agentName={currentAgent?.name || ''} agentPhone={currentAgent?.phone}
           onClose={() => setOfferLead(null)}
           onSent={(u) => onUpdateLead(u)} />
