@@ -2226,6 +2226,7 @@ export default function App() {
 
       {/* 7. Full Admin Dashboard (Add/Edit/Delete Properties with 5 photos, Review Owner Submissions, Track Clicks) */}
       <AdminDashboardModal
+        crmLeads={crmLeads}
         isOpen={isAdminDashboardOpen}
         onClose={() => setIsAdminDashboardOpen(false)}
         properties={properties}

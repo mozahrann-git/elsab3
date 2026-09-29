@@ -9,8 +9,7 @@ import {
   FooterConfig,
   NeighborhoodPriceMapData,
   ClosedDeal,
-  BrokerProfile
-} from '../types';
+  BrokerProfile, Lead } from '../types';
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { INITIAL_SALES_AGENTS, INITIAL_BADGES, INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { INITIAL_PRICE_MAP_DATA, INITIAL_CLOSED_DEALS } from '../data/marketPriceData';
@@ -84,11 +83,14 @@ import { downloadExcelTemplate, exportPropertiesToExcel } from '../utils/excelHe
 import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import { ProjectsManager } from './admin/ProjectsManager';
+import { DeepAnalytics } from './admin/DeepAnalytics';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   properties: Property[];
+  /* للتحليلات العميقة */
+  crmLeads?: Lead[];
   onAddProperty: (newProp: Property) => void;
   onUpdateProperty: (updatedProp: Property) => void;
   onDeleteProperty: (id: string) => void;
@@ -144,6 +146,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onDeleteProperty,
   onImportProperties,
   ownerSubmissions,
+  crmLeads,
   onApproveSubmission,
   onRejectSubmission,
   onDeleteSubmission,
@@ -2725,6 +2728,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {activeTab === 'analytics' && (
             <div className="space-y-6">
+              {/* التحليلات العميقة: مبنية على سجل الأحداث الحقيقي */}
+              <DeepAnalytics leads={crmLeads || []} properties={properties} />
+              <hr className="border-[#ECE8DF]" />
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-stone-900">

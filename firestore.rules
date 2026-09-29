@@ -167,6 +167,8 @@ service cloud.firestore {
 
     // ---------- مندوبين المعاينات ----------
     match /field_agents/{id} {
+      // مستند واحد بالـ id: لازمة لصفحة نداء الصباح اللي بتفتح من غير تسجيل دخول
+      allow get: if true;
       allow read: if isBoss();
       allow read: if isOps() || isStaff();
       allow write: if isAdmin();
