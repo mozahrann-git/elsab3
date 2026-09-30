@@ -30,6 +30,9 @@ export const DEFAULT_FORMS: SalesForms = {
     { id: 'downCash', label: 'المقدم اللي معاه دلوقتي (ج.م)', type: 'number', required: false },
     { id: 'monthly', label: 'القسط الشهري اللي يقدر عليه (ج.م)', type: 'number', required: false },
     { id: 'finishing', label: 'التشطيب', type: 'chips', options: ['متشطبة', 'نص تشطيب', 'الاتنين'], required: false },
+    /* سؤال بيوفّر معاينات فاشلة: في ناس بترفض المخالف تماماً عشان التسجيل والتمويل،
+       وناس عادي عندها. لازم نعرف قبل ما نوريه شقق. */
+    { id: 'violationOk', label: 'يقبل دور مخالف أو متكرر؟', type: 'chips', options: ['يقبل', 'مايقبلش', 'حسب السعر'], required: false },
     { id: 'urgency', label: 'محتاجها إمتى', type: 'chips', options: ['دلوقتي', 'خلال شهر', 'بيدوّر بس'], required: true },
   ],
   adFields: [

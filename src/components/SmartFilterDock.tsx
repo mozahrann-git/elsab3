@@ -4,6 +4,7 @@ import { SlidersHorizontal, X, Search } from 'lucide-react';
 import { FilterState, Property } from '../types';
 import { BudgetRange } from './common/WhenPicker';
 import { Project, ProjectFilter, EMPTY_PROJECT_FILTER, matchProject, countActiveProjectFilters } from '../services/projectService';
+import { toggleValue, passes, passesBedrooms, summarize } from '../utils/multiFilter';
 
 /*
   فلتر عائم: بيظهر أول ما الزائر يوصل للشقق وهو بيسكرول.
@@ -29,11 +30,9 @@ const match = (p: Property, d: FilterState) => {
   if (p.category === 'off_plan') return false;
   const q = d.search.trim().toLowerCase();
   if (q && !(`${p.code} ${p.title} ${p.neighborhood}`.toLowerCase().includes(q))) return false;
-  if (d.neighborhood !== 'all' && p.neighborhood !== d.neighborhood) return false;
-  if (d.finishing !== 'all' && p.finishing !== d.finishing) return false;
-  if (d.bedrooms === '2' && p.bedrooms !== 2) return false;
-  if (d.bedrooms === '3' && p.bedrooms !== 3) return false;
-  if (d.bedrooms === '4+' && (p.bedrooms || 0) < 4) return false;
+  if (!passes(d.neighborhoods, d.neighborhood, p.neighborhood)) return false;
+  if (!passes(d.finishings, d.finishing, p.finishing)) return false;
+  if (!passesBedrooms(d.bedroomsList, d.bedrooms, p.bedrooms)) return false;
   if (d.minPrice > 0 && p.price < d.minPrice) return false;
   if (d.maxPrice < CEIL && p.price > d.maxPrice) return false;
   return true;
@@ -65,7 +64,7 @@ export const SmartFilterDock: React.FC<Props> = ({
 
   const count = useMemo(() => properties.filter((p) => match(p, d)).length, [properties, d]);
   const activeProjects = countActiveProjectFilters(projectFilter);
-  const active = isOffPlan ? (activeProjects ? [`${activeProjects} فلتر`] : []) : [filter.search && 'كود', filter.neighborhood !== 'all' && filter.neighborhood, filter.finishing !== 'all' && (filter.finishing === 'finished' ? 'متشطب' : 'نص تشطيب'), filter.bedrooms !== 'all' && `${filter.bedrooms} غرف`, (filter.floorLicense && filter.floorLicense !== 'all') && (filter.floorLicense === 'violation' ? 'مخالف' : 'داخل الرخصة'), (filter.minPrice > 0 || filter.maxPrice < CEIL) && 'ميزانية'].filter(Boolean) as string[];
+  const active = isOffPlan ? (activeProjects ? [`${activeProjects} فلتر`] : []) : [filter.search && 'كود', summarize(filter.neighborhoods, filter.neighborhood, 'أحياء'), summarize(filter.finishings?.map((f) => (f === 'finished' ? 'متشطب' : 'نص تشطيب')), filter.finishing === 'all' ? undefined : (filter.finishing === 'finished' ? 'متشطب' : 'نص تشطيب'), 'تشطيبات'), summarize(filter.bedroomsList?.map((b) => `${b} غرف`), filter.bedrooms === 'all' ? undefined : `${filter.bedrooms} غرف`, 'اختيارات غرف'), (filter.floorLicense && filter.floorLicense !== 'all') && (filter.floorLicense === 'violation' ? 'مخالف' : 'داخل الرخصة'), (filter.minPrice > 0 || filter.maxPrice < CEIL) && 'ميزانية'].filter(Boolean) as string[];
 
   const apply = () => {
     if (isOffPlan) setProjectFilter?.(pd);
@@ -96,7 +95,7 @@ export const SmartFilterDock: React.FC<Props> = ({
             <header className="flex justify-between items-center px-5 py-3">
               <p className="text-lg font-bold font-readex">{isOffPlan ? 'دوّر على مشروعك' : 'دوّر على شقتك'}</p>
               <div className="flex items-center gap-2">
-                <button onClick={() => (isOffPlan ? setPd(EMPTY_PROJECT_FILTER) : setD({ ...d, search: '', neighborhood: 'all', finishing: 'all', bedrooms: 'all', minPrice: 0, maxPrice: CEIL }))} className="text-sm font-semibold text-[#A07A26]">مسح الكل</button>
+                <button onClick={() => (isOffPlan ? setPd(EMPTY_PROJECT_FILTER) : setD({ ...d, search: '', neighborhood: 'all', finishing: 'all', bedrooms: 'all', neighborhoods: [], finishings: [], bedroomsList: [], floorLicense: 'all', minPrice: 0, maxPrice: CEIL }))} className="text-sm font-semibold text-[#A07A26]">مسح الكل</button>
                 <button onClick={() => setOpen(false)} aria-label="إغلاق" className="p-2"><X size={18} /></button>
               </div>
             </header>
@@ -114,8 +113,14 @@ export const SmartFilterDock: React.FC<Props> = ({
               <div className="space-y-2">
                 <p className="text-sm font-bold">الحي</p>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => setPd({ ...pd, neighborhood: 'all' })} className={chip(pd.neighborhood === 'all')}>كل الأحياء</button>
-                  {projectHoods.map((n) => <button key={n} onClick={() => setPd({ ...pd, neighborhood: n })} className={chip(pd.neighborhood === n)}>{n}</button>)}
+                  <button onClick={() => setPd({ ...pd, neighborhood: 'all', neighborhoods: [] })} className={chip(!pd.neighborhoods?.length && pd.neighborhood === 'all')}>كل الأحياء</button>
+                  {projectHoods.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setPd({ ...pd, neighborhood: 'all', neighborhoods: toggleValue(pd.neighborhoods, n) })}
+                      className={chip(!!pd.neighborhoods?.includes(n))}
+                    >{n}</button>
+                  ))}
                 </div>
               </div>
 
@@ -186,20 +191,32 @@ export const SmartFilterDock: React.FC<Props> = ({
               <div className="space-y-2">
                 <p className="text-sm font-bold">الحي</p>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => setD({ ...d, neighborhood: 'all' })} className={chip(d.neighborhood === 'all')}>كل الأحياء</button>
-                  {neighborhoods.map((n) => <button key={n} onClick={() => setD({ ...d, neighborhood: n })} className={chip(d.neighborhood === n)}>{n}</button>)}
+                  <button onClick={() => setD({ ...d, neighborhood: 'all', neighborhoods: [] })} className={chip(!d.neighborhoods?.length && d.neighborhood === 'all')}>كل الأحياء</button>
+                  {neighborhoods.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setD({ ...d, neighborhood: 'all', neighborhoods: toggleValue(d.neighborhoods, n) })}
+                      className={chip(!!d.neighborhoods?.includes(n))}
+                    >{n}</button>
+                  ))}
                 </div>
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-bold">التشطيب</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {([['all', 'الكل'], ['finished', 'متشطب'], ['semi_finished', 'نص تشطيب']] as const).map(([k, t]) => <button key={k} onClick={() => setD({ ...d, finishing: k })} className={chip(d.finishing === k)}>{t}</button>)}
+                  <button onClick={() => setD({ ...d, finishing: 'all', finishings: [] })} className={chip(!d.finishings?.length && d.finishing === 'all')}>الكل</button>
+                  {([['finished', 'متشطب'], ['semi_finished', 'نص تشطيب']] as const).map(([k, t]) => (
+                    <button key={k} onClick={() => setD({ ...d, finishing: 'all', finishings: toggleValue(d.finishings, k) })} className={chip(!!d.finishings?.includes(k))}>{t}</button>
+                  ))}
                 </div>
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-bold">الغرف</p>
                 <div className="grid grid-cols-4 gap-2">
-                  {([['all', 'الكل'], ['2', '2'], ['3', '3'], ['4+', '4+']] as const).map(([k, t]) => <button key={k} onClick={() => setD({ ...d, bedrooms: k })} className={chip(d.bedrooms === k)}>{t}</button>)}
+                  <button onClick={() => setD({ ...d, bedrooms: 'all', bedroomsList: [] })} className={chip(!d.bedroomsList?.length && d.bedrooms === 'all')}>الكل</button>
+                  {([['2', '2'], ['3', '3'], ['4+', '4+']] as const).map(([k, t]) => (
+                    <button key={k} onClick={() => setD({ ...d, bedrooms: 'all', bedroomsList: toggleValue(d.bedroomsList, k) })} className={chip(!!d.bedroomsList?.includes(k))}>{t}</button>
+                  ))}
                 </div>
               </div>
               <div className="space-y-2">

@@ -19,6 +19,10 @@ export interface ToneStyle {
   card: string;           // كلاس الكارت
   chip: string;           // كلاس الشارة
   avatar: string;
+  solid: boolean;         // الكارت ملوّن بالكامل؟
+  ink: string;            // لون الكلام الأساسي على الكارت
+  inkSoft: string;        // لون الكلام الثانوي
+  divider: string;        // لون الخط الفاصل
 }
 
 /* بعد كام يوم الليد بيبقى "كامبين قديم" */
@@ -44,29 +48,43 @@ export function leadTone(lead: Lead, now = Date.now()): LeadTone {
 }
 
 const STYLES: Record<LeadTone, ToneStyle> = {
+  /* الكارت كله بياخد اللون — مش شريط ولا نقطة.
+     الكلام أبيض عليه، والأزرار بتفضل بخلفية بيضا عشان تفضل مقروءة. */
   fresh: {
     tone: 'fresh',
     label: 'ليد فريش',
-    hex: '#eb6834',
-    card: 'bg-[#FFF6F1] border-2 border-[#eb6834]',
-    chip: 'bg-[#eb6834] text-white',
-    avatar: 'bg-[#eb6834] text-white',
+    hex: '#C2410C',
+    card: 'bg-[#C2410C] border-2 border-[#9A340A]',
+    chip: 'bg-white/25 text-white',
+    avatar: 'bg-white/20 text-white',
+    solid: true,
+    ink: 'text-white',
+    inkSoft: 'text-white/80',
+    divider: 'border-white/25',
   },
   old_campaign: {
     tone: 'old_campaign',
     label: 'كامبين قديم',
-    hex: '#4a3aa7',
-    card: 'bg-[#F5F4FC] border-2 border-[#4a3aa7]',
-    chip: 'bg-[#4a3aa7] text-white',
-    avatar: 'bg-[#4a3aa7] text-white',
+    hex: '#4A5568',
+    card: 'bg-[#4A5568] border-2 border-[#3A4353]',
+    chip: 'bg-white/25 text-white',
+    avatar: 'bg-white/20 text-white',
+    solid: true,
+    ink: 'text-white',
+    inkSoft: 'text-white/80',
+    divider: 'border-white/25',
   },
   viewing_update: {
     tone: 'viewing_update',
     label: 'تحديث من سارة',
-    hex: '#2a78d6',
-    card: 'bg-[#F1F6FD] border-2 border-[#2a78d6]',
-    chip: 'bg-[#2a78d6] text-white',
-    avatar: 'bg-[#2a78d6] text-white',
+    hex: '#1F5FB0',
+    card: 'bg-[#1F5FB0] border-2 border-[#184B8C]',
+    chip: 'bg-white/25 text-white',
+    avatar: 'bg-white/20 text-white',
+    solid: true,
+    ink: 'text-white',
+    inkSoft: 'text-white/80',
+    divider: 'border-white/25',
   },
   none: {
     tone: 'none',
@@ -75,6 +93,10 @@ const STYLES: Record<LeadTone, ToneStyle> = {
     card: 'bg-white border border-[#ECE8DF]',
     chip: '',
     avatar: 'bg-[#FAF4E5] text-[#A07A26]',
+    solid: false,
+    ink: 'text-[#141414]',
+    inkSoft: 'text-[#6B665C]',
+    divider: 'border-[#ECE8DF]/70',
   },
 };
 

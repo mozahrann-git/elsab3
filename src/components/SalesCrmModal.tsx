@@ -50,6 +50,7 @@ import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
 import { matchProperties, briefLine, briefGaps } from '../services/clientBrief';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
+import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpQuest } from '../services/questService';
 import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
 import { OfferBuilderModal } from './sales/OfferBuilderModal';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
@@ -265,6 +266,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     [leads],
   );
 
+  const [questTemplates, setQuestTemplates] = useState<QuestTemplate[]>(DEFAULT_QUESTS);
+  useEffect(() => subscribeQuestTemplates(setQuestTemplates), []);
+
   const [offerPicks, setOfferPicks] = useState<string[]>([]);
   useEffect(() => { setOfferPicks([]); }, [matchingLeadId]);
   const togglePick = (id: string) => setOfferPicks((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
@@ -321,8 +325,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     return t >= startOfToday.getTime();
   }).length;
   const todayDone = scopedLeads.filter((l) => (l.activity || []).some((a: any) => a.at >= startOfToday.getTime())).length;
-  const questTemplate: DailyQuest[] = board.quests?.length ? board.quests : INITIAL_DAILY_QUESTS;
-  const agentQuests: DailyQuest[] = questTemplate.map((t) => { const mine = (currentAgent?.activeQuests || []).find((q) => q.id === t.id); return { ...t, currentCount: mine?.currentCount || 0, isCompleted: (mine?.currentCount || 0) >= t.targetCount }; });
+  /* المهام جاية من إعدادات الأدمن، والعدّادات بتبدأ من الصفر كل يوم */
+  const questTemplate: DailyQuest[] = questTemplates.filter((t) => t.active !== false).map((t) => ({
+    id: t.id, title: t.title, description: t.description, xpReward: t.xpReward,
+    targetCount: t.targetCount, currentCount: 0, isCompleted: false, category: t.category,
+  }));
+  const agentQuests: DailyQuest[] = buildAgentQuests(questTemplates, currentAgent);
   const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م' };
   const deleteRequests = isAdmin && canEdit ? leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved) : [];
   const [moveComment, setMoveComment] = useState('');
@@ -411,27 +419,11 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   };
 
   // Quests Increment
+  /* النقط بقت المكتوبة على المهمة، وبتتاخد مرة واحدة لما تكمل —
+     مش ٥٠ نقطة ثابتة مع كل ضغطة زي الأول */
   const handleIncrementQuest = (questId: string) => {
     if (!currentAgent) return;
-    const quests = agentQuests;
-    const updated = quests.map((q) => {
-      if (q.id === questId) {
-        const newCount = q.currentCount + 1;
-        const isDone = newCount >= q.targetCount;
-        return {
-          ...q,
-          currentCount: newCount,
-          isCompleted: isDone
-        };
-      }
-      return q;
-    });
-
-    onUpdateAgent({
-      ...currentAgent,
-      activeQuests: updated,
-      xp: (currentAgent.xp || 0) + 50
-    });
+    onUpdateAgent(bumpQuest({ ...currentAgent, activeQuests: agentQuests }, questId));
   };
 
   return (
@@ -904,9 +896,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* دليل الألوان — عشان محدش يقعد يخمّن اللون ده معناه إيه */}
             <div className="flex items-center gap-3 flex-wrap text-[11px] text-[#6B665C] px-1">
-              {([['#eb6834', 'ليد فريش'], ['#4a3aa7', 'كامبين قديم'], ['#2a78d6', 'تحديث من سارة']] as const).map(([c, t]) => (
-                <span key={c} className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />
+              {([['#C2410C', 'ليد فريش'], ['#4A5568', 'كامبين قديم'], ['#1F5FB0', 'تحديث من سارة']] as const).map(([c, t]) => (
+                <span key={c} className="text-white font-bold px-2.5 py-1 rounded-lg" style={{ background: c }}>
                   {t}
                 </span>
               ))}
@@ -960,32 +951,34 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                                   {tone.tone === 'viewing_update' && (
                                     <button
                                       onClick={() => onUpdateLead(markViewingSeen(lead))}
-                                      className="text-[10px] font-bold text-[#2a78d6] underline cursor-pointer"
+                                      className="text-[10px] font-extrabold bg-white text-[#1F5FB0] px-2 py-0.5 rounded-full cursor-pointer"
                                     >
                                       شفته
                                     </button>
                                   )}
                                   {tone.tone === 'old_campaign' && lead.campaignName && (
-                                    <span className="text-[10px] text-[#4a3aa7] font-bold truncate">{lead.campaignName}</span>
+                                    <span className="text-[10px] text-white/80 font-bold truncate">{lead.campaignName}</span>
                                   )}
                                 </div>
                               )}
                               {tone.tone === 'viewing_update' && (
-                                <p className="text-[11px] font-bold text-[#2a78d6] leading-relaxed">
+                                <p className="text-[11px] font-bold text-white leading-relaxed">
                                   {viewingUpdateText(lead)}
                                 </p>
                               )}
                               {/* Top row: Client Name & Follow-up urgency badge */}
                               <div className="flex items-center justify-between">
                                 <span className={`font-bold text-xs ${
-                                  lead.followUpUrgency === 'urgent' ? 'text-rose-600' : 'text-[#A07A26]'
+                                  tone.solid
+                                    ? (lead.followUpUrgency === 'urgent' ? 'text-white' : 'text-white/85')
+                                    : (lead.followUpUrgency === 'urgent' ? 'text-rose-600' : 'text-[#A07A26]')
                                 }`}>
                                   {lead.followUpUrgency === 'urgent' ? 'عاجل' : lead.followUpScheduledAt || st.defaultBadge}
                                 </span>
                                 
                                 <h5 
                                   onClick={() => setSelectedLeadForDetails(lead)}
-                                  className="font-readex font-bold text-xs text-[#141414] truncate max-w-[130px] cursor-pointer hover:text-[#A07A26]"
+                                  className={`font-readex font-bold text-xs truncate max-w-[130px] cursor-pointer ${tone.solid ? 'text-white' : 'text-[#141414] hover:text-[#A07A26]'}`}
                                 >
                                   {lead.name}
                                 </h5>
@@ -994,18 +987,18 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                               {/* Details text */}
                               <p 
                                 onClick={() => setSelectedLeadForDetails(lead)}
-                                className="text-xs text-[#6B665C] truncate cursor-pointer"
+                                className={`text-xs truncate cursor-pointer ${tone.inkSoft}`}
                               >
                                 {lead.preferredBedrooms ? `${lead.preferredBedrooms} غرف · ` : ''}
                                 {lead.preferredNeighborhood || 'الهضبة الوسطى'}
                               </p>
 
                               {/* Property Code & Budget */}
-                              <div className="flex items-center justify-between pt-1 border-t border-[#ECE8DF]/70 text-xs">
-                                <span className="font-mono text-xs text-[#8C877D]">
+                              <div className={`flex items-center justify-between pt-1 border-t text-xs ${tone.divider}`}>
+                                <span className={`font-mono text-xs ${tone.solid ? 'text-white/75' : 'text-[#8C877D]'}`}>
                                   {lead.interestedPropertyCode ? `#${lead.interestedPropertyCode}` : '—'}
                                 </span>
-                                <span className="font-bold text-xs text-[#141414]">
+                                <span className={`font-bold text-xs ${tone.ink}`}>
                                   {lead.budgetMax ? `${(lead.budgetMax / 1000000).toFixed(1)}M` : '—'}
                                 </span>
                               </div>
@@ -1148,21 +1141,21 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         </span>
                         <button
                           onClick={() => onUpdateLead(markViewingSeen(lead))}
-                          className="text-[10px] font-bold text-[#2a78d6] underline cursor-pointer"
+                          className="text-[10px] font-extrabold bg-white text-[#1F5FB0] px-2.5 py-0.5 rounded-full cursor-pointer"
                         >
                           شفته
                         </button>
                       </div>
                     )}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#ECE8DF] pb-3">
+                    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 ${tone.divider}`}>
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-2xl font-bold flex items-center justify-center font-readex text-sm ${tone.avatar}`}>
                           {lead.name.charAt(0)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-readex font-bold text-sm text-[#141414]">{lead.name}</h4>
-                            <span className="font-mono text-xs text-[#6B665C] dir-ltr">{lead.phone}</span>
+                            <h4 className={`font-readex font-bold text-sm ${tone.ink}`}>{lead.name}</h4>
+                            <span className={`font-mono text-xs dir-ltr ${tone.inkSoft}`}>{lead.phone}</span>
                             {(tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
                               <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 ${tone.chip}`}>
                                 <Flame size={10} /> {tone.label}
@@ -1170,10 +1163,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                             )}
                           </div>
                           {lead.campaignName && (tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
-                            <p className="text-[11px] font-bold" style={{ color: tone.hex }}>من كامبين: {lead.campaignName}</p>
+                            <p className="text-[11px] font-bold text-white/85">من كامبين: {lead.campaignName}</p>
                           )}
-                          <p className="text-xs text-[#8C877D]">
-                            المستشار المسؤول: <strong className="text-[#141414]">{lead.assignedAgentName || 'سارة حنفي'}</strong>
+                          <p className={`text-xs ${tone.inkSoft}`}>
+                            المستشار المسؤول: <strong className={tone.ink}>{lead.assignedAgentName || 'سارة حنفي'}</strong>
                           </p>
                         </div>
                       </div>
@@ -1268,10 +1261,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         </a>
 
                         <button
-                          onClick={() => (briefGaps(lead).length === 0 ? setOfferLead(lead) : setDiscoveryLead(lead))}
+                          onClick={() => {
+                            // العرض بيتبني من المطابقة — بيختار الشقق الأول وبعدين يبعت،
+                            // بدل ما العرض يفتح على طول باقتراح مش شايفه
+                            if (briefGaps(lead).length > 0) { setDiscoveryLead(lead); return; }
+                            setMatchingLeadId(lead.id);
+                            setActiveTab('matching');
+                          }}
                           className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl"
                         >
-                          {briefGaps(lead).length === 0 ? 'عرض مخصوص' : 'كمّل طلبه'}
+                          {briefGaps(lead).length === 0 ? 'ابني عرض من المطابقة' : 'كمّل طلبه'}
                         </button>
                         {/* الطلب الناقص بيفضل باين لحد ما يتكمّل — مش بيضيع في الزحمة */}
                         {briefGaps(lead).length > 0 && (

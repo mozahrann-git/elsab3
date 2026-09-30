@@ -85,6 +85,7 @@ import { safeLocalStorageSet } from '../utils/storageHelper';
 import { ProjectsManager } from './admin/ProjectsManager';
 import { DeepAnalytics } from './admin/DeepAnalytics';
 import { DemoDataCleanup } from './admin/DemoDataCleanup';
+import { QuestsManager } from './admin/QuestsManager';
 import { FloorRuleRow } from './admin/FloorRuleRow';
 
 interface AdminDashboardModalProps {
@@ -3082,6 +3083,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {activeTab === 'settings' && (
             <div className="space-y-6">
+
+              {/* المهام اليومية والنقط */}
+              <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+                <QuestsManager showToast={showToast} />
+              </div>
 
               {/* تنضيف البيانات التجريبية */}
               {onCleanupDemo && (

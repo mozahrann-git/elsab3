@@ -1,4 +1,5 @@
 import { Lead, Property } from '../types';
+import { floorStatusOf } from './floorRules';
 
 /*
   طلب العميل — مصدر واحد.
@@ -20,6 +21,8 @@ export interface ClientBrief {
   finishing: 'finished' | 'semi_finished' | 'all';
   downCash: number;                                     // المقدم اللي معاه — 0 = مش معروف
   monthly: number;                                      // القسط الشهري اللي يقدر عليه — 0 = مش معروف
+  /* يقبل دور مخالف؟ 'no' معناه نشيل المخالف من نتايجه خالص */
+  violationOk: 'yes' | 'no' | 'depends' | 'unknown';
   payment?: string;                                     // كاش / تقسيط
   purpose?: string;                                     // ساكن / مستثمر
   urgency?: string;                                     // دلوقتي / خلال شهر / بيدوّر
@@ -56,6 +59,7 @@ export function readBrief(lead: Lead): ClientBrief {
     budgetMax: Number(lead.budgetMax) || 0,
     bedrooms,
     finishing: finishingOf(lead, d),
+    violationOk: d.violationOk === 'يقبل' ? 'yes' : d.violationOk === 'مايقبلش' ? 'no' : d.violationOk === 'حسب السعر' ? 'depends' : 'unknown',
     downCash: Number(String(d.downCash ?? '').replace(/[^\d.]/g, '')) || 0,
     monthly: Number(String(d.monthly ?? '').replace(/[^\d.]/g, '')) || 0,
     payment: S(d.payment) || undefined,
@@ -140,6 +144,11 @@ export function matchDetailed(
 
     if (b.finishing !== 'all' && p.finishing && p.finishing !== b.finishing) return;
 
+    /* قال مايقبلش مخالف — منوريهوش شقة هيرفضها في المعاينة.
+       اللي دوره مش معروف بيفضل ظاهر، مش من حقنا نستبعده بالشك. */
+    const fstat = floorStatusOf(p);
+    if (b.violationOk === 'no' && fstat === 'violation') return;
+
     const reasons: string[] = [];
     const misses: string[] = [];
     if (hit && b.districts.length) reasons.push(p.neighborhood || '');
@@ -147,6 +156,8 @@ export function matchDetailed(
     if (b.budgetMax && price <= b.budgetMax) reasons.push('جوه الميزانية');
     else if (b.budgetMax) misses.push('أعلى من ميزانيته');
     if (b.bedrooms && (Number(p.bedrooms) || 0) > b.bedrooms) reasons.push('غرف أكتر');
+    if (fstat === 'violation') misses.push('الدور مخالف');
+    else if (fstat === 'unknown') misses.push('الدور محتاج تأكيد');
 
     const score =
       (hit ? 0 : 1) * 1e9 +
@@ -172,6 +183,8 @@ export function briefLine(lead: Lead): string {
   parts.push(b.districts.length ? b.districts.join('، ') : 'أي حي');
   parts.push(b.bedrooms ? `${b.bedrooms}+ غرف` : 'أي عدد غرف');
   if (b.budgetMax) parts.push(b.budgetMin ? `${money(b.budgetMin)}–${money(b.budgetMax)}` : `لحد ${money(b.budgetMax)}`);
+  if (b.violationOk === 'no') parts.push('مايقبلش مخالف');
+  else if (b.violationOk === 'yes') parts.push('يقبل مخالف');
   if (b.purpose) parts.push(b.purpose);
   if (b.urgency) parts.push(b.urgency);
   return parts.join(' · ');

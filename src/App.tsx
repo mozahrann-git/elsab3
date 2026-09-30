@@ -78,7 +78,9 @@ import { FieldCheckInPage } from './components/portal/FieldCheckInPage';
 import { saveUiSession, loadUiSession } from './utils/uiSession';
 import { logEvent } from './services/analyticsService';
 import { floorStatusOf } from './services/floorRules';
+import { passes, passesBedrooms } from './utils/multiFilter';
 import { syncLeadWithViewing, findLeadFor } from './services/viewingSync';
+import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpByCategory } from './services/questService';
 import { alertCount } from './utils/followUpAlerts';
 import { seedOnce } from './services/seedGuard';
 import { BrokerPortalModal } from './components/BrokerPortalModal';
@@ -174,6 +176,9 @@ const INITIAL_FILTER: FilterState = {
   installmentYears: 'all',
   finishing: 'all',
   bedrooms: 'all',
+  neighborhoods: [],
+  finishings: [],
+  bedroomsList: [],
   floorLicense: 'all',
   budgetRange: 'all',
   minPrice: 0,
@@ -1259,6 +1264,11 @@ export default function App() {
     saveLeadToDb(lead).catch(err => console.error('[Firebase] Error saving lead:', err));
   };
 
+  /* المهام اليومية من إعدادات الأدمن — بنمسكها في مرجع عشان
+     الإفكت اللي بيسمع المعاينات ما يتعادش تشغيله مع كل تغيير */
+  const questTemplatesRef = useRef<QuestTemplate[]>(DEFAULT_QUESTS);
+  useEffect(() => subscribeQuestTemplates((l) => { questTemplatesRef.current = l; }), []);
+
   /* المعاينة بتحرّك كارت العميل لوحدها.
      البروكر بيأكد المعاد → الكارت ينط لـ"معاينة مؤكدة" والسيلز يتنبّه.
      المعاينة تتم → الكارت ينط لـ"تمت المعاينة" والفيدباك يبقى مستني تأكيد السيلز. */
@@ -1278,6 +1288,20 @@ export default function App() {
             leadId: lead.id, actorId: lead.assignedAgentId, actorName: lead.assignedAgentName,
             code: req.propertyCode, propertyId: req.propertyId,
           });
+
+          /* المعاينة اللي تمت بتزوّد نقط السيلز بتاعها لوحدها —
+             مش مستنية إنه يدوس "تسجيل نشاط" بإيده */
+          if (res.movedTo === 'visit_done') {
+            setSalesAgents((agents) => agents.map((a) => {
+              if (a.id !== lead.assignedAgentId) return a;
+              const withToday = { ...a, activeQuests: buildAgentQuests(questTemplatesRef.current, a) };
+              const bumped = bumpByCategory(withToday, 'site_visit');
+              if (bumped === withToday) return a;
+              const updated = { ...bumped, visitsCompletedCount: (a.visitsCompletedCount || 0) + 1 };
+              saveSalesAgentToDb(updated).catch(() => {});
+              return updated;
+            }));
+          }
           return res.lead;
         });
         return changed ? next : prev;
@@ -1659,13 +1683,13 @@ export default function App() {
         }
       }
 
-      // 4. Neighborhood (applied to resale)
-      if (filter.category !== 'off_plan' && filter.neighborhood && filter.neighborhood !== 'all' && prop.neighborhood !== filter.neighborhood) {
+      // 4. الحي — بيقبل أكتر من حي
+      if (filter.category !== 'off_plan' && !passes(filter.neighborhoods, filter.neighborhood, prop.neighborhood)) {
         return false;
       }
 
-      // 5. Finishing (Finished vs Semi-finished)
-      if (filter.finishing && filter.finishing !== 'all' && prop.finishing !== filter.finishing) {
+      // 5. التشطيب — بيقبل أكتر من نوع
+      if (!passes(filter.finishings, filter.finishing, prop.finishing)) {
         return false;
       }
 
@@ -1676,11 +1700,8 @@ export default function App() {
         if (st !== 'unknown' && st !== filter.floorLicense) return false;
       }
 
-      if (filter.bedrooms && filter.bedrooms !== 'all') {
-        if (filter.bedrooms === '2' && prop.bedrooms !== 2) return false;
-        if (filter.bedrooms === '3' && prop.bedrooms !== 3) return false;
-        if (filter.bedrooms === '4+' && (prop.bedrooms || 0) < 4) return false;
-      }
+      // 6. الغرف — بيقبل أكتر من عدد
+      if (!passesBedrooms(filter.bedroomsList, filter.bedrooms, prop.bedrooms)) return false;
 
       // 7. Price & Budget Range Matching
       const effectiveMinPrice = prop.availableUnits && prop.availableUnits.length > 0
@@ -1856,8 +1877,9 @@ export default function App() {
       
       {/* 1. Header & Navigation */}
       <Navbar
-        selectedNeighborhood={filter.neighborhood}
-        onNeighborhoodSelect={(n) => setFilter({ ...filter, neighborhood: n })}
+        selectedNeighborhood={filter.neighborhoods?.length === 1 ? filter.neighborhoods[0] : (filter.neighborhoods?.length ? '' : filter.neighborhood)}
+        /* شريط الأحياء فوق اختيار واحد — بيمسح الاختيار المتعدد عشان الاتنين ما يتعاركوش */
+        onNeighborhoodSelect={(n) => setFilter({ ...filter, neighborhood: n, neighborhoods: [] })}
         selectedFinishing={filter.finishing}
         onFinishingSelect={(f) => setFilter({ ...filter, finishing: f })}
         favoritesCount={favoriteIds.length}

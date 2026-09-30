@@ -7,6 +7,7 @@
 */
 import { collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, getDoc } from 'firebase/firestore';
 import { db, cleanFirestoreData } from './firebaseService';
+import { passes } from '../utils/multiFilter';
 
 export type ProjectKind = 'building' | 'compound';
 
@@ -168,6 +169,7 @@ export async function saveProjects(list: Project[]): Promise<number> {
 export interface ProjectFilter {
   kind: 'all' | ProjectKind;
   neighborhood: string;       // 'all' أو اسم حي
+  neighborhoods?: string[];   // اختيار متعدد — الفاضي معناه الكل
   maxDownPercent: 'all' | number;
   delivery: string;           // 'all' أو سنة
   maxPrice: 'all' | number;
@@ -231,7 +233,7 @@ export function affordablePlans(p: Project, f: ProjectFilter): PaymentPlan[] {
 export function matchProject(p: Project, f: ProjectFilter): boolean {
   if (p.hidden) return false;
   if (f.kind !== 'all' && p.kind !== f.kind) return false;
-  if (f.neighborhood !== 'all' && p.neighborhood !== f.neighborhood) return false;
+  if (!passes(f.neighborhoods, f.neighborhood, p.neighborhood)) return false;
   if (f.delivery !== 'all' && p.deliveryDate !== f.delivery) return false;
   if (f.maxPrice !== 'all' && typeof p.startingPrice === 'number' && p.startingPrice > f.maxPrice) return false;
   if (f.maxDownPercent !== 'all') {
@@ -245,5 +247,5 @@ export function matchProject(p: Project, f: ProjectFilter): boolean {
 }
 
 export const countActiveProjectFilters = (f: ProjectFilter): number =>
-  [f.kind !== 'all', f.neighborhood !== 'all', f.delivery !== 'all', f.maxPrice !== 'all', f.maxDownPercent !== 'all',
+  [f.kind !== 'all', !!(f.neighborhoods?.length) || f.neighborhood !== 'all', f.delivery !== 'all', f.maxPrice !== 'all', f.maxDownPercent !== 'all',
    !!f.maxMonthly && f.maxMonthly !== 'all', !!f.maxDownAmount && f.maxDownAmount !== 'all'].filter(Boolean).length;

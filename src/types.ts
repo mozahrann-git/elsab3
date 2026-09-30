@@ -128,6 +128,10 @@ export interface FilterState {
   neighborhood: string;             // 'all' or specific neighborhood 1-8
   finishing: 'all' | 'finished' | 'semi_finished';
   bedrooms: 'all' | '2' | '3' | '4+';
+  /* الاختيار المتعدد — القايمة الفاضية معناها "الكل" */
+  neighborhoods?: string[];
+  finishings?: string[];
+  bedroomsList?: string[];
   /* الدور والرخصة: الكل / داخل الرخصة بس / المخالف بس */
   floorLicense?: 'all' | 'licensed' | 'violation';
   propertyType?: string;
@@ -299,6 +303,7 @@ export interface SalesAgent {
   listingsAddedCount: number;
   badges: Badge[];
   activeQuests: DailyQuest[];
+  questDay?: string;                // اليوم اللي العدّادات دي بتاعته (YYYY-MM-DD)
   isCurrentSession?: boolean;
 }
 
