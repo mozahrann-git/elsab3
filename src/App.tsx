@@ -147,6 +147,7 @@ import {
   saveOwnerSubmissionToDb,
   saveViewingRequestToDb,
   subscribeToViewingRequests,
+  syncSalesAgentsToDb,
   subscribeToBrokers,
   seedBrokersToDb,
   subscribeToStaffAuth,
@@ -626,7 +627,9 @@ export default function App() {
     }
   });
 
-  // CRM Data Persistence State
+  /* حسابات السيلز — الكاش المحلي بس عشان الشاشة ما تبقاش فاضية لحظة التحميل.
+     مبنرجعش للحسابات التجريبية هنا: لو حد مسحهم، رجوعهم من الكاش
+     كان بيخلّيهم يترفعوا للداتابيز تاني مع أول حفظ. */
   const [salesAgents, setSalesAgents] = useState<SalesAgent[]>(() => {
     try {
       const saved = localStorage.getItem('lion_sales_agents');
@@ -634,7 +637,7 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_SALES_AGENTS;
+    return [];
   });
 
   useEffect(() => {
@@ -2179,6 +2182,7 @@ export default function App() {
           <ProjectsSection
             whatsappNumber={footerConfig?.whatsapp || DEFAULT_FOOTER_CONFIG.whatsapp}
             alwaysShow
+            isStaff={isAdminLoggedIn || isSalesLoggedIn || !!staffAccess}
             filter={projectFilter}
             setFilter={setProjectFilter}
           />
@@ -2343,7 +2347,8 @@ export default function App() {
         salesAgents={salesAgents}
         onUpdateSalesAgents={(updatedAgents) => {
           setSalesAgents(updatedAgents);
-          seedSalesAgentsToDb(updatedAgents).catch(err => console.error(err));
+          // بيمسح اللي اتشال فعلاً — قبل كده كان بيكتب الباقي بس والمحذوف يرجع
+          syncSalesAgentsToDb(updatedAgents).catch((err) => console.error('[Firebase] sync agents:', err));
         }}
         onOpenSalesSession={handleOpenSalesSessionFromAdmin}
         onClearAllProperties={handleClearAllProperties}

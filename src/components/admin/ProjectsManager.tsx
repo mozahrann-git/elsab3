@@ -3,7 +3,7 @@ import {
   Upload, Plus, Trash2, Pencil, Save, X, Building2, Landmark,
   Eye, EyeOff, AlertTriangle, CheckCircle2, ImagePlus, Film,
 } from 'lucide-react';
-import { Project, PaymentPlan, subscribeProjects, saveProject, saveProjects, deleteProject, fetchInternalNotes } from '../../services/projectService';
+import { Project, PaymentPlan, subscribeProjects, saveProject, saveProjects, deleteProject, fetchProjectPrivate } from '../../services/projectService';
 import { parseProjectsWorkbook } from '../../utils/projectsExcel';
 import { uploadFile } from '../../services/mediaStorage';
 
@@ -83,7 +83,9 @@ export const ProjectsManager: React.FC<Props> = ({ showToast, neighborhoods }) =
 
   const toggleHidden = async (p: Project) => {
     try {
-      await saveProject({ ...p, hidden: !p.hidden });
+      // القايمة العامة مفيهاش المطور واللوكيشن — بنجيبهم الأول عشان ما يتمسحوش
+      const priv = await fetchProjectPrivate(p.id);
+      await saveProject({ ...p, ...priv, hidden: !p.hidden });
       showToast(p.hidden ? 'المشروع ظهر للزوار' : 'المشروع اتخبى عن الزوار');
     } catch (e: any) {
       showToast(`التغيير ما نفعش — ${e?.message || 'جرّب تاني'}`);
@@ -241,12 +243,16 @@ const ProjectForm: React.FC<{
   const [err, setErr] = useState('');
   const isBuilding = d.kind === 'building';
 
-  // الملاحظات الداخلية مش في المستند العام، فبنجيبها لوحدها لما نفتح مشروع موجود
+  /* المطور واللوكيشن والعنوان والملاحظات مش في المستند العام، فبنجيبهم لوحدهم.
+     من غير ده، فتح مشروع موجود كان هيوريهم فاضيين ويمسحهم أول ما تحفظ. */
+  const [privLoaded, setPrivLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
-    if (!initial.id) return;
-    fetchInternalNotes(initial.id).then((text) => {
-      if (alive && text) setD((prev) => ({ ...prev, internalNotes: text }));
+    if (!initial.id) { setPrivLoaded(true); return; }
+    fetchProjectPrivate(initial.id).then((priv) => {
+      if (!alive) return;
+      setD((prev) => ({ ...prev, ...priv }));
+      setPrivLoaded(true);
     });
     return () => { alive = false; };
   }, [initial.id]);
@@ -262,6 +268,8 @@ const ProjectForm: React.FC<{
   const submit = async () => {
     if (!d.code.trim()) { setErr('لازم تكتب كود للمشروع، زي BLD-002.'); return; }
     if (!d.name.trim()) { setErr('لازم تكتب اسم المشروع.'); return; }
+    // لو بيانات المشروع الجوّانية لسه بتتحمّل، الحفظ دلوقتي هيمسحها
+    if (!privLoaded) { setErr('استنى ثانية — لسه بيحمّل بيانات المشروع.'); return; }
     setSaving(true);
     setErr('');
     try {

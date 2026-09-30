@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, Landmark, HardHat, CalendarClock, ChevronLeft, X, MessageCircle, MapPin, Play } from 'lucide-react';
-import { Project, ProjectFilter, subscribeProjects, matchProject, EMPTY_PROJECT_FILTER, affordablePlans, planMonthly, planDownAmount } from '../services/projectService';
+import { Project, ProjectFilter, subscribeProjects, matchProject, EMPTY_PROJECT_FILTER, affordablePlans, planMonthly, planDownAmount, fetchProjectPrivate } from '../services/projectService';
 import { generateWhatsAppLink } from '../utils/helpers';
 import { videoPosterUrl } from '../utils/propertyMedia';
 
@@ -17,9 +17,12 @@ interface Props {
   setFilter: (f: ProjectFilter) => void;
   /** في وضع "تحت الإنشاء" لازم القسم يظهر حتى لو فاضي، عشان الصفحة ما تبقاش بيضا */
   alwaysShow?: boolean;
+  /* الحي والمطور واللوكيشن بيظهروا للفريق بس.
+     الزائر لو شافهم يقدر يروح للمطور على طول ويعدّي علينا. */
+  isStaff?: boolean;
 }
 
-export const ProjectsSection: React.FC<Props> = ({ whatsappNumber, alwaysShow, filter, setFilter }) => {
+export const ProjectsSection: React.FC<Props> = ({ whatsappNumber, alwaysShow, filter, setFilter, isStaff }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [open, setOpen] = useState<Project | null>(null);
   useEffect(() => subscribeProjects(setProjects), []);
@@ -77,11 +80,11 @@ export const ProjectsSection: React.FC<Props> = ({ whatsappNumber, alwaysShow, f
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {shown.map((p) => <ProjectCard key={p.id} p={p} filter={filter} onOpen={() => setOpen(p)} />)}
+          {shown.map((p) => <ProjectCard key={p.id} p={p} filter={filter} isStaff={isStaff} onOpen={() => setOpen(p)} />)}
         </div>
       )}
 
-      {open && <ProjectDetail p={open} whatsappNumber={whatsappNumber} onClose={() => setOpen(null)} />}
+      {open && <ProjectDetail p={open} whatsappNumber={whatsappNumber} isStaff={isStaff} onClose={() => setOpen(null)} />}
     </section>
   );
 };
@@ -99,7 +102,7 @@ const Chip: React.FC<{ active: boolean; onClick: () => void; children: React.Rea
   </button>
 );
 
-const ProjectCard: React.FC<{ p: Project; onOpen: () => void; filter?: ProjectFilter }> = ({ p, onOpen, filter }) => {
+const ProjectCard: React.FC<{ p: Project; onOpen: () => void; filter?: ProjectFilter; isStaff?: boolean }> = ({ p, onOpen, filter, isStaff }) => {
   /* لو العميل قال مقدمه وقسطه، بنوريه النظام اللي يقدر عليه هو —
      مش أول نظام في اللستة، ده ممكن يكون خارج قدرته أصلاً. */
   const wantsAfford = !!filter && ((filter.maxMonthly && filter.maxMonthly !== 'all') || (filter.maxDownAmount && filter.maxDownAmount !== 'all'));
@@ -142,7 +145,9 @@ const ProjectCard: React.FC<{ p: Project; onOpen: () => void; filter?: ProjectFi
 
         <h3 className="font-extrabold text-lg text-[#141414] leading-tight">{p.name}</h3>
         <p className="text-xs text-[#6B665C]">
-          {p.neighborhood}{p.developer ? ` · ${p.developer}` : ''}
+          {isStaff
+            ? `${p.neighborhood}${p.developer ? ` · ${p.developer}` : ''}`
+            : 'الهضبة الوسطى · الموقع مع المستشار'}
         </p>
 
         {p.headline && (
@@ -187,7 +192,16 @@ const ProjectCard: React.FC<{ p: Project; onOpen: () => void; filter?: ProjectFi
   );
 };
 
-const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: () => void }> = ({ p, whatsappNumber, onClose }) => {
+const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: () => void; isStaff?: boolean }> = ({ p: base, whatsappNumber, onClose, isStaff }) => {
+  /* المطور واللوكيشن مش في المستند العام — بنجيبهم لوحدهم، وللفريق بس */
+  const [priv, setPriv] = useState<Partial<Project>>({});
+  useEffect(() => {
+    if (!isStaff) { setPriv({}); return; }
+    let live = true;
+    fetchProjectPrivate(base.id).then((d) => { if (live) setPriv(d); });
+    return () => { live = false; };
+  }, [base.id, isStaff]);
+  const p = { ...base, ...priv } as Project;
   const isBuilding = p.kind === 'building';
   const specs: [string, string][] = isBuilding
     ? ([
@@ -202,8 +216,8 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
         ['الوحدات المتاحة', p.availableUnits != null ? (p.availableUnits === 0 ? 'اتحجزت كلها' : String(p.availableUnits)) : ''],
       ] as [string, string][])
     : ([
-        ['المطور', p.developer || ''],
-        ['مشاريع مسلّمة', p.developerTrackRecord ? String(p.developerTrackRecord) : ''],
+        ['المطور', isStaff ? (p.developer || '') : ''],
+        ['مشاريع مسلّمة', isStaff ? (p.developerTrackRecord ? String(p.developerTrackRecord) : '') : ''],
         ['مساحة المشروع', p.totalFeddan ? `${p.totalFeddan} فدان` : ''],
         ['نسبة المباني', p.builtRatioPercent != null ? `${p.builtRatioPercent}٪` : ''],
         ['المرحلة', p.phase || ''],
@@ -225,7 +239,8 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
         ['زيادة عن المعلن', p.overAnnouncedPercent != null ? `${p.overAnnouncedPercent}٪` : ''],
       ] as [string, string][]);
 
-  const msg = `مرحباً، مهتم بمشروع ${p.name} (${p.code}) في ${p.neighborhood}. ممكن تفاصيل أكتر؟`;
+  // الرسالة بتمشي بالكود بس — من غير حي، عشان اللينك لو اتشير ما يدلّش على حاجة
+  const msg = `مرحباً، مهتم بمشروع كود ${p.code}. ممكن تفاصيل أكتر؟`;
 
   return (
     <div className="fixed inset-0 z-[110] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
@@ -236,7 +251,9 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
       >
         <div className="sticky top-0 bg-[#FAF8F3] border-b border-[#ECE8DF] px-5 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-[#A07A26]">{isBuilding ? 'عمارة منفصلة' : 'كمبوند'} · {p.neighborhood}</p>
+            <p className="text-[10px] font-bold text-[#A07A26]">
+              {isBuilding ? 'عمارة منفصلة' : 'كمبوند'} · {isStaff ? p.neighborhood : 'الهضبة الوسطى'}
+            </p>
             <h3 className="font-extrabold text-xl leading-tight">{p.name}</h3>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-[#ECE8DF] shrink-0 cursor-pointer"><X size={18} /></button>
@@ -262,7 +279,7 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
             </a>
           )}
 
-          {(p.locationUrl || p.address) && (
+          {isStaff && (p.locationUrl || p.address) && (
             <div className="bg-white border border-[#ECE8DF] rounded-2xl px-4 py-3 space-y-2">
               <div className="flex items-start gap-2">
                 <MapPin size={15} className="text-[#A07A26] shrink-0 mt-0.5" />

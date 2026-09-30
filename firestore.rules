@@ -117,9 +117,12 @@ service cloud.firestore {
     match /projects/{id} {
       allow read: if true;
       allow write: if isAdmin();
-      // الملاحظات الداخلية: الأدمن بس — الزائر ميقدرش يقراها
+      /* المطور واللوكيشن والعنوان والملاحظات الداخلية.
+         الفريق بيقراها عشان يشتغل بيها، والزائر لأ — وده اللي بيمنعه
+         يروح للمطور على طول. الأدمن بس اللي بيكتب. */
       match /private/{docId} {
-        allow read, write: if isAdmin();
+        allow read: if isStaff() || isOps() || isBoss() || isMkt();
+        allow write: if isAdmin();
       }
     }
 

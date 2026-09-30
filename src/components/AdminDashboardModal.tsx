@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Property, 
   OwnerSubmission, 
@@ -201,17 +201,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [isConfirmClearModalOpen, setIsConfirmClearModalOpen] = useState(false);
   const [isClearingInProgress, setIsClearingInProgress] = useState(false);
 
-  // Sales Agents State
-  const [salesAgentsList, setSalesAgentsList] = useState<SalesAgent[]>(() => {
-    if (externalSalesAgents && externalSalesAgents.length > 0) return externalSalesAgents;
-    try {
-      const saved = localStorage.getItem('lion_sales_agents');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
-    return INITIAL_SALES_AGENTS;
-  });
+  /* حسابات السيلز.
+
+     كان فيه بقّين هنا خلّوا الحسابات المحذوفة ترجع:
+     ١) لو القايمة الحية لسه بتحمّل، كان بيرجع INITIAL_SALES_AGENTS — يعني
+        الحسابات التجريبية بترجع للشاشة، وأول ما تحفظ أي حاجة تترفع للداتابيز تاني.
+     ٢) القايمة كانت بتتقري مرة واحدة وبس، فمكانتش بتتحدث مع الداتابيز.
+
+     دلوقتي: القايمة الحية هي المصدر، والفاضي يفضل فاضي. */
+  const [salesAgentsList, setSalesAgentsList] = useState<SalesAgent[]>(() => externalSalesAgents || []);
+
+  useEffect(() => {
+    if (externalSalesAgents) setSalesAgentsList(externalSalesAgents);
+  }, [externalSalesAgents]);
 
   // Price Map & Closed Deals State
   const [priceMapList, setPriceMapList] = useState<NeighborhoodPriceMapData[]>(() => {

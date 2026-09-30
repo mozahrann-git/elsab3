@@ -106,6 +106,22 @@ export async function fetchProjects(): Promise<Project[]> {
   return list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code));
 }
 
+/** البيانات اللي بتدلّ على المشروع — الفريق بس اللي بيقراها */
+export async function fetchProjectPrivate(projectId: string): Promise<Partial<Project>> {
+  try {
+    const snap = await getDoc(doc(db, 'projects', projectId, 'private', 'notes'));
+    if (!snap.exists()) return {};
+    const d = snap.data() as any;
+    return {
+      developer: d.developer, developerTrackRecord: d.developerTrackRecord,
+      locationUrl: d.locationUrl, address: d.address, plotOrStreet: d.plotOrStreet,
+      internalNotes: d.text || '',
+    };
+  } catch {
+    return {};
+  }
+}
+
 /** الملاحظات الداخلية بتتقرا لوحدها — الأدمن بس اللي عنده صلاحية */
 export async function fetchInternalNotes(projectId: string): Promise<string> {
   try {
@@ -122,14 +138,24 @@ export async function fetchInternalNotes(projectId: string): Promise<string> {
  * مع merge كانت القيمة القديمة بتفضل مكانها وتظهر تاني بعد الحفظ.
  * لو الكود اتغيّر، بيمسح المستند القديم عشان ما يبقاش عندنا نسختين.
  */
+/* اللي بيدلّ على المشروع على طول: اسم المطور واللوكيشن والعنوان ورقم القطعة.
+   دول بيتخزنوا في مستند جوّاني، مش في المستند العام —
+   عشان إخفاؤهم من الشاشة مايبقاش كفاية والزائر يقراهم من الداتابيز. */
+const PRIVATE_FIELDS = ['developer', 'developerTrackRecord', 'locationUrl', 'address', 'plotOrStreet'] as const;
+
 export async function saveProject(p: Project, previousId?: string): Promise<void> {
   const id = projectDocId(p.code || p.id);
   if (!id) throw new Error('المشروع لازم يكون له كود');
 
-  const { internalNotes, ...publicData } = p;
+  const { internalNotes, ...rest } = p;
+  const publicData: any = { ...rest };
+  const privateData: any = {};
+  PRIVATE_FIELDS.forEach((k) => {
+    if (publicData[k] !== undefined) { privateData[k] = publicData[k]; delete publicData[k]; }
+  });
 
   await setDoc(doc(db, 'projects', id), cleanFirestoreData({ ...publicData, id, updatedAt: Date.now() }));
-  await setDoc(doc(db, 'projects', id, 'private', 'notes'), { text: internalNotes || '', updatedAt: Date.now() });
+  await setDoc(doc(db, 'projects', id, 'private', 'notes'), cleanFirestoreData({ ...privateData, text: internalNotes || '', updatedAt: Date.now() }));
 
   const oldId = previousId || p.id;
   if (oldId && oldId !== id) {
@@ -153,9 +179,20 @@ export async function saveProjects(list: Project[]): Promise<number> {
 
   let saved = 0;
   for (const p of list) {
-    const prev = byId.get(projectDocId(p.code));
+    const id = projectDocId(p.code);
+    const prev = byId.get(id);
+    /* الشيت مفيهوش المطور واللوكيشن والملاحظات — بنجيبهم من المحفوظ
+       ونسيبهم زي ما هما إلا لو الشيت جاب قيمة جديدة. من غير كده
+       أي استيراد كان هيمسحهم. */
+    const priv = prev ? await fetchProjectPrivate(id) : {};
     await saveProject({
+      ...priv,
       ...p,
+      developer: p.developer || priv.developer,
+      locationUrl: p.locationUrl || priv.locationUrl,
+      address: p.address || priv.address,
+      plotOrStreet: p.plotOrStreet || priv.plotOrStreet,
+      internalNotes: p.internalNotes || priv.internalNotes,
       hidden: prev?.hidden ?? p.hidden,
       order: prev?.order ?? p.order,
     });

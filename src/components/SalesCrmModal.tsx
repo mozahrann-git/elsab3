@@ -49,6 +49,7 @@ import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
 import { matchProperties, briefLine, briefGaps } from '../services/clientBrief';
+import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
 import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpQuest } from '../services/questService';
 import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
@@ -163,6 +164,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     phone: '',
     source: 'facebook_group' as Lead['source'],
     preferredNeighborhood: 'الحي الثاني',
+    districts: [] as string[],
     budgetMin: 2500000,
     budgetMax: 3500000,
     preferredBedrooms: 3,
@@ -365,6 +367,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   };
 
   // Submit New Lead
+  /* بعد الحفظ رايح فين: مكالمة الاكتشاف ولا المطابقة على طول */
+  const [afterAdd, setAfterAdd] = useState<'discovery' | 'matching'>('discovery');
+
   const handleAddNewLead = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLeadForm.name.trim() || !newLeadForm.phone.trim()) return;
@@ -377,7 +382,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       phone: newLeadForm.phone.trim(),
       status: 'new',
       source: newLeadForm.source,
-      preferredNeighborhood: newLeadForm.preferredNeighborhood,
+      preferredNeighborhood: newLeadForm.districts?.[0] || newLeadForm.preferredNeighborhood,
+      /* اللي السيلز كتبه هنا بيتسجّل كأول جزء من مكالمة الاكتشاف،
+         فالمطابقة بتشتغل على طول والمكالمة بتفتح وهي نصّها متملّي. */
+      discovery: {
+        districts: newLeadForm.districts?.length ? newLeadForm.districts : (newLeadForm.preferredNeighborhood ? [newLeadForm.preferredNeighborhood] : []),
+        rooms: String(newLeadForm.preferredBedrooms || ''),
+        finishing: newLeadForm.preferredFinishing === 'finished' ? 'متشطبة' : newLeadForm.preferredFinishing === 'semi_finished' ? 'نص تشطيب' : '',
+        by: currentAgent?.name || 'الفريق',
+      },
       budgetMin: Number(newLeadForm.budgetMin) || 0,
       budgetMax: Number(newLeadForm.budgetMax) || 0,
       preferredBedrooms: Number(newLeadForm.preferredBedrooms) || 3,
@@ -400,12 +413,22 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     setIsAddLeadOpen(false);
     // عميل الكامبين بييجي بالجملة فبيتضاف بسرعة. العميل اللي السيلز كلّمه بنفسه،
     // مكالمة الاكتشاف بتفتح على طول عشان الطلب يبقى كامل من أول لحظة.
-    if (newLead.source !== 'campaign') setTimeout(() => setDiscoveryLead(newLead), 220);
+    /* الربط: العميل الجديد بيروح على طول للخطوة اللي بعده.
+       عميل الكامبين بييجي بالجملة فبيتضاف وبس. */
+    if (newLead.source !== 'campaign') {
+      if (afterAdd === 'matching') {
+        setMatchingLeadId(newLead.id);
+        setActiveTab('matching');
+      } else {
+        setTimeout(() => setDiscoveryLead(newLead), 220);
+      }
+    }
     setNewLeadForm({
       name: '',
       phone: '',
       source: 'facebook_group',
       preferredNeighborhood: 'الحي الثاني',
+      districts: [] as string[],
       budgetMin: 2500000,
       budgetMax: 3500000,
       preferredBedrooms: 3,
@@ -1807,16 +1830,24 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="col-span-2">
                   <label className="text-[#141414] block mb-1 font-bold">الحي المطلوب:</label>
-                  <select
-                    value={newLeadForm.preferredNeighborhood}
-                    onChange={(e) => setNewLeadForm({ ...newLeadForm, preferredNeighborhood: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
-                  >
-                    <option value="">أي حي</option>
-                    {HADABA_WOSTA_NEIGHBORHOODS.map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
+                  {/* أكتر من حي — نفس اللي مكالمة الاكتشاف والفلاتر بيقبلوه */}
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setNewLeadForm({ ...newLeadForm, districts: [] })}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${!newLeadForm.districts?.length ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}
+                    >أي حي</button>
+                    {HADABA_WOSTA_NEIGHBORHOODS.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setNewLeadForm({ ...newLeadForm, districts: toggleValue(newLeadForm.districts, n) })}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${newLeadForm.districts?.includes(n) ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}
+                      >{n}</button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -1871,9 +1902,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 </button>
                 <button
                   type="submit"
+                  onClick={() => setAfterAdd('matching')}
+                  className="px-4 py-2.5 bg-[#E6F7ED] text-[#0E7A5A] border border-[#B3E8C8] font-bold rounded-xl cursor-pointer"
+                >
+                  احفظ وشوف الشقق
+                </button>
+                <button
+                  type="submit"
+                  onClick={() => setAfterAdd('discovery')}
                   className="px-5 py-2.5 bg-[#A07A26] hover:bg-[#8B681D] text-white font-bold rounded-xl shadow-xs cursor-pointer"
                 >
-                  حفظ العميل
+                  احفظ وكمّل الاكتشاف
                 </button>
               </div>
             </form>

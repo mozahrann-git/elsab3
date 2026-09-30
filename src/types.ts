@@ -242,6 +242,21 @@ export interface Lead {
   campaignName?: string;            // اسم الكامبين اللي الليد جه منه
   isFresh?: boolean;                // ليد فريش لسه محدش كلّمه — بيتشال أول اتصال
   distributedAt?: number;           // وقت توزيعه على السيلز
+  /* إجابات مكالمة الاكتشاف — بتتملّى جزئياً من فورم إضافة العميل */
+  discovery?: {
+    districts?: string[];
+    rooms?: string;
+    finishing?: string;
+    purpose?: string;
+    urgency?: string;
+    payment?: string;
+    violationOk?: string;
+    downCash?: string | number;
+    monthly?: string | number;
+    answeredAt?: number;
+    by?: string;
+    [k: string]: unknown;
+  };
   viewingUpdateAt?: number;         // آخر تحديث من سارة على المعاينة
   viewingSeenAt?: number;           // إمتى السيلز دوس "شفت" على التحديث
   activity?: { at: number; by: string; outcome: string; comment: string; nextAt?: number; transferTo?: string }[];

@@ -478,6 +478,37 @@ export async function saveSalesAgentToDb(agent: SalesAgent): Promise<void> {
   }
 }
 
+/**
+ * بيخلّي الداتابيز مطابقة للقايمة دي بالظبط: بيكتب اللي فيها،
+ * وبيمسح اللي اتشال منها.
+ *
+ * ده كان بق حقيقي: زرار الحذف في الأدمن كان بيشيل السيلز من القايمة
+ * ويكتب الباقي بس — ومستند المحذوف بيفضل مكانه في الداتابيز،
+ * فالاشتراك الحي بيرجّعه تاني على طول. عشان كده مكانش بيتمسح خالص.
+ */
+export async function syncSalesAgentsToDb(agents: SalesAgent[]): Promise<void> {
+  await ensureAuth();
+  const keep = new Set(agents.map((a) => a.id));
+
+  const snap = await getDocs(collection(db, 'sales_agents'));
+  const batch = writeBatch(db);
+
+  snap.forEach((d) => { if (!keep.has(d.id)) batch.delete(d.ref); });
+
+  for (const agent of agents) {
+    const agentData: any = { ...agent };
+    delete agentData.password;
+    batch.set(doc(db, 'sales_agents', agent.id), cleanFirestoreData(agentData), { merge: true });
+  }
+
+  await batch.commit();
+
+  // الكاش المحلي كمان — لو فضل فيه المحذوف هيرجع من تاني تحميل
+  try {
+    localStorage.setItem('lion_sales_agents', JSON.stringify(agents));
+  } catch { /* الوضع الخاص */ }
+}
+
 export async function seedSalesAgentsToDb(initialAgents: SalesAgent[]): Promise<void> {
   try {
     await ensureAuth();
