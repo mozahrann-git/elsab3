@@ -338,6 +338,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [moveComment, setMoveComment] = useState('');
   const [moveNext, setMoveNext] = useState<WhenValue | null>(null);
 
+  /* بعد الحفظ رايح فين: مكالمة الاكتشاف ولا المطابقة على طول.
+     لازم يفضل فوق الـ return اللي تحت — أي hook تحته بيكسر الصفحة. */
+  const [afterAdd, setAfterAdd] = useState<'discovery' | 'matching'>('discovery');
+
   if (!isOpen) return null;
 
   // Quick Move Status Handler
@@ -367,9 +371,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   };
 
   // Submit New Lead
-  /* بعد الحفظ رايح فين: مكالمة الاكتشاف ولا المطابقة على طول */
-  const [afterAdd, setAfterAdd] = useState<'discovery' | 'matching'>('discovery');
-
   const handleAddNewLead = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLeadForm.name.trim() || !newLeadForm.phone.trim()) return;
