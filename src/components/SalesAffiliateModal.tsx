@@ -42,6 +42,9 @@ interface SalesAffiliateModalProps {
   onRecordAction?: (questCategory: string, points: number) => void;
   onOpenSalesLogin?: () => void;
   onAddLead?: (newLead: Lead) => void;
+  /* عملاء السيلز الداخل — عشان يختار منهم بدل ما يكتب الاسم من تاني ويعمل نسخة تانية */
+  leads?: Lead[];
+  onUpdateLead?: (lead: Lead) => void;
   customLogoUrl?: string;
   bannerPhotoUrl?: string;
   onOpenAdmin?: () => void;
@@ -58,6 +61,8 @@ export const SalesAffiliateModal: React.FC<SalesAffiliateModalProps> = ({
   currentAgent,
   onRecordAction,
   onAddLead,
+  leads = [],
+  onUpdateLead,
   customLogoUrl,
   bannerPhotoUrl,
   onOpenAdmin,
@@ -84,6 +89,13 @@ export const SalesAffiliateModal: React.FC<SalesAffiliateModalProps> = ({
   });
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
+  /* '' = عميل جديد، وإلا id العميل المختار من عملاء السيلز */
+  const [pickedLeadId, setPickedLeadId] = useState('');
+  /* عملاء السيلز الداخل بس — مش عملاء الفريق كله */
+  const myLeads = useMemo(
+    () => leads.filter((l) => l.assignedAgentId === currentAgent?.id && l.status !== 'closed' && l.status !== 'lost'),
+    [leads, currentAgent],
+  );
   const [proposedTime, setProposedTime] = useState('اليوم الساعة 6:00 مساءً');
   const [clientNotes, setClientNotes] = useState('العميل مهتم وجاهز للمعاينة على الطبيعة');
 
@@ -269,8 +281,29 @@ ${fullShowcaseUrl}`;
     const url = `https://wa.me/2${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
 
-    if (onAddLead) {
+    /* العميل الموجود بيتربط بملفه، والجديد بس هو اللي بيتعمل له ملف.
+       قبل كده كل معاينة كانت بتعمل نسخة جديدة من نفس العميل. */
+    const picked = pickedLeadId ? myLeads.find((l) => l.id === pickedLeadId) : undefined;
+    let linkedLeadId = picked?.id || '';
+
+    if (picked && onUpdateLead) {
+      onUpdateLead({
+        ...picked,
+        status: picked.status === 'closed' || picked.status === 'lost' ? picked.status : 'visit_requested',
+        interestedPropertyCode: property.code,
+        coordinatorName: 'سارة حنفي',
+        visitScheduledAt: proposedTime,
+        visitLocation: property.neighborhood,
+        notes: [`طلب معاينة ${property.code} مع سارة حنفي: ${clientNotes}`, ...(picked.notes || [])],
+        activity: [
+          { at: Date.now(), by: currentAgent.name, outcome: `طلب معاينة ${property.code}`, comment: proposedTime || '' },
+          ...(picked.activity || []),
+        ].slice(0, 80),
+        lastContactDate: new Date().toISOString(),
+      });
+    } else if (onAddLead) {
       const newLeadId = `lead_${Date.now()}`;
+      linkedLeadId = newLeadId;
       const newLead: Lead = {
         id: newLeadId,
         name: clientName,
@@ -292,7 +325,9 @@ ${fullShowcaseUrl}`;
         createdAt: new Date().toISOString().split('T')[0]
       };
       onAddLead(newLead);
+    }
 
+    {
       // إنشاء طلب المعاينة الميدانية في غرفة عمليات البروكر
       const newViewingReq: ViewingRequest = {
         id: `req_${Date.now()}`,
@@ -305,8 +340,9 @@ ${fullShowcaseUrl}`;
         propertyImage: property.images?.[0] || unitCoverImage,
         brokerId: property.brokerId || 'broker_ahmed',
         brokerName: 'أحمد فؤاد',
-        leadId: newLeadId,
+        leadId: linkedLeadId,
         requestingAgentId: currentAgent.id,
+        requestingAgentPhone: currentAgent.phone,
         requestingAgentName: currentAgent.name,
         coordinatorName: 'سارة حنفي',
         clientName: clientName,
@@ -875,12 +911,42 @@ ${fullShowcaseUrl}`;
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs pt-1">
+                {/* اختار من عملائك بدل ما تكتبه من تاني وتعمل نسخة تانية منه */}
+                <div className="sm:col-span-2">
+                  <label className="text-[#141414] font-bold block mb-1.5">العميل:</label>
+                  <select
+                    value={pickedLeadId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setPickedLeadId(id);
+                      const l = myLeads.find((x) => x.id === id);
+                      setClientName(l ? l.name : '');
+                      setClientPhone(l ? l.phone : '');
+                    }}
+                    className="w-full px-4 py-3 bg-[#FAF9F5] border border-[#ECE8DF] rounded-2xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
+                  >
+                    <option value="">+ عميل جديد (هكتب اسمه ورقمه)</option>
+                    {myLeads.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name} — {l.phone}</option>
+                    ))}
+                  </select>
+                  {pickedLeadId && (
+                    <p className="text-[11px] text-[#1E7A45] mt-1.5 font-bold">
+                      هيتربط بملفه الموجود — مش هيتعمل عميل جديد.
+                    </p>
+                  )}
+                  {!pickedLeadId && myLeads.length === 0 && (
+                    <p className="text-[11px] text-[#6B665C] mt-1.5">مفيش عملاء مسجّلين ليك لسه.</p>
+                  )}
+                </div>
+
                 <div>
                   <label className="text-[#141414] font-bold block mb-1.5">اسم العميل:</label>
                   <input
                     type="text"
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
+                    readOnly={!!pickedLeadId}
                     placeholder="مثال: د. طارق المنشاوي"
                     className="w-full px-4 py-3 bg-[#FAF9F5] border border-[#ECE8DF] rounded-2xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
                   />
@@ -892,6 +958,7 @@ ${fullShowcaseUrl}`;
                     type="tel"
                     value={clientPhone}
                     onChange={(e) => setClientPhone(e.target.value)}
+                    readOnly={!!pickedLeadId}
                     placeholder="010XXXXXXXX"
                     className="w-full px-4 py-3 bg-[#FAF9F5] border border-[#ECE8DF] rounded-2xl text-[#141414] focus:outline-none focus:border-[#A07A26] dir-ltr text-right"
                   />

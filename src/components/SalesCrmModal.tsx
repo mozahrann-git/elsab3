@@ -49,6 +49,7 @@ import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
 import { matchProperties, briefLine, briefGaps } from '../services/clientBrief';
+import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
 import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
 import { OfferBuilderModal } from './sales/OfferBuilderModal';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
@@ -258,6 +259,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   }, [selectedMatchingLead, properties, matchTolerance, matchStrictHood]);
 
   // الشقق اللي السيلز معلّم عليها عشان يبعتها عرض مخصوص
+  // الليدات اللي فيها طلب تعديل ميزانية مستني
+  const budgetRequests = useMemo(
+    () => leads.filter((l) => l.budgetChangeRequest?.status === 'pending'),
+    [leads],
+  );
+
   const [offerPicks, setOfferPicks] = useState<string[]>([]);
   useEffect(() => { setOfferPicks([]); }, [matchingLeadId]);
   const togglePick = (id: string) => setOfferPicks((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
@@ -723,6 +730,31 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {/* ========================================================= */}
         {activeTab === 'pipeline' && (
           <div className="space-y-4 sm:space-y-5 flex-1 flex flex-col pt-1">
+
+            {/* طلبات تعديل الميزانية مستنية الإدارة — مكان واحد، مش كل ملف لوحده */}
+            {isAdmin && budgetRequests.length > 0 && (
+              <div className="bg-[#FFF8E6] border border-[#EBD9A6] rounded-2xl p-4 space-y-2">
+                <p className="font-bold text-sm text-[#7A5E12]">
+                  {budgetRequests.length} طلب تعديل ميزانية مستني تأكيدك
+                </p>
+                <div className="space-y-1.5">
+                  {budgetRequests.slice(0, 6).map((l) => (
+                    <button
+                      key={l.id}
+                      onClick={() => setSelectedLeadForDetails(l)}
+                      className="w-full text-right bg-white border border-[#EBD9A6] rounded-xl px-3 py-2 cursor-pointer"
+                    >
+                      <span className="font-bold text-xs text-[#141414]">{l.name}</span>
+                      <span className="text-[11px] text-[#7A5E12] block leading-relaxed">
+                        {l.budgetChangeRequest?.by} طلب يغيّرها لـ{' '}
+                        {Math.round(l.budgetChangeRequest?.toMax || 0).toLocaleString('en-US')} ج.م
+                        {l.budgetChangeRequest?.note ? ` — ${l.budgetChangeRequest.note}` : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             
             {/* Urgent Broadcast Banner */}
             {(isAdmin || isLead) && (
@@ -870,6 +902,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               })}
             </div>
 
+            {/* دليل الألوان — عشان محدش يقعد يخمّن اللون ده معناه إيه */}
+            <div className="flex items-center gap-3 flex-wrap text-[11px] text-[#6B665C] px-1">
+              {([['#eb6834', 'ليد فريش'], ['#4a3aa7', 'كامبين قديم'], ['#2a78d6', 'تحديث من سارة']] as const).map(([c, t]) => (
+                <span key={c} className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />
+                  {t}
+                </span>
+              ))}
+            </div>
+
             {/* Kanban Columns Board (Scrollable horizontal board with all 9 stages) */}
             <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory no-scrollbar flex-1 items-start">
               {CRM_PIPELINE_STAGES
@@ -902,11 +944,37 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                             لا يوجد عملاء في هذه المرحلة
                           </div>
                         ) : (
-                          stageLeads.map((lead, idx) => (
+                          stageLeads.map((lead, idx) => {
+                          const tone = toneStyle(lead);
+                          return (
                             <div 
                               key={lead.id}
-                              className="bg-white border border-[#ECE8DF] rounded-2xl p-3.5 shadow-2xs space-y-2.5 hover:border-[#A07A26] transition-all group"
+                              className={`rounded-2xl p-3.5 shadow-2xs space-y-2.5 transition-all group ${tone.card}`}
                             >
+                              {/* اللون معاه كلام دايماً — اللي مش بيفرّق الألوان يفهم برضه */}
+                              {tone.tone !== 'none' && (
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${tone.chip}`}>
+                                    {tone.label}
+                                  </span>
+                                  {tone.tone === 'viewing_update' && (
+                                    <button
+                                      onClick={() => onUpdateLead(markViewingSeen(lead))}
+                                      className="text-[10px] font-bold text-[#2a78d6] underline cursor-pointer"
+                                    >
+                                      شفته
+                                    </button>
+                                  )}
+                                  {tone.tone === 'old_campaign' && lead.campaignName && (
+                                    <span className="text-[10px] text-[#4a3aa7] font-bold truncate">{lead.campaignName}</span>
+                                  )}
+                                </div>
+                              )}
+                              {tone.tone === 'viewing_update' && (
+                                <p className="text-[11px] font-bold text-[#2a78d6] leading-relaxed">
+                                  {viewingUpdateText(lead)}
+                                </p>
+                              )}
                               {/* Top row: Client Name & Follow-up urgency badge */}
                               <div className="flex items-center justify-between">
                                 <span className={`font-bold text-xs ${
@@ -1009,7 +1077,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                                 </div>
                               </div>
                             </div>
-                          ))
+                          );
+                          })
                         )}
                       </div>
                     </div>
@@ -1065,34 +1134,43 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 .sort((a, b) => (a.nextActionAt || Infinity) - (b.nextActionAt || Infinity))
                 .map((lead) => {
                 const stageObj = CRM_PIPELINE_STAGES.find((s) => s.id === lead.status) || CRM_PIPELINE_STAGES[0];
+                const tone = toneStyle(lead);
                 return (
                   <div 
                     key={lead.id}
-                    className={`rounded-2xl p-4 shadow-2xs space-y-3 transition-all ${
-                      lead.isFresh
-                        ? 'bg-[#FFF8F2] border-2 border-[#FF7A1A] hover:border-[#C2412D]'
-                        : 'bg-white border border-[#ECE8DF] hover:border-[#A07A26]'
-                    }`}
+                    className={`rounded-2xl p-4 shadow-2xs space-y-3 transition-all ${tone.card}`}
                   >
+                    {/* نفس ألوان البايبلاين بالظبط — الكارت الواحد بلون واحد في كل مكان */}
+                    {tone.tone === 'viewing_update' && (
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${tone.chip}`}>
+                          {tone.label} · {viewingUpdateText(lead)}
+                        </span>
+                        <button
+                          onClick={() => onUpdateLead(markViewingSeen(lead))}
+                          className="text-[10px] font-bold text-[#2a78d6] underline cursor-pointer"
+                        >
+                          شفته
+                        </button>
+                      </div>
+                    )}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#ECE8DF] pb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-2xl font-bold flex items-center justify-center font-readex text-sm ${
-                          lead.isFresh ? 'bg-[#FF7A1A] text-white' : 'bg-[#FAF4E5] text-[#A07A26]'
-                        }`}>
+                        <div className={`w-10 h-10 rounded-2xl font-bold flex items-center justify-center font-readex text-sm ${tone.avatar}`}>
                           {lead.name.charAt(0)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="font-readex font-bold text-sm text-[#141414]">{lead.name}</h4>
                             <span className="font-mono text-xs text-[#6B665C] dir-ltr">{lead.phone}</span>
-                            {lead.isFresh && (
-                              <span className="bg-[#FF7A1A] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <Flame size={10} /> ليد فريش
+                            {(tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
+                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 ${tone.chip}`}>
+                                <Flame size={10} /> {tone.label}
                               </span>
                             )}
                           </div>
-                          {lead.isFresh && lead.campaignName && (
-                            <p className="text-[11px] text-[#C2412D] font-bold">من كامبين: {lead.campaignName}</p>
+                          {lead.campaignName && (tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
+                            <p className="text-[11px] font-bold" style={{ color: tone.hex }}>من كامبين: {lead.campaignName}</p>
                           )}
                           <p className="text-xs text-[#8C877D]">
                             المستشار المسؤول: <strong className="text-[#141414]">{lead.assignedAgentName || 'سارة حنفي'}</strong>
@@ -1813,6 +1891,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           agents={agents}
           properties={properties}
           isAdmin={isAdmin}
+          currentUserName={currentAgent?.name || (isAdmin ? 'الإدارة' : 'الفريق')}
+          currentUserId={currentAgent?.id}
           onUpdateLead={(updated) => {
             onUpdateLead(updated);
             setSelectedLeadForDetails(updated);

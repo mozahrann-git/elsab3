@@ -171,16 +171,61 @@ export interface ProjectFilter {
   maxDownPercent: 'all' | number;
   delivery: string;           // 'all' أو سنة
   maxPrice: 'all' | number;
+  /* اللي العميل يقدر عليه — جاي من مكالمة الاكتشاف */
+  maxMonthly?: 'all' | number;      // أعلى قسط شهري
+  maxDownAmount?: 'all' | number;   // أعلى مقدم بالجنيه
 }
 
 export const EMPTY_PROJECT_FILTER: ProjectFilter = {
   kind: 'all', neighborhood: 'all', maxDownPercent: 'all', delivery: 'all', maxPrice: 'all',
+  maxMonthly: 'all', maxDownAmount: 'all',
 };
 
 /** المشروع بيعدّي فلتر المقدم لو أي نظام من أنظمته في حدود المطلوب */
 export function lowestDownPercent(p: Project): number | undefined {
   const values = (p.plans || []).map((pl) => pl.downPaymentPercent).filter((v): v is number => typeof v === 'number');
   return values.length ? Math.min(...values) : undefined;
+}
+
+/** قيمة المقدم بالجنيه: مكتوبة، أو محسوبة من النسبة على السعر اللي بيبدأ منه */
+export function planDownAmount(p: Project, pl: PaymentPlan): number | undefined {
+  if (typeof pl.downPaymentAmount === 'number' && pl.downPaymentAmount > 0) return pl.downPaymentAmount;
+  if (typeof pl.downPaymentPercent === 'number' && typeof p.startingPrice === 'number') {
+    return (p.startingPrice * pl.downPaymentPercent) / 100;
+  }
+  return undefined;
+}
+
+/** القسط الشهري: مكتوب، أو من الربع سنوي ÷ ٣، أو محسوب من الباقي على السنين */
+export function planMonthly(p: Project, pl: PaymentPlan): number | undefined {
+  if (typeof pl.monthly === 'number' && pl.monthly > 0) return pl.monthly;
+  if (typeof pl.quarterly === 'number' && pl.quarterly > 0) return pl.quarterly / 3;
+  const down = planDownAmount(p, pl);
+  if (typeof p.startingPrice === 'number' && typeof pl.years === 'number' && pl.years > 0 && down !== undefined) {
+    const rest = p.startingPrice - down;
+    if (rest > 0) return rest / (pl.years * 12);
+  }
+  return undefined;
+}
+
+/**
+ * أنظمة السداد اللي العميل يقدر عليها فعلاً.
+ * النظام بيعدّي لو قسطه ومقدمه الاتنين في حدوده — مش واحد منهم بس،
+ * لأن اللي مقدمه قليل وقسطه عالي مش حل بالنسباله.
+ */
+export function affordablePlans(p: Project, f: ProjectFilter): PaymentPlan[] {
+  const maxM = f.maxMonthly && f.maxMonthly !== 'all' ? f.maxMonthly : Infinity;
+  const maxD = f.maxDownAmount && f.maxDownAmount !== 'all' ? f.maxDownAmount : Infinity;
+  if (maxM === Infinity && maxD === Infinity) return p.plans || [];
+
+  return (p.plans || []).filter((pl) => {
+    const m = planMonthly(p, pl);
+    const d = planDownAmount(p, pl);
+    // اللي مش عارفين رقمه مبنستبعدوش — بنستبعد اللي متأكدين إنه أعلى
+    if (m !== undefined && m > maxM) return false;
+    if (d !== undefined && d > maxD) return false;
+    return true;
+  });
 }
 
 export function matchProject(p: Project, f: ProjectFilter): boolean {
@@ -193,8 +238,12 @@ export function matchProject(p: Project, f: ProjectFilter): boolean {
     const low = lowestDownPercent(p);
     if (low === undefined || low > f.maxDownPercent) return false;
   }
+  // القسط والمقدم: المشروع بيعدّي لو فيه نظام واحد على الأقل يقدر عليه
+  const wantsAfford = (f.maxMonthly && f.maxMonthly !== 'all') || (f.maxDownAmount && f.maxDownAmount !== 'all');
+  if (wantsAfford && (p.plans || []).length && affordablePlans(p, f).length === 0) return false;
   return true;
 }
 
 export const countActiveProjectFilters = (f: ProjectFilter): number =>
-  [f.kind !== 'all', f.neighborhood !== 'all', f.delivery !== 'all', f.maxPrice !== 'all', f.maxDownPercent !== 'all'].filter(Boolean).length;
+  [f.kind !== 'all', f.neighborhood !== 'all', f.delivery !== 'all', f.maxPrice !== 'all', f.maxDownPercent !== 'all',
+   !!f.maxMonthly && f.maxMonthly !== 'all', !!f.maxDownAmount && f.maxDownAmount !== 'all'].filter(Boolean).length;

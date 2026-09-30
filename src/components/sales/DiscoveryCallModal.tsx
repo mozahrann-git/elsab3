@@ -46,10 +46,28 @@ export const DiscoveryCallModal: React.FC<Props> = ({ isOpen, lead, properties, 
 
   const build = (): Lead => {
     const districts: string[] = a.districts || [];
+
+    /* الميزانية بتتحط بحرية أول مرة. لكن لو كان ليها رقم معتمد قبل كده
+       والسيلز غيّره، ده تعديل — بيروح للإدارة والملف بيفضل على القديم. */
+    const hadBudget = !!lead.budgetMax;
+    const changed = hadBudget && (minB !== (lead.budgetMin || 0) || maxB !== (lead.budgetMax || 0));
+    const budgetPart = changed
+      ? {
+          budgetMin: lead.budgetMin, budgetMax: lead.budgetMax,
+          budgetChangeRequest: {
+            by: byName, at: Date.now(),
+            fromMin: lead.budgetMin || 0, fromMax: lead.budgetMax || 0,
+            toMin: minB, toMax: maxB,
+            note: 'اتغيّرت في مكالمة الاكتشاف',
+            status: 'pending' as const,
+          },
+        }
+      : { budgetMin: minB, budgetMax: maxB };
+
     return {
       ...lead,
       discovery: { ...a, answeredAt: Date.now(), by: byName },
-      budgetMin: minB, budgetMax: maxB,
+      ...budgetPart,
       preferredNeighborhood: districts[0] || lead.preferredNeighborhood,
       preferredBedrooms: a.rooms ? Number(String(a.rooms).replace('+', '')) : lead.preferredBedrooms,
       preferredFinishing: a.finishing === 'متشطبة' ? 'finished' : a.finishing === 'نص تشطيب' ? 'semi_finished' : lead.preferredFinishing,

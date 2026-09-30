@@ -65,7 +65,7 @@ export const SmartFilterDock: React.FC<Props> = ({
 
   const count = useMemo(() => properties.filter((p) => match(p, d)).length, [properties, d]);
   const activeProjects = countActiveProjectFilters(projectFilter);
-  const active = isOffPlan ? (activeProjects ? [`${activeProjects} فلتر`] : []) : [filter.search && 'كود', filter.neighborhood !== 'all' && filter.neighborhood, filter.finishing !== 'all' && (filter.finishing === 'finished' ? 'متشطب' : 'نص تشطيب'), filter.bedrooms !== 'all' && `${filter.bedrooms} غرف`, (filter.minPrice > 0 || filter.maxPrice < CEIL) && 'ميزانية'].filter(Boolean) as string[];
+  const active = isOffPlan ? (activeProjects ? [`${activeProjects} فلتر`] : []) : [filter.search && 'كود', filter.neighborhood !== 'all' && filter.neighborhood, filter.finishing !== 'all' && (filter.finishing === 'finished' ? 'متشطب' : 'نص تشطيب'), filter.bedrooms !== 'all' && `${filter.bedrooms} غرف`, (filter.floorLicense && filter.floorLicense !== 'all') && (filter.floorLicense === 'violation' ? 'مخالف' : 'داخل الرخصة'), (filter.minPrice > 0 || filter.maxPrice < CEIL) && 'ميزانية'].filter(Boolean) as string[];
 
   const apply = () => {
     if (isOffPlan) setProjectFilter?.(pd);
@@ -129,6 +129,35 @@ export const SmartFilterDock: React.FC<Props> = ({
                 <p className="text-[11px] text-[#8C877D]">المشروع بيظهر لو عنده أي نظام سداد في حدود المقدم ده.</p>
               </div>
 
+              <div className="space-y-2">
+                <p className="text-sm font-bold">اللي يقدر عليه</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="space-y-1 block">
+                    <span className="text-[11px] text-[#6B665C]">المقدم اللي معاه</span>
+                    <input
+                      type="number" inputMode="numeric" dir="ltr"
+                      value={pd.maxDownAmount && pd.maxDownAmount !== 'all' ? pd.maxDownAmount : ''}
+                      onChange={(e) => setPd({ ...pd, maxDownAmount: e.target.value ? Number(e.target.value) : 'all' })}
+                      placeholder="300000"
+                      className="w-full rounded-xl bg-white border border-[#E4DFD4] px-3 py-2.5 text-sm font-mono"
+                    />
+                  </label>
+                  <label className="space-y-1 block">
+                    <span className="text-[11px] text-[#6B665C]">القسط الشهري</span>
+                    <input
+                      type="number" inputMode="numeric" dir="ltr"
+                      value={pd.maxMonthly && pd.maxMonthly !== 'all' ? pd.maxMonthly : ''}
+                      onChange={(e) => setPd({ ...pd, maxMonthly: e.target.value ? Number(e.target.value) : 'all' })}
+                      placeholder="15000"
+                      className="w-full rounded-xl bg-white border border-[#E4DFD4] px-3 py-2.5 text-sm font-mono"
+                    />
+                  </label>
+                </div>
+                <p className="text-[11px] text-[#8C877D] leading-relaxed">
+                  بنعرض المشروع لو فيه نظام سداد واحد على الأقل مقدمه وقسطه في حدوده.
+                </p>
+              </div>
+
               {projectDeliveries.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-bold">الاستلام</p>
@@ -172,6 +201,17 @@ export const SmartFilterDock: React.FC<Props> = ({
                 <div className="grid grid-cols-4 gap-2">
                   {([['all', 'الكل'], ['2', '2'], ['3', '3'], ['4+', '4+']] as const).map(([k, t]) => <button key={k} onClick={() => setD({ ...d, bedrooms: k })} className={chip(d.bedrooms === k)}>{t}</button>)}
                 </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-bold">الدور والرخصة</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([['all', 'الكل'], ['licensed', 'داخل الرخصة'], ['violation', 'الدور مخالف']] as const).map(([k, t]) => (
+                    <button key={k} onClick={() => setD({ ...d, floorLicense: k })} className={chip((d.floorLicense || 'all') === k)}>{t}</button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-[#8C877D] leading-relaxed">
+                  الرخصة في الهضبة الوسطى أرضي + ٤ أدوار، وفي تقسيم المباحث أرضي + ٩.
+                </p>
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-bold">الميزانية</p>

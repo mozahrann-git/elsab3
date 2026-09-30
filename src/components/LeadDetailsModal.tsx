@@ -2,6 +2,7 @@ import { LeadActionPanel } from './LeadActionPanel';
 import { WhenPicker, formatWhen, relTime } from './common/WhenPicker';
 import React, { useState } from 'react';
 import { Lead, Property, SalesAgent, LeadStatus } from '../types';
+import { BudgetChangeBox } from './crm/BudgetChangeBox';
 import { 
   X, 
   Phone, 
@@ -32,6 +33,9 @@ interface LeadDetailsModalProps {
   onUpdateLead: (updatedLead: Lead) => void;
   onOpenAffiliateModal?: (property: Property) => void;
   isAdmin?: boolean;
+  /* اسم اللي فاتح الملف دلوقتي — بيتسجّل على طلب تعديل الميزانية */
+  currentUserName?: string;
+  currentUserId?: string;
 }
 
 const STAGES: { id: LeadStatus; label: string; badgeStyle: string }[] = [
@@ -54,7 +58,9 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   properties,
   onUpdateLead,
   onOpenAffiliateModal,
-  isAdmin = false
+  isAdmin = false,
+  currentUserName,
+  currentUserId
 }) => {
   const [newNote, setNewNote] = useState('');
   const [visitDate, setVisitDate] = useState(lead.visitScheduledAt || '');
@@ -217,6 +223,15 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
           {/* الأكشن الجاي + نقل إلى */}
           <LeadActionPanel lead={lead} stages={STAGES} byName={agents.find((x) => x.id === lead.assignedAgentId)?.name || 'الفريق'} onUpdateLead={onUpdateLead} />
 
+          {/* تعديل الميزانية بيمر على الإدارة */}
+          <BudgetChangeBox
+            lead={lead}
+            isAdmin={!!isAdmin}
+            byName={currentUserName || agents.find((a) => a.id === lead.assignedAgentId)?.name || 'الفريق'}
+            byId={currentUserId || lead.assignedAgentId}
+            onUpdateLead={onUpdateLead}
+          />
+
           {/* Key Customer Requirements Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-white border border-[#ECE8DF] rounded-2xl text-xs shadow-2xs">
 
@@ -229,6 +244,9 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
               <span className="text-[#6B665C] block text-[11px]">الميزانية المتاحة:</span>
               <strong className="text-[#141414] font-bold block">
                 {lead.budgetMax ? formatPrice(lead.budgetMax) : 'غير محددة'}
+                {lead.budgetChangeRequest?.status === 'pending' && (
+                  <span className="block text-[10px] font-bold text-[#7A5E12]">فيه طلب تعديل مستني الإدارة</span>
+                )}
               </strong>
             </div>
 

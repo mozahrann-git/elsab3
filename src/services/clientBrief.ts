@@ -18,6 +18,8 @@ export interface ClientBrief {
   budgetMax: number;                                    // 0 = مفتوح
   bedrooms: number;                                     // 0 = أي عدد
   finishing: 'finished' | 'semi_finished' | 'all';
+  downCash: number;                                     // المقدم اللي معاه — 0 = مش معروف
+  monthly: number;                                      // القسط الشهري اللي يقدر عليه — 0 = مش معروف
   payment?: string;                                     // كاش / تقسيط
   purpose?: string;                                     // ساكن / مستثمر
   urgency?: string;                                     // دلوقتي / خلال شهر / بيدوّر
@@ -54,6 +56,8 @@ export function readBrief(lead: Lead): ClientBrief {
     budgetMax: Number(lead.budgetMax) || 0,
     bedrooms,
     finishing: finishingOf(lead, d),
+    downCash: Number(String(d.downCash ?? '').replace(/[^\d.]/g, '')) || 0,
+    monthly: Number(String(d.monthly ?? '').replace(/[^\d.]/g, '')) || 0,
     payment: S(d.payment) || undefined,
     purpose: S(d.purpose) || undefined,
     urgency: S(d.urgency) || undefined,
@@ -171,4 +175,24 @@ export function briefLine(lead: Lead): string {
   if (b.purpose) parts.push(b.purpose);
   if (b.urgency) parts.push(b.urgency);
   return parts.join(' · ');
+}
+
+// ---------------- المشاريع تحت الإنشاء ----------------
+
+/**
+ * بيحوّل طلب العميل لفلتر مشاريع.
+ * الأرقام اللي اتقالت في مكالمة الاكتشاف (المقدم والقسط) هي اللي بتحكم،
+ * فالسيلز مش بيقعد يكتبها من تاني في كل شاشة.
+ */
+export function briefToProjectFilter(lead: Lead) {
+  const b = readBrief(lead);
+  return {
+    kind: 'all' as const,
+    neighborhood: b.districts.length === 1 ? b.districts[0] : 'all',
+    maxDownPercent: 'all' as const,
+    delivery: 'all' as const,
+    maxPrice: b.budgetMax ? b.budgetMax : ('all' as const),
+    maxMonthly: b.monthly ? b.monthly : ('all' as const),
+    maxDownAmount: b.downCash ? b.downCash : ('all' as const),
+  };
 }

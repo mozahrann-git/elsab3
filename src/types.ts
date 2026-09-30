@@ -87,6 +87,7 @@ export interface Property {
   bedrooms: number;                 // 2, 3, 4
   bathrooms: number;                // 1, 2, 3
   floor: string;                    // e.g. "الدور الثالث", "الدور الثاني"
+  licensedException?: boolean;      // الشقة مرخّصة فعلاً رغم إن دورها فوق الرخصة — الأدمن بيعلّم عليها
   totalFloors?: number;
   view: string;                     // e.g. "واجهة بحري شارع رئيسي", "فيو حديقة"
   deliveryDate: string;             // "استلام فوري" أو "استلام 2026"
@@ -127,6 +128,8 @@ export interface FilterState {
   neighborhood: string;             // 'all' or specific neighborhood 1-8
   finishing: 'all' | 'finished' | 'semi_finished';
   bedrooms: 'all' | '2' | '3' | '4+';
+  /* الدور والرخصة: الكل / داخل الرخصة بس / المخالف بس */
+  floorLicense?: 'all' | 'licensed' | 'violation';
   propertyType?: string;
   minPrice: number;
   maxPrice: number;
@@ -235,8 +238,19 @@ export interface Lead {
   campaignName?: string;            // اسم الكامبين اللي الليد جه منه
   isFresh?: boolean;                // ليد فريش لسه محدش كلّمه — بيتشال أول اتصال
   distributedAt?: number;           // وقت توزيعه على السيلز
+  viewingUpdateAt?: number;         // آخر تحديث من سارة على المعاينة
+  viewingSeenAt?: number;           // إمتى السيلز دوس "شفت" على التحديث
   activity?: { at: number; by: string; outcome: string; comment: string; nextAt?: number; transferTo?: string }[];
   transferredFrom?: string;
+  /* تعديل الميزانية بيمر على الإدارة — السيلز بيطلب، والإدارة بتأكد */
+  budgetChangeRequest?: {
+    by: string; byId?: string; at: number;
+    fromMin: number; fromMax: number;
+    toMin: number; toMax: number;
+    note: string;
+    status: 'pending' | 'approved' | 'rejected';
+    decidedBy?: string; decidedAt?: number; decisionNote?: string;
+  };
   snoozeCount?: number;             // كام مرة اتأجل، بيظهر في تقرير الليدر
 }
 

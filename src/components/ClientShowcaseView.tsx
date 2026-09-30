@@ -23,6 +23,7 @@ import {
 import { formatPrice, formatNumber, generateCallLink, generateWhatsAppLink, formatPropertyDescription } from '../utils/helpers';
 import { LionLogo } from './LionLogo';
 import { PropertyVideoPlayer } from './PropertyVideoPlayer';
+import { FloorNotice } from './FloorNotice';
 
 interface ClientShowcaseViewProps {
   property: Property;
@@ -324,6 +325,9 @@ export const ClientShowcaseView: React.FC<ClientShowcaseViewProps> = ({
             <p className="text-base sm:text-lg font-black text-stone-900 truncate">{property.floor}</p>
           </div>
         </div>
+
+        {/* الدور المخالف — بيتقال للعميل جوّه الشقة، قبل ما يتحمّس */}
+        <FloorNotice property={property} />
 
         {/* Highlights & Clean Paragraph Description */}
         <div className="p-5 sm:p-6 bg-white border border-stone-200/70 rounded-3xl space-y-4 shadow-xs">

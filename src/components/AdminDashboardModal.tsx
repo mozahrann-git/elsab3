@@ -85,6 +85,7 @@ import { safeLocalStorageSet } from '../utils/storageHelper';
 import { ProjectsManager } from './admin/ProjectsManager';
 import { DeepAnalytics } from './admin/DeepAnalytics';
 import { DemoDataCleanup } from './admin/DemoDataCleanup';
+import { FloorRuleRow } from './admin/FloorRuleRow';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -509,6 +510,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     bedrooms: 3,
     bathrooms: 2,
     floor: 'الدور الثالث',
+    licensedException: false,
     view: 'واجهة بحري صريحة شارع عريض',
     featuresText: 'واجهة فاخرة حجر هاشمي\nمدخل رخام ومصعد إيطالي\nعدادات كهرباء وغاز رسمية\nحصة مسجلة بالأرض',
     description: '',
@@ -762,6 +764,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       bedrooms: prop.bedrooms,
       bathrooms: prop.bathrooms,
       floor: prop.floor,
+      licensedException: (prop as any).licensedException === true,
       view: prop.view,
       featuresText: prop.features.join('\n'),
       description: prop.description,
@@ -820,6 +823,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         bedrooms: Number(formData.bedrooms),
         bathrooms: Number(formData.bathrooms),
         floor: formData.floor,
+        licensedException: formData.licensedException,
         view: formData.view,
         features: featuresList,
         description: formData.description.trim() || existing?.description || '',
@@ -853,6 +857,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         bedrooms: Number(formData.bedrooms),
         bathrooms: Number(formData.bathrooms),
         floor: formData.floor,
+        licensedException: formData.licensedException,
         view: formData.view,
         deliveryDate: 'استلام فوري',
         paymentMethod: 'cash_or_facilities',
@@ -1963,6 +1968,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
                         placeholder="الدور الثالث / رابع"
                         className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-900 text-xs focus:outline-none focus:border-stone-900"
+                      />
+                      {/* حكم النظام على الدور، وزرار الاستثناء لو معاك ورق الشقة */}
+                      <FloorRuleRow
+                        floor={formData.floor}
+                        neighborhood={formData.neighborhood}
+                        exempt={formData.licensedException}
+                        onToggleExempt={(v) => setFormData({ ...formData, licensedException: v })}
                       />
                     </div>
                   </div>

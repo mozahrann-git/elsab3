@@ -27,6 +27,8 @@ export const DEFAULT_FORMS: SalesForms = {
     { id: 'purpose', label: 'ساكن ولا مستثمر', type: 'chips', options: ['ساكن', 'مستثمر'], required: true },
     { id: 'districts', label: 'الحي', type: 'multi', required: true },
     { id: 'rooms', label: 'الغرف', type: 'chips', options: ['2', '3', '4+'], required: false },
+    { id: 'downCash', label: 'المقدم اللي معاه دلوقتي (ج.م)', type: 'number', required: false },
+    { id: 'monthly', label: 'القسط الشهري اللي يقدر عليه (ج.م)', type: 'number', required: false },
     { id: 'finishing', label: 'التشطيب', type: 'chips', options: ['متشطبة', 'نص تشطيب', 'الاتنين'], required: false },
     { id: 'urgency', label: 'محتاجها إمتى', type: 'chips', options: ['دلوقتي', 'خلال شهر', 'بيدوّر بس'], required: true },
   ],

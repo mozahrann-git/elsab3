@@ -69,8 +69,22 @@ service cloud.firestore {
     match /crm_leads/{leadId} {
       allow read: if isBoss();
       allow create: if true;
-      allow read, update: if isStaff();
       allow delete: if isAdmin();
+
+      // الإدارة بتعدّل أي حاجة
+      allow update: if isAdmin();
+
+      /* السيلز بيعدّل كل حاجة ما عدا الميزانية المعتمدة.
+         عايز يغيّرها؟ بيسيبها زي ما هي وبيبعت budgetChangeRequest،
+         والإدارة هي اللي بتغيّرها فعلاً. الفلتر في الواجهة مش كفاية لوحده. */
+      allow update: if isStaff()
+        && (
+          // أول مرة تتحط: مسموح
+          resource.data.get('budgetMax', 0) == 0
+          // بعد كده: لازم تفضل زي ما هي
+          || (request.resource.data.get('budgetMin', 0) == resource.data.get('budgetMin', 0)
+              && request.resource.data.get('budgetMax', 0) == resource.data.get('budgetMax', 0))
+        );
     }
 
     match /owner_submissions/{id} {

@@ -12,23 +12,50 @@ import { Lead, SalesAgent } from '../../types';
 
 interface Parsed { name: string; phone: string; note?: string }
 
+/* الأرقام العربية والفارسية بتيجي كده من الواتساب ومن تصدير الكامبينات،
+   ولو مترجمتش الرقم مبيتقريش خالص والسطر بيتشال. */
+const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+function toEnglishDigits(t: string): string {
+  return t.replace(/[٠-٩۰-۹]/g, (ch) => {
+    const a = ARABIC_DIGITS.indexOf(ch);
+    if (a >= 0) return String(a);
+    return String(PERSIAN_DIGITS.indexOf(ch));
+  });
+}
+
 /** بيطلّع اسم ورقم من أي سطر: "أحمد 01012345678" أو "01012345678 - أحمد" أو مفصولين بتاب/فاصلة */
 function parseLine(line: string): Parsed | null {
+  // الأول بنحوّل الأرقام العربية لإنجليزي، وبنشيل علامات الاتجاه اللي الواتساب بيحطها
+  const clean = toEnglishDigits(line.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')).trim();
+  if (!clean) return null;
+
   /* بنلزق أرقام الموبايل المكتوبة بشرطات أو مسافات (0100-123-4567) قبل ما ندوّر،
      لأن تصدير الكامبينات بيطلّعها كده كتير. */
-  const raw = line.trim().replace(/(\d)[\s\-().]+(?=\d)/g, '$1');
-  if (!raw) return null;
+  const raw = clean.replace(/(\d)[\s\-().]+(?=\d)/g, '$1');
 
-  const phoneMatch = raw.match(/(?:\+?20)?0?1[0-2,5]\d{8}/);
+  // 010/011/012/015 — بحدود عشان منخطفش أرقام من جوه رقم أطول
+  const phoneMatch = raw.match(/(?<!\d)(?:\+?2)?0?1[0125]\d{8}(?!\d)/);
   if (!phoneMatch) return null;
 
   let phone = phoneMatch[0].replace(/\D/g, '');
   if (phone.startsWith('20')) phone = phone.slice(2);
   if (!phone.startsWith('0')) phone = `0${phone}`;
+  if (phone.length !== 11) return null;
 
-  const rest = raw.replace(phoneMatch[0], ' ').replace(/[,\t;|()\-+]+/g, ' ').replace(/\s+/g, ' ').trim();
-  const name = rest || 'عميل من الكامبين';
-  return { name: name.slice(0, 60), phone };
+  /* الاسم: بناخده من السطر الأصلي (قبل لزق الأرقام) عشان أسماء فيها أرقام متتلغبطش،
+     وبنشيل منه الرقم بأي شكل اتكتب بيه. */
+  const digitsOnly = phone.slice(1);                       // 1012345678
+  const loose = digitsOnly.split('').join('[\\s\\-().]*');   // بيمسك الرقم حتى لو متفرّق
+  const rest = clean
+    .replace(new RegExp(`(?:\\+?2)?0?${loose}`), ' ')
+    .replace(/[,\t;|()\-+_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // لو اللي فضل أرقام أو نقط بس، مش اسم
+  const name = /[\p{L}]/u.test(rest) ? rest : '';
+  return { name: (name || 'عميل من الكامبين').slice(0, 60), phone };
 }
 
 const normPhone = (p: string) => p.replace(/\D/g, '').slice(-10);

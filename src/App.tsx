@@ -77,6 +77,8 @@ import { FollowUpPopup } from './components/FollowUpPopup';
 import { FieldCheckInPage } from './components/portal/FieldCheckInPage';
 import { saveUiSession, loadUiSession } from './utils/uiSession';
 import { logEvent } from './services/analyticsService';
+import { floorStatusOf } from './services/floorRules';
+import { syncLeadWithViewing, findLeadFor } from './services/viewingSync';
 import { alertCount } from './utils/followUpAlerts';
 import { seedOnce } from './services/seedGuard';
 import { BrokerPortalModal } from './components/BrokerPortalModal';
@@ -142,6 +144,7 @@ import {
   subscribeToOwnerSubmissions,
   saveOwnerSubmissionToDb,
   saveViewingRequestToDb,
+  subscribeToViewingRequests,
   subscribeToBrokers,
   seedBrokersToDb,
   subscribeToStaffAuth,
@@ -171,6 +174,7 @@ const INITIAL_FILTER: FilterState = {
   installmentYears: 'all',
   finishing: 'all',
   bedrooms: 'all',
+  floorLicense: 'all',
   budgetRange: 'all',
   minPrice: 0,
   maxPrice: 8000000,
@@ -1255,6 +1259,34 @@ export default function App() {
     saveLeadToDb(lead).catch(err => console.error('[Firebase] Error saving lead:', err));
   };
 
+  /* المعاينة بتحرّك كارت العميل لوحدها.
+     البروكر بيأكد المعاد → الكارت ينط لـ"معاينة مؤكدة" والسيلز يتنبّه.
+     المعاينة تتم → الكارت ينط لـ"تمت المعاينة" والفيدباك يبقى مستني تأكيد السيلز. */
+  useEffect(() => {
+    const unsub = subscribeToViewingRequests(null, (reqs) => {
+      if (!reqs?.length) return;
+      setCrmLeads((prev) => {
+        let changed = false;
+        const next = prev.map((lead) => {
+          const req = reqs.find((r) => findLeadFor(r, [lead]) === lead);
+          if (!req) return lead;
+          const res = syncLeadWithViewing(lead, req);
+          if (!res) return lead;
+          changed = true;
+          saveLeadToDb(res.lead).catch(() => {});
+          logEvent(res.movedTo === 'visit_booked' ? 'viewing_confirmed' : 'viewing_done', {
+            leadId: lead.id, actorId: lead.assignedAgentId, actorName: lead.assignedAgentName,
+            code: req.propertyCode, propertyId: req.propertyId,
+          });
+          return res.lead;
+        });
+        return changed ? next : prev;
+      });
+    });
+    return () => { try { unsub?.(); } catch { /* */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleAddLead = (newLead: Lead) => {
     logEvent('lead_created', {
       leadId: newLead.id, actorId: newLead.assignedAgentId, actorName: newLead.assignedAgentName,
@@ -1638,6 +1670,12 @@ export default function App() {
       }
 
       // 6. Bedrooms (2, 3, 4+)
+      // الدور والرخصة — اللي النظام مش فاهم دوره بيفضل ظاهر في الحالتين
+      if (filter.floorLicense && filter.floorLicense !== 'all') {
+        const st = floorStatusOf(prop);
+        if (st !== 'unknown' && st !== filter.floorLicense) return false;
+      }
+
       if (filter.bedrooms && filter.bedrooms !== 'all') {
         if (filter.bedrooms === '2' && prop.bedrooms !== 2) return false;
         if (filter.bedrooms === '3' && prop.bedrooms !== 3) return false;
@@ -2364,6 +2402,8 @@ export default function App() {
           onClose={() => setSalesToolkitProperty(null)}
           property={salesToolkitProperty}
           currentAgent={currentAgent}
+          leads={crmLeads}
+          onUpdateLead={handleUpdateLead}
           onRecordAction={handleRecordAgentAction}
           onAddLead={handleAddLead}
           onAddLeadsBulk={handleAddLeadsBulk}

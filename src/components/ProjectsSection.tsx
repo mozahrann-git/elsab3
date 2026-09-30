@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, Landmark, HardHat, CalendarClock, ChevronLeft, X, MessageCircle, MapPin, Play } from 'lucide-react';
-import { Project, ProjectFilter, subscribeProjects, matchProject, EMPTY_PROJECT_FILTER } from '../services/projectService';
+import { Project, ProjectFilter, subscribeProjects, matchProject, EMPTY_PROJECT_FILTER, affordablePlans, planMonthly, planDownAmount } from '../services/projectService';
 import { generateWhatsAppLink } from '../utils/helpers';
 import { videoPosterUrl } from '../utils/propertyMedia';
 
@@ -77,7 +77,7 @@ export const ProjectsSection: React.FC<Props> = ({ whatsappNumber, alwaysShow, f
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {shown.map((p) => <ProjectCard key={p.id} p={p} onOpen={() => setOpen(p)} />)}
+          {shown.map((p) => <ProjectCard key={p.id} p={p} filter={filter} onOpen={() => setOpen(p)} />)}
         </div>
       )}
 
@@ -99,8 +99,14 @@ const Chip: React.FC<{ active: boolean; onClick: () => void; children: React.Rea
   </button>
 );
 
-const ProjectCard: React.FC<{ p: Project; onOpen: () => void }> = ({ p, onOpen }) => {
-  const plan = p.plans?.[0];
+const ProjectCard: React.FC<{ p: Project; onOpen: () => void; filter?: ProjectFilter }> = ({ p, onOpen, filter }) => {
+  /* لو العميل قال مقدمه وقسطه، بنوريه النظام اللي يقدر عليه هو —
+     مش أول نظام في اللستة، ده ممكن يكون خارج قدرته أصلاً. */
+  const wantsAfford = !!filter && ((filter.maxMonthly && filter.maxMonthly !== 'all') || (filter.maxDownAmount && filter.maxDownAmount !== 'all'));
+  const fits = wantsAfford && filter ? affordablePlans(p, filter) : [];
+  const plan = (fits.length ? fits[0] : p.plans?.[0]);
+  const planMonthlyVal = plan ? planMonthly(p, plan) : undefined;
+  const planDownVal = plan ? planDownAmount(p, plan) : undefined;
   const isBuilding = p.kind === 'building';
   const hasVideo = Boolean((p.videoUrl || '').trim());
   // لو مفيش صور مرفوعة، بناخد لقطة من الفيديو بدل غلاف فاضي
@@ -153,8 +159,15 @@ const ProjectCard: React.FC<{ p: Project; onOpen: () => void }> = ({ p, onOpen }
         <div className="flex items-center gap-3 flex-wrap text-[11px] text-[#4A463F]">
           {plan?.downPaymentPercent != null && <span>مقدم {plan.downPaymentPercent}٪</span>}
           {plan?.years != null && <span>· {plan.years} سنين</span>}
-          {plan?.monthly != null && <span>· قسط {f(plan.monthly)}</span>}
+          {planMonthlyVal != null && <span>· قسط {f(Math.round(planMonthlyVal))}</span>}
         </div>
+
+        {wantsAfford && fits.length > 0 && (
+          <p className="text-[11px] font-bold text-[#1E7A45] bg-[#EEF5F0] border border-[#BFE0CC] rounded-lg px-2 py-1.5 leading-relaxed">
+            في حدوده: مقدم {planDownVal != null ? f(Math.round(planDownVal)) : '—'} وقسط {planMonthlyVal != null ? f(Math.round(planMonthlyVal)) : '—'}
+            {fits.length > 1 ? ` · و${fits.length - 1} نظام تاني` : ''}
+          </p>
+        )}
 
         <div className="flex items-center gap-2 flex-wrap pt-1">
           {p.constructionPercent != null && (

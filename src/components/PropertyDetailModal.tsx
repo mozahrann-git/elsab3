@@ -23,6 +23,7 @@ import { LionLogo } from './LionLogo';
 import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { hydratePropertyMedia } from '../utils/propertyMedia';
 import { logEvent } from '../services/analyticsService';
+import { FloorNotice } from './FloorNotice';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -433,6 +434,9 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               </div>
 
             </div>
+
+            {/* الدور المخالف — بيتقال جوّه الشقة قبل "عن الوحدة" */}
+            <FloorNotice property={property} forStaff={!!onEditProperty || !!onOpenSalesToolkit} />
 
             {/* "عن الوحدة" Section */}
             <div className="space-y-3 pt-2">
