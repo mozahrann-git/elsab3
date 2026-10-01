@@ -113,13 +113,27 @@ const STYLES: Record<LeadTone, ToneStyle> = {
   },
 };
 
+/** العميل ده موزّع من حد تاني على السيلز؟ */
+export function assignedByOther(lead: Lead): string | null {
+  const by = (lead as any).addedByName as string | undefined;
+  if (!by) return null;
+  // لو السيلز هو اللي ضافه بنفسه، مفيش حاجة تتقال
+  return by === lead.assignedAgentName ? null : by;
+}
+
 export function toneStyle(lead: Lead, now = Date.now()): ToneStyle {
   const tone = leadTone(lead, now);
   const base = STYLES[tone];
+  const by = assignedByOther(lead);
 
   // العميل اللي بقاله كتير من غير ما حد يكلّمه: التسمية بتفرق لو جاي من كامبين
   if (tone === 'old_campaign' && !(lead.source === 'campaign' || lead.campaignName)) {
-    return { ...base, label: 'بايت — محدش كلّمه' };
+    return { ...base, label: by ? `بايت — موزّع من ${by}` : 'بايت — محدش كلّمه' };
+  }
+
+  // الموزّع من الإدارة مش "ليد فريش" بتاعه — ده شغل موزّع عليه
+  if (tone === 'fresh' && by) {
+    return { ...base, label: `موزّع من ${by}` };
   }
   return base;
 }

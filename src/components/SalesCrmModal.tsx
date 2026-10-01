@@ -50,7 +50,7 @@ import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
 import { matchProperties, briefLine, briefGaps } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
-import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
+import { toneStyle, viewingUpdateText, markViewingSeen, assignedByOther } from '../utils/leadTone';
 import { humanDuration } from '../utils/followUpAlerts';
 import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpQuest } from '../services/questService';
 import { AgentDayPanel } from './crm/AgentDayPanel';
@@ -426,6 +426,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       notes: newLeadForm.notes.trim() ? [newLeadForm.notes.trim()] : ['تم إضافة العميل للمتابعة'],
       assignedAgentId: assignedAgent.id,
       assignedAgentName: assignedAgent.name,
+      /* مين ضافه فعلاً — عشان الكارت يفرّق بين عميل السيلز جابه بنفسه
+         وعميل الإدارة وزّعته عليه */
+      addedByName: currentAgent?.name || (isAdmin ? 'الإدارة' : 'الفريق'),
+      addedById: currentAgent?.id,
       createdAt: new Date().toISOString(),
       lastContactDate: 'الآن',
       followUpStatus: 'pending',
@@ -1023,6 +1027,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                                   )}
                                   {tone.tone === 'old_campaign' && lead.campaignName && (
                                     <span className="text-[10px] text-white/80 font-bold truncate">{lead.campaignName}</span>
+                                  )}
+                                  {/* مين وزّعه — عشان ما يتحسبش إنه من شغل السيلز */}
+                                  {tone.tone === 'fresh' && assignedByOther(lead) && (
+                                    <span className="text-[10px] text-white/80 font-bold truncate">
+                                      {lead.campaignName || 'إضافة يدوية'}
+                                    </span>
                                   )}
                                 </div>
                               )}
@@ -1899,6 +1909,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           onClose={() => setIsCampaignOpen(false)}
           agents={agents}
           existingLeads={leads}
+          distributorName={currentAgent?.name || 'الإدارة'}
           onDistribute={onAddLeadsBulk}
         />
       )}

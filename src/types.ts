@@ -242,6 +242,10 @@ export interface Lead {
   campaignName?: string;            // اسم الكامبين اللي الليد جه منه
   isFresh?: boolean;                // ليد فريش لسه محدش كلّمه — بيتشال أول اتصال
   distributedAt?: number;           // وقت توزيعه على السيلز
+  /* مين اللي ضاف العميل ووزّعه. لو الإدارة وزّعته على سيلز،
+     لازم يبان على الكارت إنه موزّع مش من شغل السيلز نفسه. */
+  addedByName?: string;
+  addedById?: string;
   /* إجابات مكالمة الاكتشاف — بتتملّى جزئياً من فورم إضافة العميل */
   discovery?: {
     districts?: string[];

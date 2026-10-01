@@ -62,13 +62,15 @@ const normPhone = (p: string) => p.replace(/\D/g, '').slice(-10);
 
 interface Props {
   isOpen: boolean;
+  /** اسم اللي بيوزّع — بيتكتب على كل ليد */
+  distributorName?: string;
   onClose: () => void;
   agents: SalesAgent[];
   existingLeads: Lead[];
   onDistribute: (leads: Lead[]) => void;
 }
 
-export const CampaignLeadsModal: React.FC<Props> = ({ isOpen, onClose, agents, existingLeads, onDistribute }) => {
+export const CampaignLeadsModal: React.FC<Props> = ({ isOpen, onClose, agents, existingLeads, onDistribute, distributorName }) => {
   const [text, setText] = useState('');
   const [campaign, setCampaign] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
@@ -153,6 +155,7 @@ export const CampaignLeadsModal: React.FC<Props> = ({ isOpen, onClose, agents, e
       notes: [campaign.trim() ? `ليد من كامبين: ${campaign.trim()}` : 'ليد من الكامبين'],
       assignedAgentId: r.agent.id,
       assignedAgentName: r.agent.name,
+      addedByName: distributorName || 'الإدارة',
       createdAt: new Date().toISOString(),
       lastContactDate: 'لسه محدش كلّمه',
       followUpStatus: 'pending',
