@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, Landmark, HardHat, CalendarClock, ChevronLeft, X, MessageCircle, MapPin, Play } from 'lucide-react';
-import { Project, ProjectFilter, subscribeProjects, matchProject, EMPTY_PROJECT_FILTER, affordablePlans, planMonthly, planDownAmount, fetchProjectPrivate } from '../services/projectService';
+import { Project, ProjectFilter, subscribeProjects, matchProject, EMPTY_PROJECT_FILTER, affordablePlans, planMonthly, planDownAmount, fetchProjectPrivate, areaPlanNumbers } from '../services/projectService';
 import { generateWhatsAppLink } from '../utils/helpers';
 import { videoPosterUrl } from '../utils/propertyMedia';
+import { ShareBar } from './ShareBar';
+import { projectText } from '../utils/shareKit';
 
 /*
   قسم "تحت الإنشاء" في الصفحة الرئيسية.
@@ -309,6 +311,15 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
             <Big label="الاستلام" value={p.deliveryDate || '—'} />
           </div>
 
+          {/* ابعته للعميل على طول */}
+          <ShareBar
+            text={projectText(p, { isStaff })}
+            images={p.images || []}
+            videoUrl={p.videoUrl}
+            baseName={p.code}
+            title={p.name}
+          />
+
           {(p.plans || []).length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-extrabold text-[#A07A26]">أنظمة السداد</p>
@@ -323,6 +334,40 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* المساحات بأسعارها ومقدمها وقسطها — محسوبة، مش مكتوبة بإيد حد */}
+          {(p.unitAreas || []).length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-extrabold text-[#A07A26]">المساحات وأقساطها</p>
+              <div className="bg-white border border-[#ECE8DF] rounded-2xl divide-y divide-[#ECE8DF] overflow-hidden">
+                {(p.unitAreas || []).map((u, i) => {
+                  const first = (p.plans || [])[0];
+                  const r = first ? areaPlanNumbers(p, u, first) : {};
+                  return (
+                    <div key={i} className={`px-4 py-3 space-y-1 ${u.sold ? 'opacity-55' : ''}`}>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-extrabold text-sm">
+                          {u.area} م²{u.label ? ` · ${u.label}` : ''}
+                          {u.sold && <span className="text-[10px] font-bold text-[#9E2A1B] mr-1.5">اتباعت</span>}
+                        </span>
+                        <span className="font-extrabold text-sm font-mono text-[#141414]">{f(r.price)} ج.م</span>
+                      </div>
+                      {(r.down !== undefined || r.monthly !== undefined) && (
+                        <p className="text-[11.5px] text-[#6B665C]">
+                          مقدم <b className="text-[#141414] font-mono">{f(r.down)}</b>
+                          {' · '}قسط شهري <b className="text-[#141414] font-mono">{f(r.monthly)}</b>
+                          {first?.years != null ? ` على ${first.years} سنين` : ''}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {(p.plans || []).length > 1 && (
+                <p className="text-[11px] text-[#8C877D]">الأرقام دي على {(p.plans || [])[0]?.label || 'النظام الأول'} — باقي الأنظمة فوق.</p>
+              )}
             </div>
           )}
 

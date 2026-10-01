@@ -24,13 +24,49 @@ export interface LeadAlert {
   urgency: AlertUrgency;
   relativeTimeText: string;
   isOverdue: boolean;
+  /** متأخر بكام دقيقة. صفر أو أقل يعني لسه في ميعاده. */
+  lateMinutes: number;
   at: number;
 }
 
-const rel = (mins: number) => {
-  const a = Math.abs(mins);
-  return a < 60 ? `${a} د` : a < 1440 ? `${Math.round(a / 60)} س` : `${Math.round(a / 1440)} يوم`;
+/*
+  مدة بالعربي زي ما بتتقال: "٣ ساعات" مش "3 س".
+  المثنى والجمع مظبوطين، عشان "متأخر 2 يوم" وحشة.
+*/
+const arCount = (n: number, one: string, two: string, few: string, many: string) => {
+  if (n === 1) return one;
+  if (n === 2) return two;
+  if (n >= 3 && n <= 10) return `${n} ${few}`;
+  return `${n} ${many}`;
 };
+
+export const humanDuration = (mins: number): string => {
+  const a = Math.max(0, Math.round(Math.abs(mins)));
+  if (a < 1) return 'دلوقتي';
+  if (a < 60) return arCount(a, 'دقيقة', 'دقيقتين', 'دقايق', 'دقيقة');
+
+  const hours = Math.floor(a / 60);
+  if (hours < 24) {
+    const rest = a % 60;
+    const h = arCount(hours, 'ساعة', 'ساعتين', 'ساعات', 'ساعة');
+    // الدقايق بتتقال مع الساعة الواحدة والاتنين بس — أكتر من كده بتبقى زحمة
+    return hours <= 2 && rest >= 10 ? `${h} و${rest} دقيقة` : h;
+  }
+
+  const days = Math.floor(a / 1440);
+  if (days < 7) {
+    const restH = Math.floor((a % 1440) / 60);
+    const d = arCount(days, 'يوم', 'يومين', 'أيام', 'يوم');
+    return days <= 2 && restH >= 1 ? `${d} و${arCount(restH, 'ساعة', 'ساعتين', 'ساعات', 'ساعة')}` : d;
+  }
+
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return arCount(weeks, 'أسبوع', 'أسبوعين', 'أسابيع', 'أسبوع');
+  const months = Math.floor(days / 30);
+  return arCount(months, 'شهر', 'شهرين', 'شهور', 'شهر');
+};
+
+const rel = (mins: number) => humanDuration(mins);
 
 /** بيبني كل التنبيهات من الليدات. الليد المقفول أو الخسران مبيطلّعش تنبيه. */
 export function buildAlerts(leads: Lead[], now = Date.now()): LeadAlert[] {
@@ -44,7 +80,7 @@ export function buildAlerts(leads: Lead[], now = Date.now()): LeadAlert[] {
     const m = Math.round((at - now) / 60000);
     return {
       t: at <= eod ? `النهارده ${t}` : `${d.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'short' })} ${t}`,
-      rel: m < 0 ? `متأخر ${rel(m)}` : `بعد ${rel(m)}`,
+      rel: m < 0 ? `متأخر من ${rel(m)}` : `بعد ${rel(m)}`,
     };
   };
 
@@ -72,6 +108,7 @@ export function buildAlerts(leads: Lead[], now = Date.now()): LeadAlert[] {
         urgency: at <= now ? 'urgent' : at <= eod ? 'today' : 'upcoming',
         relativeTimeText: f.rel,
         isOverdue: at <= now,
+        lateMinutes: Math.max(0, Math.round((now - at) / 60000)),
         at,
       });
     } else if (lead.status === 'new' && !at) {
@@ -86,6 +123,7 @@ export function buildAlerts(leads: Lead[], now = Date.now()): LeadAlert[] {
         urgency: 'urgent',
         relativeTimeText: 'دلوقتي',
         isOverdue: true,
+        lateMinutes: 0,
         at: now,
       });
     }

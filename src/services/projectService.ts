@@ -21,6 +21,14 @@ export interface PaymentPlan {
   quarterly?: number;          // القسط الربع سنوي
 }
 
+/** مساحة معروضة في المشروع */
+export interface UnitArea {
+  area: number;                // م²
+  price?: number;              // سعر مكتوب بإيدك — لو فاضي بيتحسب من سعر المتر
+  label?: string;              // وصف اختياري: "الدور التالت" مثلاً
+  sold?: boolean;
+}
+
 export interface Project {
   id: string;                  // = الكود
   kind: ProjectKind;
@@ -53,6 +61,9 @@ export interface Project {
 
   plans?: PaymentPlan[];
   availableUnits?: number;      // عدد الوحدات المتاحة
+  /* المساحات الموجودة في العمارة/المشروع.
+     سعر كل مساحة بيتحسب من سعر المتر، وعلى أساسه مقدمها وقسطها. */
+  unitAreas?: UnitArea[];
 
   // خاص بالعمارات المنفصلة
   floors?: number;
@@ -224,6 +235,34 @@ export const EMPTY_PROJECT_FILTER: ProjectFilter = {
 export function lowestDownPercent(p: Project): number | undefined {
   const values = (p.plans || []).map((pl) => pl.downPaymentPercent).filter((v): v is number => typeof v === 'number');
   return values.length ? Math.min(...values) : undefined;
+}
+
+/** سعر المساحة: المكتوب، وإلا المساحة × سعر المتر */
+export function areaPrice(p: Project, u: UnitArea): number | undefined {
+  if (typeof u.price === 'number' && u.price > 0) return u.price;
+  if (typeof p.pricePerMeter === 'number' && p.pricePerMeter > 0 && u.area > 0) return u.area * p.pricePerMeter;
+  return undefined;
+}
+
+/** مقدم وقسط المساحة دي على نظام سداد معيّن */
+export function areaPlanNumbers(p: Project, u: UnitArea, pl: PaymentPlan): { price?: number; down?: number; monthly?: number } {
+  const price = areaPrice(p, u);
+  if (price === undefined) return {};
+
+  // المقدم: نسبة على سعر المساحة، وإلا المبلغ المكتوب في النظام
+  const down = typeof pl.downPaymentPercent === 'number'
+    ? (price * pl.downPaymentPercent) / 100
+    : pl.downPaymentAmount;
+
+  // القسط: الباقي على شهور المدة. لو مفيش مدة بنرجع المكتوب.
+  let monthly: number | undefined;
+  if (typeof pl.years === 'number' && pl.years > 0 && down !== undefined) {
+    const rest = price - down;
+    if (rest > 0) monthly = rest / (pl.years * 12);
+  }
+  if (monthly === undefined) monthly = pl.monthly ?? (pl.quarterly ? pl.quarterly / 3 : undefined);
+
+  return { price, down, monthly };
 }
 
 /** قيمة المقدم بالجنيه: مكتوبة، أو محسوبة من النسبة على السعر اللي بيبدأ منه */

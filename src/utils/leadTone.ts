@@ -28,20 +28,33 @@ export interface ToneStyle {
 /* بعد كام يوم الليد بيبقى "كامبين قديم" */
 const OLD_AFTER_DAYS = 3;
 
+/** إمتى وصل العميل */
+function arrivedAt(lead: Lead): number {
+  return lead.distributedAt || Date.parse(lead.createdAt || '') || 0;
+}
+
+/** لسه محدش كلّمه فعلاً؟ */
+function untouched(lead: Lead): boolean {
+  return lead.status === 'new' && (lead.activity?.length || 0) === 0;
+}
+
 export function leadTone(lead: Lead, now = Date.now()): LeadTone {
   // ١) تحديث من سارة على المعاينة والسيلز لسه مشافهوش — ده الأهم
   const upd = (lead as any).viewingUpdateAt as number | undefined;
   const seen = (lead as any).viewingSeenAt as number | undefined;
   if (upd && (!seen || seen < upd)) return 'viewing_update';
 
-  // ٢) ليد فريش في خانة جديد — لسه محدش كلّمه
-  if (lead.isFresh && lead.status === 'new') return 'fresh';
+  /* ٢) ليد لسه محدش كلّمه.
 
-  // ٣) كامبين بقاله كام يوم ومحدش اتحرك عليه
-  const fromCampaign = lead.source === 'campaign' || !!lead.campaignName;
-  if (fromCampaign && lead.status === 'new') {
-    const at = lead.distributedAt || Date.parse(lead.createdAt || '') || 0;
-    if (at && now - at > OLD_AFTER_DAYS * 86400000) return 'old_campaign';
+     كان فيه بق: اللون كان بيعتمد على علامة isFresh، وديـ مكانت بتتحط
+     إلا من توزيع الكامبين. فأي عميل تضيفه بإيدك أو ييجي من الموقع
+     كان بيبقى أبيض عادي حتى لو لسه نازل دلوقتي ومحدش كلّمه.
+
+     دلوقتي المعيار هو الحقيقة نفسها: في خانة "جديد" + مفيش أي نشاط. */
+  if (untouched(lead)) {
+    const at = arrivedAt(lead);
+    const old = at && now - at > OLD_AFTER_DAYS * 86400000;
+    return old ? 'old_campaign' : 'fresh';
   }
 
   return 'none';
@@ -101,7 +114,14 @@ const STYLES: Record<LeadTone, ToneStyle> = {
 };
 
 export function toneStyle(lead: Lead, now = Date.now()): ToneStyle {
-  return STYLES[leadTone(lead, now)];
+  const tone = leadTone(lead, now);
+  const base = STYLES[tone];
+
+  // العميل اللي بقاله كتير من غير ما حد يكلّمه: التسمية بتفرق لو جاي من كامبين
+  if (tone === 'old_campaign' && !(lead.source === 'campaign' || lead.campaignName)) {
+    return { ...base, label: 'بايت — محدش كلّمه' };
+  }
+  return base;
 }
 
 /** آخر خبر من سارة — بيتكتب على الكارت الأزرق */

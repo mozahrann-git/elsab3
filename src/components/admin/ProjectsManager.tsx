@@ -4,6 +4,7 @@ import {
   Eye, EyeOff, AlertTriangle, CheckCircle2, ImagePlus, Film,
 } from 'lucide-react';
 import { Project, PaymentPlan, subscribeProjects, saveProject, saveProjects, deleteProject, fetchProjectPrivate } from '../../services/projectService';
+import { UnitAreasEditor } from './UnitAreasEditor';
 import { parseProjectsWorkbook } from '../../utils/projectsExcel';
 import { uploadFile } from '../../services/mediaStorage';
 
@@ -374,6 +375,9 @@ const ProjectForm: React.FC<{
               </div>
             ))}
           </div>
+
+          {/* المساحات — بعد أنظمة السداد عشان الحساب يبان على طول */}
+          <UnitAreasEditor d={d} setD={setD} />
 
           <MediaBlock d={d} set={set} />
 

@@ -24,6 +24,8 @@ import { formatPrice, formatNumber, generateCallLink, generateWhatsAppLink, form
 import { LionLogo } from './LionLogo';
 import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { FloorNotice } from './FloorNotice';
+import { ShareBar } from './ShareBar';
+import { propertyText } from '../utils/shareKit';
 
 interface ClientShowcaseViewProps {
   property: Property;
@@ -328,6 +330,15 @@ export const ClientShowcaseView: React.FC<ClientShowcaseViewProps> = ({
 
         {/* الدور المخالف — بيتقال للعميل جوّه الشقة، قبل ما يتحمّس */}
         <FloorNotice property={property} />
+
+        {/* ابعتها للعميل على الواتساب من غير لينك */}
+        <ShareBar
+          text={propertyText(property)}
+          images={rawImages}
+          videoUrl={property.videoUrl}
+          baseName={property.code}
+          title={property.title}
+        />
 
         {/* Highlights & Clean Paragraph Description */}
         <div className="p-5 sm:p-6 bg-white border border-stone-200/70 rounded-3xl space-y-4 shadow-xs">

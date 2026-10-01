@@ -340,10 +340,21 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs font-mono text-[#8C877D]">
-                      <Clock size={13} />
-                      <span>{alert.dueTime}</span>
-                    </div>
+                    {/* المتأخر لازم يبان إنه متأخر — مش "النهارده 6:45" وخلاص */}
+                    {alert.isOverdue && alert.lateMinutes > 0 ? (
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <span className="flex items-center gap-1.5 text-xs font-extrabold text-white bg-[#9E2A1B] px-2.5 py-1 rounded-lg">
+                          <AlertTriangle size={12} />
+                          {alert.relativeTimeText}
+                        </span>
+                        <span className="text-[11px] font-mono text-[#8C877D]">كان {alert.dueTime}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-xs font-mono text-[#8C877D]">
+                        <Clock size={13} />
+                        <span>{alert.dueTime}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Note / Description */}

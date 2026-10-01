@@ -66,6 +66,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    /* سجل المهام: مكالمات بنتيجتها وإعلانات بسكرين شوت.
+       الفريق بيسجّل ويقرا، والإدارة بس اللي بتمسح — عشان محدش
+       يشيل تسجيلة بعد ما الإدارة تراجعها. */
+    match /quest_logs/{id} {
+      allow read: if isStaff() || isOps() || isBoss() || isMkt();
+      allow create: if isStaff() || isOps();
+      allow update, delete: if isAdmin();
+    }
+
     match /crm_leads/{leadId} {
       allow read: if isBoss();
       allow create: if true;

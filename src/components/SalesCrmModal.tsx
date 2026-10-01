@@ -51,7 +51,12 @@ import { LeaderboardTab } from './sales/LeaderboardTab';
 import { matchProperties, briefLine, briefGaps } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
+import { humanDuration } from '../utils/followUpAlerts';
 import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpQuest } from '../services/questService';
+import { AgentDayPanel } from './crm/AgentDayPanel';
+import { QuestLogSheet } from './crm/QuestLogSheet';
+import { DayLogSummary } from './crm/DayLogSummary';
+import { QuestLog, subscribeDayLogs, dayKey, summarizeCalls, summarizeAds, CALL_OUTCOMES } from '../services/questLogService';
 import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
 import { OfferBuilderModal } from './sales/OfferBuilderModal';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
@@ -191,12 +196,20 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   }, [isOpen]);
 
   // Active Sales Agent for current session
+  /* مين الداخل فعلاً.
+
+     كان فيه بق خطير: لو مفيش سيلز داخل (يعني الأدمن)، الكود كان بيرجّع
+     agents[0] — أول واحد في القايمة. فالإدارة كانت بتشتغل باسم سهير
+     من غير ما حد ياخد باله: نقطها هي اللي بتظهر، ومهامها هي،
+     وأي مكالمة الأدمن يسجّلها كانت هتتسجّل باسمها.
+
+     دلوقتي: مفيش سيلز داخل = مفيش سيلز. الأدمن إدارة، مش سيلز. */
   const currentSalesAgent = useMemo(() => {
     if (currentAgentId) {
       const found = agents.find((a) => a.id === currentAgentId);
       if (found) return found;
     }
-    return agents.find((a) => a.isCurrentSession) || agents[0];
+    return agents.find((a) => a.isCurrentSession) || undefined;
   }, [agents, currentAgentId]);
 
   const currentAgent = currentSalesAgent;
@@ -271,6 +284,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [questTemplates, setQuestTemplates] = useState<QuestTemplate[]>(DEFAULT_QUESTS);
   useEffect(() => subscribeQuestTemplates(setQuestTemplates), []);
 
+  /* سجل مهام النهارده لكل الفريق — منه بنعرف المكالمات راحت فين والإعلانات اتنشرت على إيه */
+  const [dayLogs, setDayLogs] = useState<QuestLog[]>([]);
+  useEffect(() => subscribeDayLogs(dayKey(), setDayLogs), []);
+  const [logQuest, setLogQuest] = useState<DailyQuest | null>(null);
+  const [toast, setToast] = useState('');
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2800); };
+
   const [offerPicks, setOfferPicks] = useState<string[]>([]);
   useEffect(() => { setOfferPicks([]); }, [matchingLeadId]);
   const togglePick = (id: string) => setOfferPicks((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
@@ -332,7 +352,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     id: t.id, title: t.title, description: t.description, xpReward: t.xpReward,
     targetCount: t.targetCount, currentCount: 0, isCompleted: false, category: t.category,
   }));
-  const agentQuests: DailyQuest[] = buildAgentQuests(questTemplates, currentAgent);
+  /* الإدارة لما تدوس على حد في قايمة الفريق، المفروض تشوف نقطه هو ومهامه هو */
+  const shownAgent = (viewAgentId !== 'all' ? agents.find((a) => a.id === viewAgentId) : null) || currentAgent;
+  const viewingSomeoneElse = !!shownAgent && shownAgent.id !== currentAgent?.id;
+  const agentQuests: DailyQuest[] = shownAgent ? buildAgentQuests(questTemplates, shownAgent) : [];
   const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م' };
   const deleteRequests = isAdmin && canEdit ? leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved) : [];
   const [moveComment, setMoveComment] = useState('');
@@ -375,7 +398,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     e.preventDefault();
     if (!newLeadForm.name.trim() || !newLeadForm.phone.trim()) return;
 
-    const assignedAgent = agents.find((a) => a.id === newLeadForm.assignedAgentId) || currentSalesAgent || agents[0];
+    /* الأدمن لازم يختار السيلز بإيده — من غير كده العميل كان بيروح
+       لأول واحد في القايمة من غير ما حد يعرف */
+    const assignedAgent = agents.find((a) => a.id === newLeadForm.assignedAgentId) || currentSalesAgent;
+    if (!assignedAgent) { showToast('اختار السيلز المسؤول عن العميل ده'); return; }
 
     const newLead: Lead = {
       id: `lead_${Date.now()}`,
@@ -503,8 +529,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 </div>
               </div>
 
+              {/* بتتبع اللي إنت شايفه. الإدارة من غير اختيار = مفيش نقط، مش نقط حد تاني */}
               <span className="px-2 py-0.5 bg-[#FAF4E5]/10 border border-[#E9DFCA]/20 text-[#FAF4E5] text-[10px] font-mono font-bold rounded-lg">
-                {currentSalesAgent?.xp || 1450} XP
+                {shownAgent ? `${(shownAgent.xp || 0).toLocaleString('en-US')} XP` : 'إدارة'}
               </span>
             </div>
           </div>
@@ -786,7 +813,21 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     </button>
                   )}
                 </div>
-                <p className="text-[11px] text-[#8C877D]">دوس على أي حد عشان تشوف عملاءه لوحدهم</p>
+                <p className="text-[11px] text-[#8C877D]">دوس على أي حد عشان تشوف عملاءه ونقطه وإنجازه النهارده</p>
+
+                {/* اللي إنت دايس عليه: نقطه هو ومهامه هو واللي عمله النهارده */}
+                {viewAgentId !== 'all' && (() => {
+                  const sel = agents.find((a) => a.id === viewAgentId);
+                  return sel ? (
+                    <AgentDayPanel
+                      agent={sel}
+                      leads={leads}
+                      questTemplates={questTemplates}
+                      dayLogs={dayLogs}
+                      onClose={() => setViewAgentId('all')}
+                    />
+                  ) : null;
+                })()}
                 {visibleAgents.map((a) => {
                   const mine = leads.filter((l) => l.assignedAgentId === a.id);
                   const late = mine.filter((l) => l.nextActionAt && l.nextActionAt < Date.now() && l.followUpStatus !== 'completed').length;
@@ -992,13 +1033,29 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                               )}
                               {/* Top row: Client Name & Follow-up urgency badge */}
                               <div className="flex items-center justify-between">
-                                <span className={`font-bold text-xs ${
-                                  tone.solid
-                                    ? (lead.followUpUrgency === 'urgent' ? 'text-white' : 'text-white/85')
-                                    : (lead.followUpUrgency === 'urgent' ? 'text-rose-600' : 'text-[#A07A26]')
-                                }`}>
-                                  {lead.followUpUrgency === 'urgent' ? 'عاجل' : lead.followUpScheduledAt || st.defaultBadge}
-                                </span>
+                                {/* المتأخر بيقول متأخر من إمتى — "عاجل" لوحدها مش بتقول حاجة */}
+                                {(() => {
+                                  const lateMins = lead.nextActionAt && lead.followUpStatus !== 'completed'
+                                    ? Math.round((Date.now() - lead.nextActionAt) / 60000) : 0;
+                                  if (lateMins > 0) {
+                                    return (
+                                      <span className={`font-extrabold text-[11px] px-2 py-0.5 rounded-lg ${
+                                        tone.solid ? 'bg-white text-[#9E2A1B]' : 'bg-[#9E2A1B] text-white'
+                                      }`}>
+                                        متأخر {humanDuration(lateMins)}
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className={`font-bold text-xs ${
+                                      tone.solid
+                                        ? (lead.followUpUrgency === 'urgent' ? 'text-white' : 'text-white/85')
+                                        : (lead.followUpUrgency === 'urgent' ? 'text-rose-600' : 'text-[#A07A26]')
+                                    }`}>
+                                      {lead.followUpUrgency === 'urgent' ? 'عاجل' : lead.followUpScheduledAt || st.defaultBadge}
+                                    </span>
+                                  );
+                                })()}
                                 
                                 <h5 
                                   onClick={() => setSelectedLeadForDetails(lead)}
@@ -1214,9 +1271,20 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
                       <div>
                         <span className="text-[#8C877D] text-[10px] block font-bold">الأولوية:</span>
-                        <span className={`font-bold ${lead.followUpUrgency === 'urgent' ? 'text-rose-600' : 'text-[#A07A26]'}`}>
-                          {lead.followUpUrgency === 'urgent' ? '🔴 عاجل فوراً' : '🟡 متابعة اليوم'}
-                        </span>
+                        {/* المتأخر بيقول متأخر من إمتى بالظبط */}
+                        {(() => {
+                          const lateMins = lead.nextActionAt && lead.followUpStatus !== 'completed'
+                            ? Math.round((Date.now() - lead.nextActionAt) / 60000) : 0;
+                          return lateMins > 0 ? (
+                            <span className="font-extrabold text-white bg-[#9E2A1B] px-2 py-0.5 rounded-lg inline-block">
+                              متأخر {humanDuration(lateMins)}
+                            </span>
+                          ) : (
+                            <span className={`font-bold ${lead.followUpUrgency === 'urgent' ? 'text-rose-600' : 'text-[#A07A26]'}`}>
+                              {lead.followUpUrgency === 'urgent' ? '🔴 عاجل فوراً' : '🟡 متابعة اليوم'}
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       <div>
@@ -1265,12 +1333,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         📝 <strong className="text-[#141414]">آخر ملاحظة:</strong> {lead.followUpNote || lead.notes?.[0] || 'لا توجد ملاحظات مسجلة بعد'}
                       </p>
 
-                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                      <div className="flex flex-wrap items-center gap-2 justify-end self-stretch sm:self-auto">
                         <a
                           href={generateWhatsAppLink(lead.phone, undefined, undefined, `مرحباً أستاذ ${lead.name}، بخصوص الشقق المعروضة بالهضبة الوسطى`)}
                           target="_blank"
                           rel="noreferrer"
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1"
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 whitespace-nowrap shrink-0"
                         >
                           <MessageCircle size={14} />
                           <span>واتساب</span>
@@ -1278,7 +1346,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
                         <a
                           href={generateCallLink(lead.phone)}
-                          className="px-3 py-1.5 bg-[#141414] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1"
+                          className="px-3 py-1.5 bg-[#141414] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1 whitespace-nowrap shrink-0"
                         >
                           <Phone size={14} />
                           <span>اتصال</span>
@@ -1292,7 +1360,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                             setMatchingLeadId(lead.id);
                             setActiveTab('matching');
                           }}
-                          className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl"
+                          className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl whitespace-nowrap shrink-0"
                         >
                           {briefGaps(lead).length === 0 ? 'ابني عرض من المطابقة' : 'كمّل طلبه'}
                         </button>
@@ -1300,26 +1368,30 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         {briefGaps(lead).length > 0 && (
                           <button
                             onClick={() => setDiscoveryLead(lead)}
-                            className="px-2.5 py-1.5 bg-[#FFF8E6] text-[#7A5E12] text-[11px] font-bold rounded-xl border border-[#EBD9A6]"
+                            title={`ناقص: ${briefGaps(lead).map((g) => g.label).join('، ')}`}
+                            className="px-2.5 py-1.5 bg-[#FFF8E6] text-[#7A5E12] text-[11px] font-bold rounded-xl border border-[#EBD9A6] whitespace-nowrap shrink-0"
                           >
-                            ناقص {briefGaps(lead).map((g) => g.label).join('، ')}
+                            {/* مختصرة عشان ما تتكسرش عمودي وتبوّظ شكل الكارت */}
+                            {briefGaps(lead).length === 1
+                              ? `ناقص ${briefGaps(lead)[0].label}`
+                              : `ناقص ${briefGaps(lead).length} بيانات`}
                           </button>
                         )}
                         <button
                           onClick={() => { setMatchingLeadId(lead.id); setActiveTab('matching'); }}
-                          className="px-3 py-1.5 bg-[#E6F7ED] text-[#0E7A5A] text-xs font-bold rounded-xl border border-[#B3E8C8]"
+                          className="px-3 py-1.5 bg-[#E6F7ED] text-[#0E7A5A] text-xs font-bold rounded-xl border border-[#B3E8C8] whitespace-nowrap shrink-0"
                         >
                           شقق مناسبة له
                         </button>
                         <button
                           onClick={() => setSelectedLeadForDetails(lead)}
-                          className="px-3 py-1.5 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] text-xs font-bold rounded-xl border border-[#ECE8DF]"
+                          className="px-3 py-1.5 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] text-xs font-bold rounded-xl border border-[#ECE8DF] whitespace-nowrap shrink-0"
                         >
                           تفاصيل الملف
                         </button>
                         {isAdmin && canEdit ? (
                           <button onClick={() => adminDeleteLead(lead)}
-                            className="px-2.5 py-1.5 bg-[#FBEDEA] hover:bg-[#F7DED8] text-[#C2412D] text-xs font-bold rounded-xl border border-[#E9B8AE]">
+                            className="px-2.5 py-1.5 bg-[#FBEDEA] hover:bg-[#F7DED8] text-[#C2412D] text-xs font-bold rounded-xl border border-[#E9B8AE] whitespace-nowrap shrink-0">
                             حذف
                           </button>
                         ) : (lead as any).deleteRequest && !(lead as any).deleteRequest.resolved ? (
@@ -1570,10 +1642,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#ECE8DF] pb-4">
                 <div>
                   <h3 className="font-readex font-bold text-base sm:text-lg text-[#141414]">
-                    تحديات اليوم ونقاط الخبرة XP
+                    {viewAgentId !== 'all' && shownAgent ? `مهام ${shownAgent.name} ونقطه` : 'تحديات اليوم ونقاط الخبرة XP'}
                   </h3>
                   <p className="text-xs text-[#6B665C]">
-                    أنجز المهام اليومية لرفع مستواك وفتح جوائز وعمولات إضافية
+                    {viewAgentId !== 'all' && shownAgent
+                      ? `${(shownAgent.xp || 0).toLocaleString('en-US')} نقطة · بتتفرّج بس، التسجيل بيتعمل من حسابه`
+                      : 'أنجز المهام اليومية لرفع مستواك وفتح جوائز وعمولات إضافية'}
                   </p>
                 </div>
                 <button
@@ -1584,6 +1658,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   <span>عجلة الحظ للمبيعات</span>
                 </button>
               </div>
+
+              {!shownAgent ? (
+                <p className="text-xs bg-[#FFF8E6] border border-[#EBD9A6] text-[#7A5E12] rounded-xl px-4 py-3 leading-relaxed">
+                  إنت داخل كإدارة، والمهام والنقط بتبقى لكل سيلز لوحده.
+                  ارجع لـ<b> مسار المتابعات اليومية </b>ودوس على أي حد من الفريق عشان تشوف مهامه ونقطه وإنجازه.
+                </p>
+              ) : (
+                /* شغل النهارده بالتفصيل — المكالمات والإعلانات */
+                <DayLogSummary logs={dayLogs.filter((l) => l.agentId === shownAgent.id)} />
+              )}
 
               {/* Quest Items List */}
               <div className="space-y-3.5">
@@ -1646,13 +1730,26 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                               <Check size={13} />
                               <span>مكتملة ✓</span>
                             </span>
+                          ) : viewingSomeoneElse ? (
+                            /* بتتفرّج على حد تاني — ما ينفعش تسجّل نشاط باسمه */
+                            <span className="px-3 py-1.5 bg-[#F6F4EF] border border-[#E4DFD4] text-[#6B665C] text-[11px] font-bold rounded-xl">
+                              لسه
+                            </span>
                           ) : (
                             <button
-                              onClick={() => handleIncrementQuest(quest.id)}
+                              onClick={() => {
+                                /* المكالمة والإعلان محتاجين تفاصيل — مش مجرد +1 */
+                                if (quest.category === 'calls' || quest.category === 'facebook_share') setLogQuest(quest);
+                                else handleIncrementQuest(quest.id);
+                              }}
                               className="px-3.5 py-1.5 bg-[#141414] hover:bg-black text-white text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 flex items-center gap-1 shadow-2xs"
                             >
                               <Plus size={13} />
-                              <span>تسجيل نشاط (+1)</span>
+                              <span>
+                                {quest.category === 'calls' ? 'سجّل مكالمة'
+                                  : quest.category === 'facebook_share' ? 'سجّل إعلان'
+                                  : 'تسجيل نشاط (+1)'}
+                              </span>
                             </button>
                           )}
                         </div>
@@ -1778,6 +1875,24 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       {/* ========================================================= */}
       {/* ADD NEW LEAD MODAL */}
       {/* ========================================================= */}
+      {toast && (
+        <div className="fixed bottom-5 inset-x-0 z-[120] flex justify-center px-4 pointer-events-none">
+          <p className="bg-[#141414] text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow-lg">{toast}</p>
+        </div>
+      )}
+
+      {/* تسجيل مكالمة أو إعلان بتفاصيله */}
+      {logQuest && currentAgent && (
+        <QuestLogSheet
+          quest={logQuest}
+          agent={currentAgent}
+          leads={leads}
+          onClose={() => setLogQuest(null)}
+          onSaved={() => handleIncrementQuest(logQuest.id)}
+          showToast={showToast}
+        />
+      )}
+
       {onAddLeadsBulk && (
         <CampaignLeadsModal
           isOpen={isCampaignOpen}

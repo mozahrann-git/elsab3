@@ -43,13 +43,42 @@ export const DEFAULT_FORMS: SalesForms = {
     { id: 'question', label: 'السؤال اللي يخلّيهم يردوا', hint: 'السؤال بيجيب تعليقات، والتعليقات بتجيب ناس', example: 'تفضل دور أعلى ولا مساحة أكبر؟', required: true },
   ],
 };
+/*
+  دمج الأسئلة المحفوظة مع اللي جاي مع النظام.
+
+  المشكلة اللي بيحلّها: النسخة المحفوظة في الداتابيز كانت بتحل محل الافتراضية
+  بالكامل. فأي سؤال جديد يتضاف في الكود مكانش بيوصل أبداً لحد فتح المكالمة
+  قبل كده — الأسئلة تفضل ٧ زي ما اتحفظت من زمان.
+
+  دلوقتي: ترتيب الأدمن وتعديلاته محفوظين، وأي سؤال جديد بيتضاف في آخر القايمة.
+  السؤال اللي الأدمن مسحه بقصد بيفضل متمسوح (بنسجّل المحذوفين).
+*/
+function mergeDiscovery(saved?: DiscoveryQuestion[], removed?: string[]): DiscoveryQuestion[] {
+  if (!saved || !saved.length) return DEFAULT_FORMS.discovery;
+  const gone = new Set(removed || []);
+  const have = new Set(saved.map((q) => q.id));
+  const extra = DEFAULT_FORMS.discovery.filter((q) => !have.has(q.id) && !gone.has(q.id));
+  return [...saved, ...extra];
+}
+
 export function subscribeSalesForms(cb: (f: SalesForms) => void) {
   return onSnapshot(doc(db, 'site_config', 'sales_forms'), (s) => {
-    const d = s.data() as Partial<SalesForms> | undefined;
-    cb({ ...DEFAULT_FORMS, ...(d || {}) });
+    const d = s.data() as (Partial<SalesForms> & { removedDiscovery?: string[] }) | undefined;
+    cb({
+      ...DEFAULT_FORMS,
+      ...(d || {}),
+      discovery: mergeDiscovery(d?.discovery, d?.removedDiscovery),
+    });
   }, () => cb(DEFAULT_FORMS));
 }
 export async function saveSalesForms(f: Partial<SalesForms>) {
+  /* السؤال اللي الأدمن شاله من القايمة بنسجّله كمحذوف،
+     وإلا الدمج فوق هيرجّعه تاني مع كل تحميل. */
+  if (f.discovery) {
+    const kept = new Set(f.discovery.map((q) => q.id));
+    const removed = DEFAULT_FORMS.discovery.filter((q) => !kept.has(q.id)).map((q) => q.id);
+    (f as any).removedDiscovery = removed;
+  }
   await setDoc(doc(db, 'site_config', 'sales_forms'), cleanFirestoreData(f), { merge: true });
 }
 

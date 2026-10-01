@@ -24,6 +24,8 @@ import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { hydratePropertyMedia } from '../utils/propertyMedia';
 import { logEvent } from '../services/analyticsService';
 import { FloorNotice } from './FloorNotice';
+import { ShareBar } from './ShareBar';
+import { propertyText } from '../utils/shareKit';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -437,6 +439,17 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
             {/* الدور المخالف — بيتقال جوّه الشقة قبل "عن الوحدة" */}
             <FloorNotice property={property} forStaff={!!onEditProperty || !!onOpenSalesToolkit} />
+
+            {/* المشاركة للفريق — العميل العادي عنده زرار الواتساب تحت */}
+            {(!!onEditProperty || !!onOpenSalesToolkit) && (
+              <ShareBar
+                text={propertyText(property)}
+                images={(property.images || []).filter(Boolean)}
+                videoUrl={property.videoUrl}
+                baseName={property.code}
+                title={property.title}
+              />
+            )}
 
             {/* "عن الوحدة" Section */}
             <div className="space-y-3 pt-2">
