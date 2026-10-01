@@ -9,6 +9,7 @@ import { SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveOffer, OfferUnit, c
 import { formatWhen } from '../common/WhenPicker';
 import { waLink } from '../../utils/helpers';
 import { matchProperties, briefLine, briefGaps } from '../../services/clientBrief';
+import { copyText, downloadAll } from '../../utils/shareKit';
 
 /*
   العرض المخصوص: الفلترة آلية من مكالمة الاكتشاف، والاختيار والترتيب والسطور بشرية.
@@ -65,6 +66,22 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
   const move = (i: number, dir: -1 | 1) => setPicked((l) => { const n = [...l]; const j = i + dir; if (j < 0 || j >= n.length) return n; [n[i], n[j]] = [n[j], n[i]]; return n; });
   const hasVoiceOrNotes = !!voice || picked.some((u) => (u.note || '').trim().length > 3);
 
+  /* النص اللي بيتنسخ مع الصور — نفس اللي في العرض بالظبط */
+  const offerPlainText = useMemo(() => {
+    const L: string[] = [];
+    L.push(intro.trim() || `أهلاً أستاذ ${lead.name}، دول أحسن ${picked.length} حاجات عندي دلوقتي بعد كلامنا.`);
+    L.push('');
+    picked.forEach((u, i) => {
+      L.push(`${i + 1}. ${u.title} — ${Math.round(u.price).toLocaleString('en-US')} ج.م`);
+      if (u.note) L.push(`   « ${u.note} »`);
+    });
+    L.push('');
+    L.push(question.trim() || 'قولّي رأيك وأنا أرتبلك المعاينة');
+    L.push('');
+    L.push(`${agentName} — السبع للعقارات`);
+    return L.join('\n');
+  }, [picked, intro, question, lead.name, agentName]);
+
   const send = async () => {
     setBusy(true);
     try {
@@ -120,43 +137,32 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
               <a href={done.wa} target="_blank" rel="noopener noreferrer" className="py-3 rounded-xl bg-[#1FA85D] text-white text-center font-bold">ابعته واتساب</a>
               <button onClick={() => navigator.clipboard?.writeText(done.link)} className="py-3 rounded-xl bg-[#F6F4EF] font-bold flex items-center justify-center gap-2"><Copy size={16} />انسخ اللينك</button>
             </div>
-            {/* للعملاء اللي مش بيفتحوا لينكات: العرض بينزل صور تتبعت في الشات على طول */}
-            <div className="rounded-2xl bg-white border border-[#ECE8DF] p-4 space-y-2">
-              <p className="font-bold text-sm">العميل مش بيفتح لينكات؟</p>
-              <p className="text-xs text-[#6B665C] leading-relaxed">
-                نزّل الشقق كصور وابعتهالُه في الشات عادي. كل شقة صورة فيها الكود والسعر والمساحة ولوجو السبع.
-              </p>
-              <button
-                onClick={async () => {
-                  setImgBusy('جاري التجهيز...');
-                  try {
-                    const n = await downloadOfferCards(
-                      picked.map((u) => ({
-                        code: u.code,
-                        title: u.title,
-                        note: u.note,
-                        property: properties.find((p) => p.id === u.propertyId || p.code === u.code),
-                      })),
-                      {
-                        agentName,
-                        agentPhone,
-                        leadName: lead.name,
-                        onProgress: (i, t) => setImgBusy(`بيجهّز صورة ${i} من ${t}...`),
-                      },
-                    );
-                    setImgBusy(n ? `نزلت ${n} صورة` : 'محصلش تنزيل');
-                  } catch {
-                    setImgBusy('الصور ما اتجهزتش، جرّب تاني');
+            {/* زرار صغير مش بيبان: بينسخ التفاصيل وينزّل الصور والفيديو مرة واحدة،
+                للعميل اللي مش بيفتح لينكات */}
+            <button
+              onClick={async () => {
+                setImgBusy('بيجهّز...');
+                try {
+                  await copyText(offerPlainText);
+                  const media = picked
+                    .map((u) => properties.find((p) => p.id === u.propertyId || p.code === u.code))
+                    .flatMap((p) => (p ? [...(p.images || []).slice(0, 1), p.videoUrl || ''] : []))
+                    .filter(Boolean) as string[];
+                  if (media.length) {
+                    await downloadAll(media, `عرض-${lead.name}`, (d, t) => setImgBusy(`${d} من ${t}`));
                   }
-                  setTimeout(() => setImgBusy(''), 3000);
-                }}
-                disabled={!!imgBusy || picked.length === 0}
-                className="w-full py-3 rounded-xl bg-[#A07A26] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-              >
-                <ImageDown size={16} />
-                {imgBusy || `نزّل العرض كصور (${picked.length})`}
-              </button>
-            </div>
+                  setImgBusy('اتنسخ واتحمّل ✓');
+                } catch {
+                  setImgBusy('جرّب تاني');
+                }
+                setTimeout(() => setImgBusy(''), 2500);
+              }}
+              disabled={!!imgBusy || picked.length === 0}
+              className="w-full text-[11px] text-[#6B665C] py-2 flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              <ImageDown size={12} />
+              {imgBusy || 'العميل مش بيفتح لينكات؟ انسخ التفاصيل ونزّل الصور'}
+            </button>
 
             <button onClick={onClose} className="w-full py-3 rounded-xl bg-[#141414] text-white font-bold">تمام</button>
           </div>

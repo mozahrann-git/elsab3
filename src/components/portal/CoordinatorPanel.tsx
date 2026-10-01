@@ -419,6 +419,7 @@ const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; byName: string; onApp
               <Chip tone={(s as any).brokerId ? ('blue' as any) : 'gold'}>{(s as any).brokerId ? `بروكر: ${(s as any).brokerId}` : 'من مالك'}</Chip>
             </div>
             <p className="text-sm">{fmt(s.askingPrice)} ج.م · {(s as any).brokerId ? 'بعتها البروكر' : 'المالك'}: {s.ownerName}</p>
+            {s.referredBy && <p className="text-xs text-[#A07A26] font-bold">جات من لينك: {s.referredBy}</p>}
             {s.images?.length > 0 && <div className="flex gap-2 overflow-x-auto">{s.images.slice(0, 5).map((u) => <img key={u} src={u} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />)}</div>}
             {q ? <Chip tone="green">اتأكد مع المالك · {q.by}{q.accountDelivered ? ' · الحساب اتسلّم' : ''}</Chip> : <Chip tone="red">لسه محتاجة مراجعة جودة</Chip>}
             <div className="grid grid-cols-3 gap-2">

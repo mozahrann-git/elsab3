@@ -143,3 +143,46 @@ export function scopeAlerts(alerts: LeadAlert[], agentId?: string | null, seeAll
 export function alertCount(leads: Lead[], agentId?: string | null, seeAll = false, now = Date.now()): number {
   return scopeAlerts(buildAlerts(leads, now), agentId, seeAll).length;
 }
+
+
+/*
+  الأولوية الحقيقية للمتابعة.
+
+  كان فيه بق: الكارت بيقرا followUpUrgency المتخزّن في الملف — وده رقم
+  اتكتب وقت الإضافة ومبيتحدّثش. فعميل متابعته بكرة كان بيفضل مكتوب عليه
+  "عاجل" للأبد.
+
+  دلوقتي الحساب من الميعاد نفسه: متأخر، ولا النهارده، ولا بعدين.
+*/
+export type FollowUpState = 'late' | 'today' | 'soon' | 'later' | 'none';
+
+export function followUpState(nextActionAt?: number | null, status?: string, now = Date.now()): FollowUpState {
+  if (!nextActionAt || status === 'completed') return 'none';
+  if (nextActionAt <= now) return 'late';
+
+  const eod = new Date(now);
+  eod.setHours(23, 59, 59, 999);
+  if (nextActionAt <= eod.getTime()) {
+    // باقي أقل من ساعتين على الميعاد = قرّب
+    return nextActionAt - now <= 2 * 3600000 ? 'soon' : 'today';
+  }
+  return 'later';
+}
+
+/** الكلام اللي بيتكتب على الكارت */
+export function followUpBadge(nextActionAt?: number | null, status?: string, fallback = '', now = Date.now()) {
+  const state = followUpState(nextActionAt, status, now);
+  if (state === 'none') return { text: fallback, tone: 'calm' as const };
+  if (state === 'late') return { text: `متأخر ${humanDuration((now - (nextActionAt || now)) / 60000)}`, tone: 'late' as const };
+  if (state === 'soon') return { text: `بعد ${humanDuration(((nextActionAt || now) - now) / 60000)}`, tone: 'soon' as const };
+
+  const d = new Date(nextActionAt!);
+  const time = d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+  if (state === 'today') return { text: `النهارده ${time}`, tone: 'today' as const };
+
+  const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(23, 59, 59, 999);
+  const label = nextActionAt! <= tomorrow.getTime()
+    ? `بكرة ${time}`
+    : `${d.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'short' })} ${time}`;
+  return { text: label, tone: 'calm' as const };
+}

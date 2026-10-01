@@ -38,6 +38,21 @@ function untouched(lead: Lead): boolean {
   return lead.status === 'new' && (lead.activity?.length || 0) === 0;
 }
 
+/**
+ * الليد ده نازل من الإدارة ولا السيلز جابه بنفسه؟
+ *
+ * اللون معناه "ده شغل نازل عليك من فوق" — فالعميل اللي السيلز ضافه
+ * بنفسه مبياخدش لون، عشان اللون يفضل معناه واضح.
+ *
+ * الليدات القديمة اللي مفيهاش بيانات الإضافة بنعاملها كأنها نازلة،
+ * عشان متختفيش فجأة من اللي متعوّد عليه.
+ */
+function handedDown(lead: Lead): boolean {
+  const by = (lead as any).addedByName as string | undefined;
+  if (!by) return true;
+  return by !== lead.assignedAgentName;
+}
+
 export function leadTone(lead: Lead, now = Date.now()): LeadTone {
   // ١) تحديث من سارة على المعاينة والسيلز لسه مشافهوش — ده الأهم
   const upd = (lead as any).viewingUpdateAt as number | undefined;
@@ -51,7 +66,7 @@ export function leadTone(lead: Lead, now = Date.now()): LeadTone {
      كان بيبقى أبيض عادي حتى لو لسه نازل دلوقتي ومحدش كلّمه.
 
      دلوقتي المعيار هو الحقيقة نفسها: في خانة "جديد" + مفيش أي نشاط. */
-  if (untouched(lead)) {
+  if (untouched(lead) && handedDown(lead)) {
     const at = arrivedAt(lead);
     const old = at && now - at > OLD_AFTER_DAYS * 86400000;
     return old ? 'old_campaign' : 'fresh';
@@ -122,20 +137,8 @@ export function assignedByOther(lead: Lead): string | null {
 }
 
 export function toneStyle(lead: Lead, now = Date.now()): ToneStyle {
-  const tone = leadTone(lead, now);
-  const base = STYLES[tone];
-  const by = assignedByOther(lead);
-
-  // العميل اللي بقاله كتير من غير ما حد يكلّمه: التسمية بتفرق لو جاي من كامبين
-  if (tone === 'old_campaign' && !(lead.source === 'campaign' || lead.campaignName)) {
-    return { ...base, label: by ? `بايت — موزّع من ${by}` : 'بايت — محدش كلّمه' };
-  }
-
-  // الموزّع من الإدارة مش "ليد فريش" بتاعه — ده شغل موزّع عليه
-  if (tone === 'fresh' && by) {
-    return { ...base, label: `موزّع من ${by}` };
-  }
-  return base;
+  // التسميات ثابتة: ليد فريش / كامبين قديم. مفيش اسم اللي وزّعه على الكارت.
+  return STYLES[leadTone(lead, now)];
 }
 
 /** آخر خبر من سارة — بيتكتب على الكارت الأزرق */

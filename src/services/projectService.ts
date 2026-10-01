@@ -25,8 +25,16 @@ export interface PaymentPlan {
 export interface UnitArea {
   area: number;                // م²
   price?: number;              // سعر مكتوب بإيدك — لو فاضي بيتحسب من سعر المتر
-  label?: string;              // وصف اختياري: "الدور التالت" مثلاً
+  label?: string;              // الدور أو الأدوار: "الدور التالت والرابع"
+  count?: number;              // كام وحدة متاحة بالمساحة دي
   sold?: boolean;
+}
+
+/** مجموع الوحدات المتاحة من المساحات — أدق من رقم مكتوب بإيد حد */
+export function availableFromAreas(p: Project): number | undefined {
+  const list = (p.unitAreas || []).filter((u) => !u.sold && u.area > 0);
+  if (!list.length) return undefined;
+  return list.reduce((n, u) => n + (u.count && u.count > 0 ? u.count : 1), 0);
 }
 
 export interface Project {

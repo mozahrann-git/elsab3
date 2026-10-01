@@ -61,9 +61,12 @@ export function projectText(p: Project, opts: { isStaff?: boolean } = {}): strin
     L.push('المساحات المتاحة:');
     areas.forEach((u) => {
       const r = first ? areaPlanNumbers(p, u, first) : { price: areaPrice(p, u) };
-      const bits = [`${u.area} م²`, `${f(r.price)} ج.م`];
+      const bits = [`${u.area} م²`];
+      if (u.label) bits.push(u.label);                       // الدور
+      bits.push(`${f(r.price)} ج.م`);
       if ((r as any).down !== undefined) bits.push(`مقدم ${f((r as any).down)}`);
       if ((r as any).monthly !== undefined) bits.push(`قسط ${f((r as any).monthly)}`);
+      if (u.count && u.count > 1) bits.push(`${u.count} وحدات`);
       L.push(`• ${bits.join(' · ')}`);
     });
     if (first?.years != null) L.push(`(على ${first.years} سنين)`);

@@ -294,7 +294,8 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
         </header>
 
         {/* ALERTS LIST AREA */}
-        <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-3.5">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5">
+          <div className="bg-white border border-[#ECE8DF] rounded-2xl overflow-hidden">
           {filteredAlerts.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
               <div className="w-14 h-14 rounded-full bg-[#FAF4E5] border border-[#E9DFCA] flex items-center justify-center text-[#A07A26]">
@@ -309,112 +310,106 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
             filteredAlerts.map((alert) => {
               const lead = leads.find((l) => l.id === alert.leadId);
 
+              /* التأخير بيتقال بشريط رفيع على الحافة ولون الوقت — مش بملء
+                 الكارت بالأحمر. ١٤ صف كلهم أحمر معناه إن محدش هيبص لحد. */
+              const rail = alert.isOverdue
+                ? (alert.lateMinutes > 1440 ? '#9E2A1B' : '#C2410C')
+                : alert.urgency === 'today' ? '#A07A26' : '#DCD6CA';
+
               return (
-                <div 
+                <article
                   key={alert.id}
-                  className={`bg-white rounded-2xl p-4 sm:p-5 border transition-all shadow-2xs space-y-3 ${
-                    alert.urgency === 'urgent'
-                      ? 'border-rose-300 ring-1 ring-rose-200'
-                      : 'border-[#ECE8DF] hover:border-[#A07A26]'
-                  }`}
+                  className="relative bg-white border-b border-[#EFEBE3] last:border-b-0 py-4 pr-5 pl-3 sm:pl-4 hover:bg-[#FCFBF8] transition-colors"
                 >
-                  {/* Top Header inside alert card */}
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold ${
-                        alert.urgency === 'urgent'
-                          ? 'bg-rose-100 text-rose-800'
-                          : alert.urgency === 'today'
-                          ? 'bg-[#FAF4E5] text-[#A07A26]'
-                          : 'bg-[#F6F4EF] text-[#6B665C]'
-                      }`}>
-                        {alert.type === 'visit' ? 'معاينة ميدانية' : alert.type === 'urgent_lead' ? 'ليد جديد' : 'متابعة هاتفية'}
-                      </span>
+                  {/* شريط الحافة: سُمكه ولونه هما كل الإنذار */}
+                  <span
+                    aria-hidden
+                    className="absolute top-4 bottom-4 right-0 rounded-full"
+                    style={{ width: alert.isOverdue ? 3 : 2, background: rail }}
+                  />
 
-                      <span className="font-readex font-bold text-sm text-[#141414]">
-                        {alert.leadName}
-                      </span>
-
-                      <span className="font-mono text-xs text-[#6B665C] dir-ltr">
-                        {alert.leadPhone}
-                      </span>
-                    </div>
-
-                    {/* المتأخر لازم يبان إنه متأخر — مش "النهارده 6:45" وخلاص */}
-                    {alert.isOverdue && alert.lateMinutes > 0 ? (
-                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        <span className="flex items-center gap-1.5 text-xs font-extrabold text-white bg-[#9E2A1B] px-2.5 py-1 rounded-lg">
-                          <AlertTriangle size={12} />
-                          {alert.relativeTimeText}
-                        </span>
-                        <span className="text-[11px] font-mono text-[#8C877D]">كان {alert.dueTime}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-xs font-mono text-[#8C877D]">
-                        <Clock size={13} />
-                        <span>{alert.dueTime}</span>
-                      </div>
-                    )}
+                  {/* السطر الأول: الاسم الكبير، والوقت على الناحية التانية */}
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h4 className="font-readex font-bold text-[15px] text-[#141414] leading-tight truncate">
+                      {alert.leadName}
+                    </h4>
+                    <span
+                      className="text-[12px] font-bold shrink-0"
+                      style={{ color: alert.isOverdue ? rail : '#8C877D' }}
+                    >
+                      {alert.isOverdue && alert.lateMinutes > 0 ? alert.relativeTimeText : alert.dueTime}
+                    </span>
                   </div>
 
-                  {/* Note / Description */}
-                  <p className="text-xs text-[#4A463F] bg-[#FAF9F5] p-3 rounded-xl border border-[#ECE8DF] leading-relaxed">
-                    {alert.note}
-                  </p>
+                  {/* السطر التاني: التليفون، السيلز المسؤول، ونوع التنبيه */}
+                  <div className="flex items-center justify-between gap-3 mt-1">
+                    <p className="text-[11.5px] text-[#6B665C] truncate">
+                      <span className="font-mono dir-ltr">{alert.leadPhone}</span>
+                      {alert.assignedAgentName && (
+                        <>
+                          <span className="mx-1.5 text-[#DCD6CA]">|</span>
+                          <span className="font-bold text-[#141414]">{alert.assignedAgentName}</span>
+                        </>
+                      )}
+                    </p>
+                    <span className="text-[11px] text-[#8C877D] shrink-0">
+                      {alert.isOverdue && alert.lateMinutes > 0
+                        ? `كان ${alert.dueTime}`
+                        : alert.type === 'urgent_lead' ? 'عميل جديد' : 'متابعة'}
+                    </span>
+                  </div>
 
-                  {/* Actions Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
-                    {/* Left Direct Communication Buttons */}
-                    <div className="flex items-center gap-2">
+                  {/* الملاحظة: نص عادي، مش صندوق جوه صندوق */}
+                  {alert.note && (
+                    <p className="text-[12.5px] text-[#4A463F] leading-relaxed mt-2 line-clamp-2">
+                      {alert.note}
+                    </p>
+                  )}
+
+                  {/* أكشن واحد واضح، والباقي أيقونات هادية */}
+                  <div className="flex items-center justify-between gap-2 mt-3">
+                    {alert.isOverdue || alert.urgency === 'urgent' ? (
+                      <button
+                        onClick={() => { if (lead) { onSelectLead(lead); onClose(); } }}
+                        className="px-4 py-2 rounded-xl bg-[#141414] hover:bg-black text-white text-[12px] font-bold transition-colors cursor-pointer"
+                      >
+                        سجّل النتيجة
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-[#A8A298]">يفتح {alert.relativeTimeText}</span>
+                    )}
+
+                    <div className="flex items-center gap-1">
                       <a
                         href={generateCallLink(alert.leadPhone)}
-                        className="px-3.5 py-2 bg-[#141414] hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                        title="اتصال"
+                        className="w-9 h-9 rounded-xl border border-[#ECE8DF] text-[#141414] flex items-center justify-center hover:bg-[#F6F4EF] transition-colors"
                       >
-                        <Phone size={13} />
-                        <span>اتصال الآن</span>
+                        <Phone size={15} />
                       </a>
-
                       <button
                         onClick={() => handleSendWhatsAppFollowUp(alert)}
-                        className="px-3.5 py-2 bg-[#1E7A45] hover:bg-[#166534] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                        title="واتساب"
+                        className="w-9 h-9 rounded-xl border border-[#ECE8DF] text-[#1E7A45] flex items-center justify-center hover:bg-[#EEF5F0] transition-colors cursor-pointer"
                       >
-                        <MessageCircle size={13} />
-                        <span>واتساب</span>
+                        <MessageCircle size={15} />
                       </button>
-
                       {lead && (
                         <button
-                          onClick={() => {
-                            onSelectLead(lead);
-                            onClose();
-                          }}
-                          className="px-3 py-2 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                          onClick={() => { onSelectLead(lead); onClose(); }}
+                          title="الملف الكامل"
+                          className="w-9 h-9 rounded-xl border border-[#ECE8DF] text-[#6B665C] flex items-center justify-center hover:bg-[#F6F4EF] transition-colors cursor-pointer"
                         >
-                          <User size={13} />
-                          <span>الملف الكامل</span>
+                          <User size={15} />
                         </button>
-                      )}
-                    </div>
-
-                    {/* الأكشن بيتفتح في ميعاده بس، وبيفتح ملف العميل عشان يكتب ويحدد الجاي */}
-                    <div className="flex items-center gap-2">
-                      {alert.isOverdue || alert.urgency === 'urgent' ? (
-                        <button
-                          onClick={() => { const l = leads.find((x) => x.id === alert.leadId); if (l) { onSelectLead(l); onClose(); } }}
-                          className="px-4 py-2 bg-[#A07A26] hover:bg-[#8B681D] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                        >
-                          <Check size={14} />
-                          <span>سجّل النتيجة والأكشن الجاي</span>
-                        </button>
-                      ) : (
-                        <span className="px-3 py-2 rounded-xl bg-[#F6F4EF] text-[#8C877D] text-xs font-bold">يفتح في ميعاده · {alert.relativeTimeText}</span>
                       )}
                     </div>
                   </div>
-                </div>
+                </article>
               );
             })
           )}
+          </div>
         </div>
 
       </div>

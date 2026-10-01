@@ -50,10 +50,11 @@ import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
 import { matchProperties, briefLine, briefGaps } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
-import { toneStyle, viewingUpdateText, markViewingSeen, assignedByOther } from '../utils/leadTone';
-import { humanDuration } from '../utils/followUpAlerts';
+import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
+import { humanDuration, followUpBadge } from '../utils/followUpAlerts';
 import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpQuest } from '../services/questService';
 import { AgentDayPanel } from './crm/AgentDayPanel';
+import { OwnerLinkCard } from './crm/OwnerLinkCard';
 import { QuestLogSheet } from './crm/QuestLogSheet';
 import { DayLogSummary } from './crm/DayLogSummary';
 import { QuestLog, subscribeDayLogs, dayKey, summarizeCalls, summarizeAds, CALL_OUTCOMES } from '../services/questLogService';
@@ -803,6 +804,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
             )}
             
+            {/* لينك المالك — السيلز يبعته للمالك يملا شقته بنفسه */}
+            <OwnerLinkCard
+              byCode={currentSalesAgent?.id || (isAdmin ? 'admin' : undefined)}
+              byName={currentSalesAgent?.name || (isAdmin ? 'الإدارة' : undefined)}
+            />
+
             {/* Urgent Broadcast Banner */}
             {(isAdmin || isLead) && (
               <div className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">
@@ -1028,12 +1035,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                                   {tone.tone === 'old_campaign' && lead.campaignName && (
                                     <span className="text-[10px] text-white/80 font-bold truncate">{lead.campaignName}</span>
                                   )}
-                                  {/* مين وزّعه — عشان ما يتحسبش إنه من شغل السيلز */}
-                                  {tone.tone === 'fresh' && assignedByOther(lead) && (
-                                    <span className="text-[10px] text-white/80 font-bold truncate">
-                                      {lead.campaignName || 'إضافة يدوية'}
-                                    </span>
-                                  )}
+
                                 </div>
                               )}
                               {tone.tone === 'viewing_update' && (
@@ -1043,28 +1045,20 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                               )}
                               {/* Top row: Client Name & Follow-up urgency badge */}
                               <div className="flex items-center justify-between">
-                                {/* المتأخر بيقول متأخر من إمتى — "عاجل" لوحدها مش بتقول حاجة */}
+                                {/* الأولوية من الميعاد نفسه — مش من رقم قديم متخزّن */}
                                 {(() => {
-                                  const lateMins = lead.nextActionAt && lead.followUpStatus !== 'completed'
-                                    ? Math.round((Date.now() - lead.nextActionAt) / 60000) : 0;
-                                  if (lateMins > 0) {
+                                  const b = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || st.defaultBadge);
+                                  if (b.tone === 'late') {
                                     return (
                                       <span className={`font-extrabold text-[11px] px-2 py-0.5 rounded-lg ${
                                         tone.solid ? 'bg-white text-[#9E2A1B]' : 'bg-[#9E2A1B] text-white'
-                                      }`}>
-                                        متأخر {humanDuration(lateMins)}
-                                      </span>
+                                      }`}>{b.text}</span>
                                     );
                                   }
-                                  return (
-                                    <span className={`font-bold text-xs ${
-                                      tone.solid
-                                        ? (lead.followUpUrgency === 'urgent' ? 'text-white' : 'text-white/85')
-                                        : (lead.followUpUrgency === 'urgent' ? 'text-rose-600' : 'text-[#A07A26]')
-                                    }`}>
-                                      {lead.followUpUrgency === 'urgent' ? 'عاجل' : lead.followUpScheduledAt || st.defaultBadge}
-                                    </span>
-                                  );
+                                  const color = tone.solid
+                                    ? (b.tone === 'soon' ? 'text-white' : 'text-white/85')
+                                    : (b.tone === 'soon' ? 'text-[#C2410C]' : b.tone === 'today' ? 'text-[#A07A26]' : 'text-[#6B665C]');
+                                  return <span className={`font-bold text-xs ${color}`}>{b.text}</span>;
                                 })()}
                                 
                                 <h5 
@@ -1281,19 +1275,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
                       <div>
                         <span className="text-[#8C877D] text-[10px] block font-bold">الأولوية:</span>
-                        {/* المتأخر بيقول متأخر من إمتى بالظبط */}
                         {(() => {
-                          const lateMins = lead.nextActionAt && lead.followUpStatus !== 'completed'
-                            ? Math.round((Date.now() - lead.nextActionAt) / 60000) : 0;
-                          return lateMins > 0 ? (
-                            <span className="font-extrabold text-white bg-[#9E2A1B] px-2 py-0.5 rounded-lg inline-block">
-                              متأخر {humanDuration(lateMins)}
-                            </span>
-                          ) : (
-                            <span className={`font-bold ${lead.followUpUrgency === 'urgent' ? 'text-rose-600' : 'text-[#A07A26]'}`}>
-                              {lead.followUpUrgency === 'urgent' ? '🔴 عاجل فوراً' : '🟡 متابعة اليوم'}
-                            </span>
-                          );
+                          const b = followUpBadge(lead.nextActionAt, lead.followUpStatus, '—');
+                          if (b.tone === 'late') {
+                            return <span className="font-extrabold text-white bg-[#9E2A1B] px-2 py-0.5 rounded-lg inline-block">{b.text}</span>;
+                          }
+                          if (b.tone === 'soon') return <span className="font-bold text-[#C2410C]">🟠 {b.text}</span>;
+                          if (b.tone === 'today') return <span className="font-bold text-[#A07A26]">🟡 {b.text}</span>;
+                          return <span className="font-bold text-[#6B665C]">{b.text}</span>;
                         })()}
                       </div>
 

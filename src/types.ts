@@ -147,6 +147,8 @@ export interface FilterState {
 }
 
 export interface OwnerSubmission {
+  /** كود اللي بعت لينك المالك — بيعرّفك شقق مين */
+  referredBy?: string;
   id: string;
   ownerName: string;
   propertyCode?: string;            // كود الوحدة لو المالك عارفه، بيربط الطلب بالشقة على طول

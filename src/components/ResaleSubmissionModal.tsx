@@ -28,6 +28,8 @@ interface ResaleSubmissionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (submission: OwnerSubmission) => void;
+  /** مين بعت لينك المالك — بيتسجّل على الطلب عشان تعرف شقق مين */
+  referredBy?: string;
 }
 
 const DEFAULT_SUBMISSION_PHOTOS = [
@@ -58,6 +60,7 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
+  referredBy,
 }) => {
   const [acctEmail, setAcctEmail] = useState('');   // اسم المستخدم (من غير الدومين)
   const [realOwnerName, setRealOwnerName] = useState('');
@@ -222,6 +225,7 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
       status: 'pending',
       ownerEmail,
       brokerId,
+      referredBy: referredBy || undefined,
       submittedAtMs: Date.now(),
       submittedAt: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })
     };

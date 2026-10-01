@@ -91,9 +91,20 @@ export const UnitAreasEditor: React.FC<Props> = ({ d, setD }) => {
             <input
               value={u.label || ''}
               onChange={(e) => setArea(i, { label: e.target.value })}
-              placeholder="وصف (اختياري): الدور التالت مثلاً"
-              className="flex-1 min-w-[140px] bg-[#FAF9F5] border border-[#ECE8DF] rounded-lg px-2.5 py-1.5 text-[11px]"
+              placeholder="الدور أو الأدوار: التالت والرابع"
+              className="flex-1 min-w-[130px] bg-[#FAF9F5] border border-[#ECE8DF] rounded-lg px-2.5 py-1.5 text-[11px]"
             />
+            <label className="flex items-center gap-1.5 text-[11px] text-[#6B665C]">
+              متاح
+              <input
+                type="number" min={1} dir="ltr"
+                value={u.count || ''}
+                placeholder="1"
+                onChange={(e) => setArea(i, { count: Number(e.target.value) || undefined })}
+                className="w-14 bg-[#FAF9F5] border border-[#ECE8DF] rounded-lg px-2 py-1.5 text-[11px] font-mono"
+              />
+              وحدة
+            </label>
             <label className="flex items-center gap-1.5 text-[11px] text-[#6B665C] cursor-pointer">
               <input type="checkbox" checked={!!u.sold} onChange={(e) => setArea(i, { sold: e.target.checked })} className="accent-[#9E2A1B]" />
               اتباعت

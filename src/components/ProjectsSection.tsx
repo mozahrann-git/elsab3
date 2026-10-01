@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, Landmark, HardHat, CalendarClock, ChevronLeft, X, MessageCircle, MapPin, Play } from 'lucide-react';
-import { Project, ProjectFilter, subscribeProjects, matchProject, EMPTY_PROJECT_FILTER, affordablePlans, planMonthly, planDownAmount, fetchProjectPrivate, areaPlanNumbers } from '../services/projectService';
+import { Project, ProjectFilter, subscribeProjects, matchProject, EMPTY_PROJECT_FILTER, affordablePlans, planMonthly, planDownAmount, fetchProjectPrivate, areaPlanNumbers, availableFromAreas } from '../services/projectService';
 import { generateWhatsAppLink } from '../utils/helpers';
 import { videoPosterUrl } from '../utils/propertyMedia';
 import { ShareBar } from './ShareBar';
@@ -204,6 +204,11 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
     return () => { live = false; };
   }, [base.id, isStaff]);
   const p = { ...base, ...priv } as Project;
+
+  /* المساحات المتاحة واللي المستخدم مختارها */
+  const available = useMemo(() => (p.unitAreas || []).filter((u) => !u.sold && u.area > 0), [p.unitAreas]);
+  const firstPlan = (p.plans || [])[0];
+  const [pickedArea, setPickedArea] = useState<number | null>(null);
   const isBuilding = p.kind === 'building';
   const specs: [string, string][] = isBuilding
     ? ([
@@ -215,7 +220,13 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
         ['أسانسير', p.hasElevator === undefined ? '' : p.hasElevator ? 'نعم' : 'لا'],
         ['جراج', p.hasGarage === undefined ? '' : p.hasGarage ? 'نعم' : 'لا'],
         ['المساحات', p.minArea && p.maxArea ? `${p.minArea} – ${p.maxArea} م²` : p.minArea ? `من ${p.minArea} م²` : ''],
-        ['الوحدات المتاحة', p.availableUnits != null ? (p.availableUnits === 0 ? 'اتحجزت كلها' : String(p.availableUnits)) : ''],
+        /* بيتحسب من المساحات — الرقم المكتوب بإيد حد كان بيطلع ملخبط */
+        ['الوحدات المتاحة', (() => {
+          const n = availableFromAreas(p);
+          if (n !== undefined) return n === 0 ? 'اتحجزت كلها' : String(n);
+          return p.availableUnits != null && Number.isFinite(p.availableUnits) && p.availableUnits < 10000
+            ? (p.availableUnits === 0 ? 'اتحجزت كلها' : String(p.availableUnits)) : '';
+        })()],
       ] as [string, string][])
     : ([
         ['المطور', isStaff ? (p.developer || '') : ''],
@@ -320,54 +331,83 @@ const ProjectDetail: React.FC<{ p: Project; whatsappNumber?: string; onClose: ()
             title={p.name}
           />
 
+          {/* المساحات المتاحة الأول — تختار واحدة والحسبة تحتها بتتغيّر عليها */}
+          {available.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-xs font-extrabold text-[#A07A26]">المساحات المتاحة</p>
+                <span className="text-[11px] text-[#6B665C]">
+                  {availableFromAreas(p)} وحدة في {available.length} مساحة
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {available.map((u, i) => {
+                  const on = pickedArea === i;
+                  const r = firstPlan ? areaPlanNumbers(p, u, firstPlan) : {};
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setPickedArea(on ? null : i)}
+                      className={`text-right rounded-2xl border-2 p-3 transition cursor-pointer ${
+                        on ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#ECE8DF] hover:border-[#A07A26]'
+                      }`}
+                    >
+                      <p className="font-extrabold text-sm">{u.area} م²</p>
+                      {u.label && (
+                        <p className={`text-[11px] leading-tight ${on ? 'text-white/80' : 'text-[#6B665C]'}`}>{u.label}</p>
+                      )}
+                      <p className={`text-[11px] font-mono mt-1 ${on ? 'text-white' : 'text-[#141414]'}`}>{f(r.price)} ج.م</p>
+                      <p className={`text-[10px] ${on ? 'text-white/70' : 'text-[#8C877D]'}`}>
+                        {u.count && u.count > 1 ? `${u.count} وحدات متاحة` : 'وحدة واحدة'}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="text-[11px] text-[#8C877D] leading-relaxed">
+                {pickedArea != null
+                  ? `الأقساط تحت محسوبة على ${available[pickedArea].area} م².`
+                  : 'دوس على أي مساحة والأقساط تحت هتتحسب عليها.'}
+              </p>
+            </div>
+          )}
+
           {(p.plans || []).length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-extrabold text-[#A07A26]">أنظمة السداد</p>
               <div className="grid gap-2 sm:grid-cols-2">
-                {(p.plans || []).map((pl, i) => (
-                  <div key={i} className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">
-                    <p className="font-extrabold text-sm">{pl.label || `نظام ${i + 1}`}</p>
-                    <Row k="المقدم" v={pl.downPaymentAmount ? `${f(pl.downPaymentAmount)} ج.م${pl.downPaymentPercent != null ? ` (${pl.downPaymentPercent}٪)` : ''}` : pl.downPaymentPercent != null ? `${pl.downPaymentPercent}٪` : '—'} />
-                    <Row k="المدة" v={pl.years != null ? `${pl.years} سنين` : '—'} />
-                    <Row k="القسط الشهري" v={pl.monthly ? `${f(pl.monthly)} ج.م` : '—'} />
-                    {pl.quarterly ? <Row k="الربع سنوي" v={`${f(pl.quarterly)} ج.م`} /> : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* المساحات بأسعارها ومقدمها وقسطها — محسوبة، مش مكتوبة بإيد حد */}
-          {(p.unitAreas || []).length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-extrabold text-[#A07A26]">المساحات وأقساطها</p>
-              <div className="bg-white border border-[#ECE8DF] rounded-2xl divide-y divide-[#ECE8DF] overflow-hidden">
-                {(p.unitAreas || []).map((u, i) => {
-                  const first = (p.plans || [])[0];
-                  const r = first ? areaPlanNumbers(p, u, first) : {};
+                {(p.plans || []).map((pl, i) => {
+                  // لو فيه مساحة مختارة، الأرقام بتتحسب عليها هي
+                  const sel = pickedArea != null ? available[pickedArea] : null;
+                  const r = sel ? areaPlanNumbers(p, sel, pl) : null;
                   return (
-                    <div key={i} className={`px-4 py-3 space-y-1 ${u.sold ? 'opacity-55' : ''}`}>
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="font-extrabold text-sm">
-                          {u.area} م²{u.label ? ` · ${u.label}` : ''}
-                          {u.sold && <span className="text-[10px] font-bold text-[#9E2A1B] mr-1.5">اتباعت</span>}
-                        </span>
-                        <span className="font-extrabold text-sm font-mono text-[#141414]">{f(r.price)} ج.م</span>
+                    <div key={i} className={`bg-white border rounded-2xl p-4 space-y-2 ${sel ? 'border-[#A07A26]' : 'border-[#ECE8DF]'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-extrabold text-sm">{pl.label || `نظام ${i + 1}`}</p>
+                        {sel && <span className="text-[10px] font-bold text-[#A07A26]">على {sel.area} م²</span>}
                       </div>
-                      {(r.down !== undefined || r.monthly !== undefined) && (
-                        <p className="text-[11.5px] text-[#6B665C]">
-                          مقدم <b className="text-[#141414] font-mono">{f(r.down)}</b>
-                          {' · '}قسط شهري <b className="text-[#141414] font-mono">{f(r.monthly)}</b>
-                          {first?.years != null ? ` على ${first.years} سنين` : ''}
-                        </p>
+                      {sel && r ? (
+                        <>
+                          <Row k="سعر الوحدة" v={`${f(r.price)} ج.م`} />
+                          <Row k="المقدم" v={`${f(r.down)} ج.م${pl.downPaymentPercent != null ? ` (${pl.downPaymentPercent}٪)` : ''}`} />
+                          <Row k="المدة" v={pl.years != null ? `${pl.years} سنين` : '—'} />
+                          <Row k="القسط الشهري" v={`${f(r.monthly)} ج.م`} />
+                          {r.monthly != null ? <Row k="الربع سنوي" v={`${f(r.monthly * 3)} ج.م`} /> : null}
+                        </>
+                      ) : (
+                        <>
+                          <Row k="المقدم" v={pl.downPaymentAmount ? `${f(pl.downPaymentAmount)} ج.م${pl.downPaymentPercent != null ? ` (${pl.downPaymentPercent}٪)` : ''}` : pl.downPaymentPercent != null ? `${pl.downPaymentPercent}٪` : '—'} />
+                          <Row k="المدة" v={pl.years != null ? `${pl.years} سنين` : '—'} />
+                          <Row k="القسط الشهري" v={pl.monthly ? `${f(pl.monthly)} ج.م` : '—'} />
+                          {pl.quarterly ? <Row k="الربع سنوي" v={`${f(pl.quarterly)} ج.م`} /> : null}
+                        </>
                       )}
                     </div>
                   );
                 })}
               </div>
-              {(p.plans || []).length > 1 && (
-                <p className="text-[11px] text-[#8C877D]">الأرقام دي على {(p.plans || [])[0]?.label || 'النظام الأول'} — باقي الأنظمة فوق.</p>
-              )}
             </div>
           )}
 

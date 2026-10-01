@@ -28,6 +28,23 @@ const num = (v: unknown): number | undefined => {
   // الصفر قيمة حقيقية (وحدات متاحة = 0 يعني اتباعت كلها)، فمبنرميهوش
   return isFinite(n) ? n : undefined;
 };
+/** بيقرا خانة الوحدات المتاحة: عدد ولا قايمة مساحات */
+const availableFrom = (v: unknown): { availableUnits?: number; unitAreas?: { area: number }[] } => {
+  const raw = String(v ?? '').trim();
+  if (!raw) return {};
+
+  // بنفصل على أي فاصل: فاصلة، شرطة مايلة، مسافة، أو فاصلة عربية
+  const parts = raw.split(/[،,/|\s]+/).map((x) => Number(x.replace(/[^\d.]/g, ''))).filter((n) => isFinite(n) && n > 0);
+
+  // أكتر من رقم = مساحات متاحة. المساحات بتبدأ من ٥٠ متر عادةً،
+  // فالأرقام الصغيرة (١، ٢، ٣) معناها عدد وحدات مش مساحات.
+  if (parts.length > 1 && parts.every((n) => n >= 40)) {
+    return { unitAreas: parts.map((area) => ({ area })), availableUnits: parts.length };
+  }
+  const one = num(v);
+  return one === undefined ? {} : { availableUnits: one };
+};
+
 const yesNo = (v: unknown): boolean | undefined => {
   const s = txt(v);
   if (!s) return undefined;
@@ -106,7 +123,10 @@ function buildingFrom(r: Record<string, unknown>): Project | null {
     startingPrice: num(r['يبدأ من (ج.م)']),
     cashDiscountPercent: toPercent(r['خصم الكاش']),
     cashPrice: num(r['سعر الكاش (ج.م)']),
-    availableUnits: num(r['الوحدات المتاحة']),
+    /* خانة "الوحدات المتاحة" في الشيت بتتكتب بطريقتين:
+       رقم واحد = عدد الوحدات، أو قايمة مساحات "110، 145، 155".
+       كان الكود بيشيل الفواصل ويلزقهم في بعض فيطلع 145155155110. */
+    ...availableFrom(r['الوحدات المتاحة']),
 
     plans: plansOf([
       {

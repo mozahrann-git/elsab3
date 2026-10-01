@@ -588,7 +588,17 @@ export default function App() {
   const [detailModalInitialMedia, setDetailModalInitialMedia] = useState<'photos' | 'video'>('photos');
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
-  const [isResaleSubmitOpen, setIsResaleSubmitOpen] = useState(false);
+  /* لينك المالك: elsab3.com/?owner=1 بيفتح نموذج إضافة الشقة على طول.
+     و&by=CODE بيسجّل مين بعت اللينك عشان نعرف اللينك بتاع مين جاب الشقة. */
+  const [isResaleSubmitOpen, setIsResaleSubmitOpen] = useState(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      return q.get('owner') !== null || q.get('addunit') !== null;
+    } catch { return false; }
+  });
+  const ownerLinkBy = useMemo(() => {
+    try { return new URLSearchParams(window.location.search).get('by') || ''; } catch { return ''; }
+  }, []);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
@@ -2250,7 +2260,18 @@ export default function App() {
       {/* 2. Resale Submission Modal (5 photos upload for owners) */}
       <ResaleSubmissionModal
         isOpen={isResaleSubmitOpen}
-        onClose={() => setIsResaleSubmitOpen(false)}
+        referredBy={ownerLinkBy}
+        onClose={() => {
+          setIsResaleSubmitOpen(false);
+          // نشيل الباراميتر من اللينك عشان الريفريش ما يفتحش الفورم تاني
+          try {
+            const u = new URL(window.location.href);
+            if (u.searchParams.has('owner') || u.searchParams.has('addunit')) {
+              u.searchParams.delete('owner'); u.searchParams.delete('addunit'); u.searchParams.delete('by');
+              window.history.replaceState({}, '', u.pathname + (u.search || ''));
+            }
+          } catch { /* */ }
+        }}
         onSubmit={handleAddSubmission}
       />
 
