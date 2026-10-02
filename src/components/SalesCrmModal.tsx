@@ -48,13 +48,14 @@ import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
-import { matchProperties, briefLine, briefGaps } from '../services/clientBrief';
+import { matchProperties, briefLine, briefGaps, readBrief, payModeOf, budgetCeiling, instalmentCeiling, PayMode } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
 import { humanDuration, followUpBadge } from '../utils/followUpAlerts';
 import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpQuest } from '../services/questService';
 import { AgentDayPanel } from './crm/AgentDayPanel';
 import { OwnerLinkCard } from './crm/OwnerLinkCard';
+import { QuickBriefRow } from './crm/QuickBriefRow';
 import { QuestLogSheet } from './crm/QuestLogSheet';
 import { DayLogSummary } from './crm/DayLogSummary';
 import { QuestLog, subscribeDayLogs, dayKey, summarizeCalls, summarizeAds, CALL_OUTCOMES } from '../services/questLogService';
@@ -266,14 +267,27 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   // Matched Properties List for the selected lead
   const [matchTolerance, setMatchTolerance] = useState<number>(0);   // 0 = بالظبط، 0.05، 0.1
   const [matchStrictHood, setMatchStrictHood] = useState<boolean>(true);
+  /* نوع الدفع: null = زي ما قال في المكالمة. السيلز يقدر يجرّب كاش أو تقسيط
+     من غير ما يغيّر ملف العميل. */
+  const [matchPay, setMatchPay] = useState<PayMode | null>(null);
+  useEffect(() => { setMatchPay(null); }, [matchingLeadId]);
+
+  const matchBrief = useMemo(
+    () => (selectedMatchingLead ? readBrief(selectedMatchingLead) : null),
+    [selectedMatchingLead],
+  );
+  const activePay: PayMode = matchPay || (matchBrief ? payModeOf(matchBrief) : 'cash');
+  const matchCeiling = matchBrief ? budgetCeiling(matchBrief, activePay) : { max: 0, source: 'budget' as const };
+
   // نفس المحرك اللي بيبني العرض المخصوص — فالشاشتين مستحيل يختلفوا
   const matchedProperties = useMemo(() => {
     if (!selectedMatchingLead) return [];
     return matchProperties(selectedMatchingLead, properties, {
       tolerance: matchTolerance,
       strictDistrict: matchStrictHood,
+      payMode: activePay,
     });
-  }, [selectedMatchingLead, properties, matchTolerance, matchStrictHood]);
+  }, [selectedMatchingLead, properties, matchTolerance, matchStrictHood, activePay]);
 
   // الشقق اللي السيلز معلّم عليها عشان يبعتها عرض مخصوص
   // الليدات اللي فيها طلب تعديل ميزانية مستني
@@ -1301,6 +1315,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                       </div>
                     </div>
 
+                    {/* الطلب — بيتعدّل من هنا على طول، من غير ما تفتح شاشة تانية */}
+                    <QuickBriefRow lead={lead} onUpdateLead={onUpdateLead} byName={currentAgent?.name || 'السيلز'} />
+
                     {/* Field Viewing Report Box in List View */}
                     {lead.fieldViewingComment && (
                       <div className="p-3 bg-amber-50/90 border border-amber-200/90 rounded-2xl space-y-1.5 shadow-2xs">
@@ -1363,19 +1380,24 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         >
                           {briefGaps(lead).length === 0 ? 'ابني عرض من المطابقة' : 'كمّل طلبه'}
                         </button>
-                        {/* الطلب الناقص بيفضل باين لحد ما يتكمّل — مش بيضيع في الزحمة */}
-                        {briefGaps(lead).length > 0 && (
-                          <button
-                            onClick={() => setDiscoveryLead(lead)}
-                            title={`ناقص: ${briefGaps(lead).map((g) => g.label).join('، ')}`}
-                            className="px-2.5 py-1.5 bg-[#FFF8E6] text-[#7A5E12] text-[11px] font-bold rounded-xl border border-[#EBD9A6] whitespace-nowrap shrink-0"
-                          >
-                            {/* مختصرة عشان ما تتكسرش عمودي وتبوّظ شكل الكارت */}
-                            {briefGaps(lead).length === 1
-                              ? `ناقص ${briefGaps(lead)[0].label}`
-                              : `ناقص ${briefGaps(lead).length} بيانات`}
-                          </button>
-                        )}
+                        {/* الطلب بيتفتح للتعديل دايماً — ناقص أو كامل.
+                            العميل بيغيّر رأيه، والمسار لازم يغيّر معاه. */}
+                        <button
+                          onClick={() => setDiscoveryLead(lead)}
+                          title={briefGaps(lead).length ? `ناقص: ${briefGaps(lead).map((g) => g.label).join('، ')}` : 'افتح الطلب وعدّله'}
+                          className={`px-2.5 py-1.5 text-[11px] font-bold rounded-xl border whitespace-nowrap shrink-0 cursor-pointer ${
+                            briefGaps(lead).length
+                              ? 'bg-[#FFF8E6] text-[#7A5E12] border-[#EBD9A6]'
+                              : 'bg-white text-[#141414] border-[#E4DFD4]'
+                          }`}
+                        >
+                          {/* مختصرة عشان ما تتكسرش عمودي وتبوّظ شكل الكارت */}
+                          {briefGaps(lead).length === 0
+                            ? 'عدّل الطلب كله'
+                            : briefGaps(lead).length === 1
+                            ? `ناقص ${briefGaps(lead)[0].label}`
+                            : `ناقص ${briefGaps(lead).length} بيانات`}
+                        </button>
                         <button
                           onClick={() => { setMatchingLeadId(lead.id); setActiveTab('matching'); }}
                           className="px-3 py-1.5 bg-[#E6F7ED] text-[#0E7A5A] text-xs font-bold rounded-xl border border-[#B3E8C8] whitespace-nowrap shrink-0"
@@ -1446,6 +1468,55 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     ))}
                     <button type="button" onClick={() => setMatchStrictHood(!matchStrictHood)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${matchStrictHood ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>{matchStrictHood ? 'نفس الحي بس' : 'كل الأحياء'}</button>
                   </div>
+
+                  {/* كاش ولا تقسيط — ده اللي بيحدد السقف اللي بنطابق عليه */}
+                  {matchBrief && (
+                    <div className="mt-2 bg-[#FAF8F3] border border-[#ECE8DF] rounded-xl p-2.5 space-y-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-bold text-[#6B665C] ml-1">الدفع:</span>
+                        {([['cash', 'كاش'], ['instalment', 'تقسيط'], ['both', 'الاتنين']] as [PayMode, string][]).map(([v, t]) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setMatchPay(v)}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold border cursor-pointer ${activePay === v ? 'bg-[#A07A26] text-white border-[#A07A26]' : 'bg-white border-[#E4DFD4]'}`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                        {matchPay && (
+                          <button type="button" onClick={() => setMatchPay(null)} className="text-[11px] font-bold text-[#6B665C] underline cursor-pointer">
+                            رجّع اللي قاله
+                          </button>
+                        )}
+                      </div>
+
+                      {/* الرقم اللي بنفلتر بيه فعلاً — عشان مايبقاش سحر */}
+                      <p className="text-[11px] text-[#6B665C] leading-relaxed">
+                        {matchCeiling.source === 'instalment' ? (
+                          <>
+                            بنطابق على <b className="text-[#141414] font-mono">{matchCeiling.max.toLocaleString('en-US')}</b> ج.م
+                            {' '}= مقدم <b className="font-mono">{matchBrief.downCash.toLocaleString('en-US')}</b>
+                            {' + '}قسط <b className="font-mono">{matchBrief.monthly.toLocaleString('en-US')}</b> × {matchBrief.years} سنين
+                          </>
+                        ) : matchCeiling.max ? (
+                          <>بنطابق على الميزانية: لحد <b className="text-[#141414] font-mono">{matchCeiling.max.toLocaleString('en-US')}</b> ج.م</>
+                        ) : (
+                          'مفيش ميزانية ولا مقدم متسجّلين — بيطلّع كل حاجة'
+                        )}
+                      </p>
+
+                      {activePay !== 'cash' && !instalmentCeiling(matchBrief) && (
+                        <button
+                          type="button"
+                          onClick={() => setDiscoveryLead(selectedMatchingLead!)}
+                          className="text-[11px] font-bold text-[#7A5E12] bg-[#FFF8E6] border border-[#EBD9A6] rounded-lg px-2.5 py-1.5 cursor-pointer"
+                        >
+                          اكتب المقدم والقسط عشان الحسبة تشتغل
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Matching Counter Badge */}

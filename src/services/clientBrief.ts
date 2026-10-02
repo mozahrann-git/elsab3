@@ -24,9 +24,57 @@ export interface ClientBrief {
   /* يقبل دور مخالف؟ 'no' معناه نشيل المخالف من نتايجه خالص */
   violationOk: 'yes' | 'no' | 'depends' | 'unknown';
   payment?: string;                                     // كاش / تقسيط
+  years: number;                                        // سنين التقسيط المتفق عليها
   purpose?: string;                                     // ساكن / مستثمر
   urgency?: string;                                     // دلوقتي / خلال شهر / بيدوّر
   askedAt?: number;                                     // وقت مكالمة الاكتشاف
+}
+
+/* البايع في الريسيل نادراً بيقسّط أكتر من ٤ سنين. لو العميل اتفق على مدة
+   تانية بنكتبها في المكالمة وهي اللي بتغلب. */
+export const DEFAULT_INSTALMENT_YEARS = 4;
+
+/** نوع الدفع: كاش ولا تقسيط ولا الاتنين */
+export type PayMode = 'cash' | 'instalment' | 'both';
+
+/** بيقرأ نوع الدفع من إجابة المكالمة */
+export function payModeOf(b: ClientBrief): PayMode {
+  if (b.payment === 'تقسيط') return 'instalment';
+  if (b.payment === 'كاش') return 'cash';
+  if (b.payment === 'الاتنين') return 'both';
+  /* مقال حاجة — لو كاتب مقدم وقسط يبقى بيفكّر تقسيط */
+  return b.downCash || b.monthly ? 'both' : 'cash';
+}
+
+/**
+ * أقصى سعر يقدر عليه بالتقسيط = المقدم + (القسط × ١٢ × السنين).
+ * بترجّع 0 لو مكتبناش مقدم ولا قسط — ساعتها الميزانية هي اللي بتحكم.
+ */
+export function instalmentCeiling(b: ClientBrief): number {
+  if (!b.downCash && !b.monthly) return 0;
+  return Math.round(b.downCash + b.monthly * 12 * (b.years || DEFAULT_INSTALMENT_YEARS));
+}
+
+/**
+ * السقف الحقيقي اللي بنطابق عليه.
+ *
+ * ده اللي كان ناقص: الميزانية اللي فوق كانت بتغلب على كل حاجة، فلما السيلز
+ * يكتب «معاه ٨٠٠ ألف مقدم و٢٠ ألف قسط» الرقم ده مكانش بيدخل الحسبة خالص.
+ *
+ *  كاش      → الميزانية زي ما هي
+ *  تقسيط    → المقدم + القسط × المدة (لو اتكتبوا)، وإلا الميزانية
+ *  الاتنين  → الأعلى فيهم، عشان يشوف اللي يقدر عليه بالطريقتين
+ */
+export function budgetCeiling(b: ClientBrief, mode?: PayMode): { max: number; source: 'budget' | 'instalment' } {
+  const m = mode || payModeOf(b);
+  const inst = instalmentCeiling(b);
+  const budget = b.budgetMax || 0;
+
+  if (m === 'cash' || !inst) return { max: budget, source: 'budget' };
+  if (m === 'instalment') return { max: inst, source: 'instalment' };
+  return inst > budget
+    ? { max: inst, source: 'instalment' }
+    : { max: budget, source: 'budget' };
 }
 
 const S = (v: any) => (typeof v === 'string' ? v.trim() : '');
@@ -63,6 +111,7 @@ export function readBrief(lead: Lead): ClientBrief {
     downCash: Number(String(d.downCash ?? '').replace(/[^\d.]/g, '')) || 0,
     monthly: Number(String(d.monthly ?? '').replace(/[^\d.]/g, '')) || 0,
     payment: S(d.payment) || undefined,
+    years: Number(String(d.years ?? '').replace(/[^\d.]/g, '')) || DEFAULT_INSTALMENT_YEARS,
     purpose: S(d.purpose) || undefined,
     urgency: S(d.urgency) || undefined,
     askedAt: typeof d.answeredAt === 'number' ? d.answeredAt : undefined,
@@ -102,6 +151,8 @@ export interface MatchOptions {
   tolerance?: number;
   /** لو false بيطلّع شقق برّه الأحياء اللي طلبها كمان (مرتبة بعدها) */
   strictDistrict?: boolean;
+  /** يغلب على اللي اتقال في المكالمة — السيلز بيجرّب كاش وتقسيط من الشاشة */
+  payMode?: PayMode;
 }
 
 export interface MatchResult {
@@ -125,9 +176,11 @@ export function matchDetailed(
   const tol = opts.tolerance || 0;
   const strict = opts.strictDistrict !== false;
 
+  /* السقف بيتحسب من نوع الدفع — مش من الميزانية وبس */
+  const ceil = budgetCeiling(b, opts.payMode);
   const minB = b.budgetMin ? b.budgetMin * (1 - tol) : 0;
-  const maxB = b.budgetMax ? b.budgetMax * (1 + tol) : Infinity;
-  const target = b.budgetMax ? ((b.budgetMin || b.budgetMax) + b.budgetMax) / 2 : 0;
+  const maxB = ceil.max ? ceil.max * (1 + tol) : Infinity;
+  const target = ceil.max ? ((b.budgetMin || ceil.max) + ceil.max) / 2 : 0;
 
   const out: MatchResult[] = [];
 
@@ -153,8 +206,8 @@ export function matchDetailed(
     const misses: string[] = [];
     if (hit && b.districts.length) reasons.push(p.neighborhood || '');
     else if (b.districts.length) misses.push('برّه الأحياء اللي طلبها');
-    if (b.budgetMax && price <= b.budgetMax) reasons.push('جوه الميزانية');
-    else if (b.budgetMax) misses.push('أعلى من ميزانيته');
+    if (ceil.max && price <= ceil.max) reasons.push(ceil.source === 'instalment' ? 'يقدر عليها بالمقدم والقسط' : 'جوه الميزانية');
+    else if (ceil.max) misses.push(ceil.source === 'instalment' ? 'أعلى من قدرته بالتقسيط' : 'أعلى من ميزانيته');
     if (b.bedrooms && (Number(p.bedrooms) || 0) > b.bedrooms) reasons.push('غرف أكتر');
     if (fstat === 'violation') misses.push('الدور مخالف');
     else if (fstat === 'unknown') misses.push('الدور محتاج تأكيد');
@@ -183,6 +236,11 @@ export function briefLine(lead: Lead): string {
   parts.push(b.districts.length ? b.districts.join('، ') : 'أي حي');
   parts.push(b.bedrooms ? `${b.bedrooms}+ غرف` : 'أي عدد غرف');
   if (b.budgetMax) parts.push(b.budgetMin ? `${money(b.budgetMin)}–${money(b.budgetMax)}` : `لحد ${money(b.budgetMax)}`);
+  /* لما يكون بيقسّط، الرقم اللي بنطابق عليه فعلاً لازم يبان — مش الميزانية بس */
+  const inst = instalmentCeiling(b);
+  if (inst && payModeOf(b) !== 'cash') {
+    parts.push(`تقسيط: مقدم ${money(b.downCash)} + ${Math.round(b.monthly / 1000)} ألف/شهر = لحد ${money(inst)}`);
+  }
   if (b.violationOk === 'no') parts.push('مايقبلش مخالف');
   else if (b.violationOk === 'yes') parts.push('يقبل مخالف');
   if (b.purpose) parts.push(b.purpose);

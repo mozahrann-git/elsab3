@@ -29,6 +29,8 @@ export const DEFAULT_FORMS: SalesForms = {
     { id: 'rooms', label: 'الغرف', type: 'chips', options: ['2', '3', '4+'], required: false },
     { id: 'downCash', label: 'المقدم اللي معاه دلوقتي (ج.م)', type: 'number', required: false },
     { id: 'monthly', label: 'القسط الشهري اللي يقدر عليه (ج.م)', type: 'number', required: false },
+    /* المدة بتحدد السقف: المقدم + القسط × ١٢ × السنين. من غيرها بنفترض ٤ سنين. */
+    { id: 'years', label: 'التقسيط على كام سنة', type: 'chips', options: ['1', '2', '3', '4', '5', '6'], required: false },
     { id: 'finishing', label: 'التشطيب', type: 'chips', options: ['متشطبة', 'نص تشطيب', 'الاتنين'], required: false },
     /* سؤال بيوفّر معاينات فاشلة: في ناس بترفض المخالف تماماً عشان التسجيل والتمويل،
        وناس عادي عندها. لازم نعرف قبل ما نوريه شقق. */
