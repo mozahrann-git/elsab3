@@ -265,3 +265,88 @@ describe('store — pausing never loses a message', () => {
     assert.ok(DAY > 0);
   });
 });
+
+describe('store — cloud mode', () => {
+  function fakeBackend() {
+    const calls: { op: string; arg: unknown }[] = [];
+    const rec = (op: string) => async (arg?: unknown, arg2?: unknown) => {
+      calls.push({ op, arg: arg2 === undefined ? arg : [arg, arg2] });
+    };
+    return {
+      calls,
+      backend: {
+        addEvent: rec('addEvent'),
+        removeEvent: rec('removeEvent'),
+        setReply: rec('setReply'),
+        setPaused: rec('setPaused'),
+        enqueue: rec('enqueue'),
+        drain: rec('drain'),
+        signOut: rec('signOut'),
+      } as unknown as import('./store').CloudBackend,
+    };
+  }
+  const session = { email: 'sales@elsab3.com', role: 'sales', name: 'Sara' };
+
+  it('writes events to the cloud stamped with the author, not to the device', () => {
+    radar._reset();
+    const { calls, backend } = fakeBackend();
+    radar.attachCloud(backend, session);
+    const ev = radar.receive(VERONA, 'Shady · Xland')!;
+    assert.equal(ev.createdBy, 'sales@elsab3.com');
+    assert.equal(calls[0].op, 'addEvent');
+    assert.equal(radar.get().mode, 'cloud');
+    assert.equal(radar.get().events.length, 0, 'the device copy stays empty until the snapshot arrives');
+    radar.cloudSnapshot({ events: [ev] });
+    assert.equal(radar.get().events.length, 1);
+    assert.ok(radar.get().all.some((e) => e.id === ev.id));
+  });
+
+  it('pausing enqueues in the cloud; resuming drains with stable ids', () => {
+    radar._reset();
+    const { calls, backend } = fakeBackend();
+    radar.attachCloud(backend, session);
+    radar.cloudSnapshot({ paused: true });
+    assert.equal(radar.receive(VERONA, 'Shady · Xland'), null);
+    const q = calls.find((c) => c.op === 'enqueue')!.arg as import('./store').QueuedMessage;
+    radar.cloudSnapshot({ queue: [q] });
+    radar.setPaused(false);
+    const drain = calls.find((c) => c.op === 'drain')!.arg as [RadarEvent[], string[]];
+    assert.equal(drain[0][0].id, `ev_${q.id}`);
+    assert.deepEqual(drain[1], [q.id]);
+    assert.equal(drain[0][0].fields.price, 3_082_500);
+  });
+
+  it('respects roles: view-only accounts cannot write, sales removes only own events', async () => {
+    const { canWrite, canRemove } = await import('./store');
+    const mine = { createdBy: 'sales@elsab3.com' } as RadarEvent;
+    const theirs = { createdBy: 'other@elsab3.com' } as RadarEvent;
+    assert.equal(canWrite({ mode: 'cloud', session: { email: 'b@x', role: 'company_owner' } }), false);
+    assert.equal(canWrite({ mode: 'cloud', session }), true);
+    assert.equal(canWrite({ mode: 'local', session: null }), true);
+    assert.equal(canRemove({ mode: 'cloud', session }, mine), true);
+    assert.equal(canRemove({ mode: 'cloud', session }, theirs), false);
+    assert.equal(canRemove({ mode: 'cloud', session: { email: 'a@x', role: 'admin' } }, theirs), true);
+  });
+
+  it('signing out returns to local mode and keeps device data', async () => {
+    radar._reset();
+    radar.receive(VERONA, 'local · Xland');
+    const { backend } = fakeBackend();
+    radar.attachCloud(backend, session);
+    assert.equal(radar.get().localPending, 1);
+    await radar.signOut();
+    assert.equal(radar.get().mode, 'local');
+    assert.equal(radar.get().events.length, 1);
+  });
+
+  it('uploads device messages once signed in, then clears the device', async () => {
+    radar._reset();
+    radar.receive(VERONA, 'local · Xland');
+    const { calls, backend } = fakeBackend();
+    radar.attachCloud(backend, session);
+    const n = await radar.uploadLocal();
+    assert.equal(n, 1);
+    assert.equal((calls.find((c) => c.op === 'addEvent')!.arg as RadarEvent).createdBy, 'sales@elsab3.com');
+    assert.equal(radar.get().localPending, 0);
+  });
+});

@@ -389,6 +389,16 @@ button.mr-row:hover .rt { color: var(--pulse); }
   font: 600 13px/18px var(--font-sans); box-shadow: var(--shadow-overlay); animation: mr-in var(--dur-move) var(--ease-settle) both;
 }
 
+.mr-pop {
+  position: fixed; z-index: 35; top: 60px; inset-inline-end: max(16px, calc((100vw - 1240px) / 2 + 24px)); width: min(320px, calc(100vw - 32px));
+  box-shadow: var(--shadow-overlay); animation: mr-in var(--dur-move) var(--ease-settle) both;
+}
+.mr-dialog {
+  position: fixed; z-index: 41; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px));
+  box-shadow: var(--shadow-overlay); animation: mr-fade var(--dur-move) var(--ease-settle) both;
+}
+.mr-mode { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; font-size: 13px; line-height: 20px; color: var(--ink-muted); }
+
 .mr-empty { padding: var(--space-8) 0; color: var(--ink-muted); text-align: center; font-size: 14px; }
 
 .mr-spark path.area { fill: var(--pulse); opacity: 0.08; }

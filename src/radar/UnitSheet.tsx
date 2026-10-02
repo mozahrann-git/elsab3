@@ -2,13 +2,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MARKET, ZONES } from './data';
 import { alternativesLine, fmt, pct, reasonLine, stampDate, threeAngles, verdict } from './engine';
-import { radar, useRadar } from './store';
+import { canWrite, radar, useRadar } from './store';
 import { SourceStamp, TrueCostCard, VerdictMeter, haptic, useLang } from './ui';
 import type { Audience, RadarEvent } from './types';
 
 export function UnitSheet({ event, onClose, onCriteria, toast }: { event: RadarEvent; onClose: () => void; onCriteria: () => void; toast: (s: string) => void }) {
   const { lang, tx } = useLang();
-  const { all, replies } = useRadar();
+  const st = useRadar();
+  const { all, replies } = st;
   const zone = ZONES.find((z) => z.id === event.fields.zoneId);
   const v = useMemo(() => (zone ? verdict(event, zone, MARKET, all) : null), [event, zone, all]);
   const [angle, setAngle] = useState<Audience>('investor');
@@ -81,7 +82,7 @@ export function UnitSheet({ event, onClose, onCriteria, toast }: { event: RadarE
                 stamp={<SourceStamp source={{ kind: 'computed', name: tx('المحاور الستة', 'Six axes'), org: zone.name[lang], date: zone.source.date, sample: zone.source.sample }} />}
                 onDetails={() => setDetails((d) => !d)}
                 reply={reply?.text}
-                onReply={() => setReplying((r) => !r)}
+                onReply={canWrite(st) ? () => setReplying((r) => !r) : undefined}
               />
 
               {replying && (

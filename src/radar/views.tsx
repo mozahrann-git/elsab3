@@ -4,7 +4,7 @@ import { answer } from './ask';
 import { DEVELOPERS, MARKET, ZONES } from './data';
 import { DAY, FIELD_NAMES, GRADE_WORD, THRESHOLDS, developerState, fmt, fmtMoney, isLive, pct, relDays, stampDate, verdict } from './engine';
 import { CORE_FIELDS, coverage, ingest } from './parser';
-import { radar, useRadar } from './store';
+import { canRemove, canWrite, radar, useRadar } from './store';
 import { DeveloperTile, Figure, PriceLine, SourceStamp, haptic, useLang } from './ui';
 import type { EventType, Extracted, Lang, RadarEvent, Zone } from './types';
 
@@ -425,6 +425,7 @@ export function IntakeView({ onOpen, toast }: { onOpen: (e: RadarEvent) => void;
   const [sender, setSender] = useState('');
   const preview = useMemo(() => (raw.trim().length > 8 ? ingest(raw, { sender: sender || 'Manual', history: st.all }) : null), [raw, sender, st.all]);
   const cov = preview ? coverage(preview.fields) : 0;
+  const writable = canWrite(st);
   const now = Date.now();
   const submit = () => {
     const ev = radar.receive(raw.trim(), sender.trim() || 'Manual');
@@ -445,9 +446,17 @@ export function IntakeView({ onOpen, toast }: { onOpen: (e: RadarEvent) => void;
         <div className="mr-card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span className={`mr-dot ${st.paused ? '' : 'beat'}`} style={{ background: st.paused ? 'var(--ink-faint)' : undefined }} />
           <span className="small">{st.paused ? tx(`موقوف · ${fmt(st.queue.length)} في الطابور`, `Paused · ${st.queue.length} queued`) : tx('التشغيل مفعّل', 'Running')}</span>
-          <button className="mr-link" onClick={() => radar.setPaused(!st.paused)}>{st.paused ? tx('شغّل', 'Resume') : tx('أوقف', 'Pause')}</button>
+          {writable && <button className="mr-link" onClick={() => radar.setPaused(!st.paused)}>{st.paused ? tx('شغّل', 'Resume') : tx('أوقف', 'Pause')}</button>}
         </div>
       </div>
+      <p className="mr-mode" style={{ marginBottom: 16 }}>
+        <span className="mr-dot" style={{ background: st.mode === 'cloud' ? 'var(--verdict-opportunity)' : 'var(--ink-faint)' }} />
+        {st.mode === 'cloud'
+          ? writable
+            ? tx('متصل بقاعدة الفريق — كل ما تعتمده يظهر لكل الفريق فوراً.', 'Connected to the team database — everything you approve is shared instantly.')
+            : tx('متصل للعرض فقط — حسابك يقرأ الرادار ولا يسجّل فيه.', 'Connected read-only — your account can view but not record.')
+          : tx('وضع محلي — ما تسجّله يُحفظ على هذا الجهاز فقط. ادخل بحساب الفريق للحفظ المشترك.', 'Local mode — what you record stays on this device. Sign in with a team account to share.')}
+      </p>
       <div className="mr-split">
         <div className="mr-card">
           <label className="label" htmlFor="mr-raw">{tx('نص الرسالة', 'Message text')}</label>
@@ -455,7 +464,7 @@ export function IntakeView({ onOpen, toast }: { onOpen: (e: RadarEvent) => void;
           <label className="label" htmlFor="mr-sender" style={{ display: 'block', marginTop: 16 }}>{tx('المرسِل · الشركة', 'Sender · company')}</label>
           <input id="mr-sender" className="mr-input" style={{ marginTop: 8 }} dir="auto" value={sender} onChange={(e) => setSender(e.target.value)} placeholder="Shady Azmy · Xland" />
           <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-            <button className="mr-btn" disabled={!preview} onClick={submit}>{tx('اعتمد وسجّل', 'Approve & record')}</button>
+            <button className="mr-btn" disabled={!preview || !writable} onClick={submit}>{tx('اعتمد وسجّل', 'Approve & record')}</button>
             <button className="mr-btn ghost" onClick={() => { setRaw(SAMPLE); setSender('Shady Azmy · Xland'); }}>{tx('جرّب رسالة مثال', 'Try a sample')}</button>
           </div>
           <p className="stamp" style={{ marginTop: 12 }}>{tx('التشغيل يُجدول على ذروة النشر (الصباح والمساء)، والإيقاف لا يُضيّع رسالة: تتراكم وتُقرأ عند التشغيل.', 'Runs on the posting peaks (morning and evening); pausing loses nothing — messages queue and are read on resume.')}</p>
@@ -499,16 +508,20 @@ export function IntakeView({ onOpen, toast }: { onOpen: (e: RadarEvent) => void;
 
       <div className="mr-section" style={{ marginTop: 32 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-          <span className="label">{tx(`ما سجّلته على هذا الجهاز — ${fmt(st.events.length)}`, `Recorded on this device — ${st.events.length}`)}</span>
+          <span className="label">
+            {st.mode === 'cloud'
+              ? tx(`سجلّ الفريق — ${fmt(st.events.length)} حدث`, `Team log — ${st.events.length} events`)
+              : tx(`ما سجّلته على هذا الجهاز — ${fmt(st.events.length)}`, `Recorded on this device — ${st.events.length}`)}
+          </span>
           <button className="mr-link" onClick={() => radar.setShowSeed(!st.showSeed)}>{st.showSeed ? tx('أخفِ العيّنة التجريبية', 'Hide demo sample') : tx('أظهر العيّنة التجريبية', 'Show demo sample')}</button>
         </div>
         <div className="mr-card">
           {st.events.length ? (
             <div className="mr-feed">
-              {[...st.events].reverse().map((e) => (
+              {[...st.events].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).slice(0, 100).map((e) => (
                 <div key={e.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <div style={{ flex: 1, minWidth: 0 }}><EventRow e={e} all={st.all} onOpen={onOpen} now={now} /></div>
-                  <button className="mr-chip-btn" aria-label={tx('احذف', 'Delete')} onClick={() => radar.remove(e.id)}>✕</button>
+                  {canRemove(st, e) && <button className="mr-chip-btn" aria-label={tx('احذف', 'Delete')} onClick={() => radar.remove(e.id)}>✕</button>}
                 </div>
               ))}
             </div>

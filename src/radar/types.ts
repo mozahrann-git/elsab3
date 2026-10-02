@@ -81,6 +81,8 @@ export interface RadarEvent {
   expiresAt: string | null;
   source: Source;
   fingerprint: string;
+  /** بريد من سجّل الحدث (في الوضع السحابي). */
+  createdBy?: string;
 }
 
 export interface PricePoint {

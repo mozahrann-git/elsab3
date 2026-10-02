@@ -1,7 +1,8 @@
 // Manateq Radar — الهيكل: الرأس، التنقّل، اللغة والسمة، واللوحة الجانبية للوحدة.
 import { useCallback, useEffect, useState } from 'react';
 import './radar.css';
-import { useRadar } from './store';
+import { radar, useRadar } from './store';
+import { TeamAccess } from './TeamAccess';
 import { LangCtx } from './ui';
 import { UnitSheet } from './UnitSheet';
 import { AskView, CriteriaView, DevelopersView, IntakeView, MapView, PulseView } from './views';
@@ -48,7 +49,7 @@ export default function RadarApp() {
   const [dev, setDev] = useState<string | null>(null);
   const [askSeed, setAskSeed] = useState('');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const { showSeed, seed } = useRadar();
+  const { showSeed, seed, error } = useRadar();
   const tx = (ar: string, en: string) => (lang === 'ar' ? ar : en);
 
   useEffect(() => {
@@ -100,6 +101,14 @@ export default function RadarApp() {
 
   const close = useCallback(() => setOpen(null), []);
 
+  // خطأ الكتابة للسحابة لا يضيع بصمت
+  useEffect(() => {
+    if (!error) return;
+    toast(error === 'permission-denied' ? tx('مالكش صلاحية على العملية دي', 'You do not have permission for that') : tx('ما اتحفظش — اتأكد من الاتصال وجرّب تاني', 'Not saved — check the connection and retry'));
+    radar.clearError();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
+
   return (
     <LangCtx.Provider value={lang}>
       <div className="mr" data-theme={theme} dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang}>
@@ -117,6 +126,7 @@ export default function RadarApp() {
               ))}
             </nav>
             <div className="mr-tools">
+              <TeamAccess toast={toast} />
               <button className="mr-chip-btn" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} aria-label={tx('English', 'العربية')}>
                 {lang === 'ar' ? 'EN' : 'ع'}
               </button>
