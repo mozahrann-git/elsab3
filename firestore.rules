@@ -232,6 +232,51 @@ service cloud.firestore {
                     && request.resource.data.stage == 'submitted';
     }
 
+    // ---------- Manateq Radar (/radar) ----------
+    /* رسائل السيلز فيها عمولات وأسماء مرسلين، فالقراءة للفريق بس.
+       الحدث بعد تسجيله ما بيتعدّلش (التاريخ ما بيتكتبش من جديد)؛
+       صاحبه أو الأدمن بس اللي بيمسحه. */
+    function radarTeam()   { return isStaff() || isOps() || isBoss() || isMkt(); }
+    function radarFeeder() { return isStaff() || isOps(); }
+    match /radar_events/{id} {
+      allow read: if radarTeam();
+      allow create: if radarFeeder()
+                    && request.resource.data.id == id
+                    && request.resource.data.createdBy == staffEmail()
+                    && request.resource.data.raw is string
+                    && request.resource.data.raw.size() <= 8000
+                    && request.resource.data.receivedAt is string;
+      allow delete: if isAdmin() || (radarFeeder() && resource.data.createdBy == staffEmail());
+    }
+    // الطابور: الرسائل اللي وصلت والتشغيل موقوف، بتتقري وتتمسح عند التشغيل
+    match /radar_queue/{id} {
+      allow read: if radarTeam();
+      allow create: if radarFeeder()
+                    && request.resource.data.id == id
+                    && request.resource.data.by == staffEmail()
+                    && request.resource.data.raw is string
+                    && request.resource.data.raw.size() <= 8000;
+      allow delete: if radarFeeder();
+    }
+    // حق الردّ: توضيح المطوّر بيتنشر جنب الحكم
+    match /radar_replies/{eventId} {
+      allow read: if radarTeam();
+      allow create, update: if radarFeeder()
+                            && request.resource.data.eventId == eventId
+                            && request.resource.data.by == staffEmail()
+                            && request.resource.data.text is string
+                            && request.resource.data.text.size() <= 2000;
+      allow delete: if isAdmin();
+    }
+    // زرار الإيقاف والتشغيل
+    match /radar_config/{id} {
+      allow read: if radarTeam();
+      allow write: if radarFeeder() && id == 'ops'
+                   && request.resource.data.keys().hasOnly(['paused', 'by', 'at'])
+                   && request.resource.data.paused is bool
+                   && request.resource.data.by == staffEmail();
+    }
+
     // ---------- قديم ----------
     match /brokers/{id} {
       allow read: if isBoss();
