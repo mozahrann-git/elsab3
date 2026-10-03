@@ -115,7 +115,6 @@ export const INITIAL_SALES_AGENTS: SalesAgent[] = [
     listingsAddedCount: 8,
     badges: [INITIAL_BADGES[0], INITIAL_BADGES[1], INITIAL_BADGES[2]],
     activeQuests: INITIAL_DAILY_QUESTS,
-    isCurrentSession: true
   },
   {
     id: 'agent_mahmoud',
