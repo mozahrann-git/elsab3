@@ -26,6 +26,11 @@ interface Props {
 export const QuestLogSheet: React.FC<Props> = ({ quest, agent, leads, onClose, onSaved, showToast }) => {
   const isCall = quest.category === 'calls';
   const isAd = quest.category === 'facebook_share';
+  /* أي تحدي تاني الإدارة طلبت عليه إثبات */
+  const proof = quest.proof || 'none';
+  const isProof = !isCall && !isAd && proof !== 'none';
+  const needPhoto = isProof && (proof === 'photo' || proof === 'both');
+  const needNote = isProof && (proof === 'note' || proof === 'both');
 
   const [outcome, setOutcome] = useState<CallOutcome | ''>('');
   const [leadId, setLeadId] = useState('');
@@ -54,7 +59,11 @@ export const QuestLogSheet: React.FC<Props> = ({ quest, agent, leads, onClose, o
     }
   };
 
-  const canSave = isCall ? !!outcome : isAd ? !!platform : true;
+  /* الإثبات مش اختياري — التحدي ما يتسجّلش من غيره */
+  const canSave = isCall ? !!outcome
+    : isAd ? !!platform
+    : isProof ? ((!needPhoto || !!shot) && (!needNote || note.trim().length >= 3))
+    : true;
 
   const save = async () => {
     if (!canSave) return;
@@ -70,7 +79,7 @@ export const QuestLogSheet: React.FC<Props> = ({ quest, agent, leads, onClose, o
         leadId: lead?.id,
         leadName: lead?.name,
         platform: isAd ? platform : undefined,
-        screenshotUrl: isAd ? shot || undefined : undefined,
+        screenshotUrl: shot || undefined,
         note: note.trim() || undefined,
       });
       onSaved();
@@ -192,13 +201,54 @@ export const QuestLogSheet: React.FC<Props> = ({ quest, agent, leads, onClose, o
             </>
           )}
 
+          {/* ===== إثبات عام ===== */}
+          {isProof && (
+            <div className="space-y-3">
+              <p className="text-[11px] bg-[#FFF8E6] border border-[#EBD9A6] text-[#7A5E12] rounded-xl px-3 py-2 leading-relaxed font-bold">
+                التحدي ده محتاج إثبات{quest.proofHint ? `: ${quest.proofHint}` : ''}
+              </p>
+
+              {needPhoto && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-[#141414]">الصورة *</p>
+                  {shot ? (
+                    <div className="relative">
+                      <img src={shot} alt="" className="w-full rounded-xl border border-[#E4DFD4]" />
+                      <button onClick={() => setShot('')} className="absolute top-2 left-2 bg-black/70 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg cursor-pointer">شيلها</button>
+                      <span className="absolute top-2 right-2 bg-[#1E7A45] text-white text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+                        <Check size={11} /> اترفعت
+                      </span>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#DCD6CA] rounded-xl py-7 cursor-pointer bg-white">
+                      {busy ? (
+                        <>
+                          <Loader2 size={20} className="text-[#A07A26] animate-spin" />
+                          <span className="text-xs text-[#6B665C]">بيرفع... {upPct}%</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={20} className="text-[#A07A26]" />
+                          <span className="text-xs font-bold text-[#141414]">ارفع الإثبات</span>
+                        </>
+                      )}
+                      <input type="file" accept="image/*" onChange={pickShot} className="hidden" disabled={busy} />
+                    </label>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <label className="block space-y-1">
-            <span className="text-xs font-bold text-[#141414]">ملاحظة (اختياري)</span>
+            <span className="text-xs font-bold text-[#141414]">
+              {needNote ? 'الإثبات المكتوب *' : 'ملاحظة (اختياري)'}
+            </span>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
-              placeholder={isCall ? 'قال إيه بالظبط؟' : 'اسم الجروب أو الكود المنشور'}
+              placeholder={needNote ? (quest.proofHint || 'اكتب الإثبات') : isCall ? 'قال إيه بالظبط؟' : 'اسم الجروب أو الكود المنشور'}
               className="w-full bg-white border border-[#E4DFD4] rounded-xl px-3 py-2.5 text-sm leading-relaxed"
             />
           </label>
@@ -208,7 +258,12 @@ export const QuestLogSheet: React.FC<Props> = ({ quest, agent, leads, onClose, o
             disabled={!canSave || busy}
             className="w-full py-3.5 rounded-xl bg-[#141414] text-white font-bold text-sm disabled:opacity-40 cursor-pointer"
           >
-            {busy ? 'بيسجّل...' : !canSave ? (isCall ? 'اختار نتيجة المكالمة' : 'اختار المنصة') : 'سجّل'}
+            {busy ? 'بيسجّل...'
+              : canSave ? 'سجّل'
+              : isCall ? 'اختار نتيجة المكالمة'
+              : isAd ? 'اختار المنصة'
+              : needPhoto && !shot ? 'ارفع الإثبات الأول'
+              : 'اكتب الإثبات الأول'}
           </button>
         </div>
       </div>

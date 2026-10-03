@@ -67,7 +67,8 @@ export const QuickBriefRow: React.FC<Props> = ({ lead, byName, onUpdateLead }) =
           <SlidersHorizontal size={13} className="text-[#A07A26] shrink-0" />
           <span className="text-[11px] font-bold text-[#141414] truncate">
             {finishingLabel} · {payLabel}
-            {ceiling ? ` · يقدر لحد ${(ceiling / 1e6).toFixed(1)}م` : ''}
+            {mode === 'instalment' ? ' · مشاريع بس' : ''}
+            {ceiling && mode !== 'cash' ? ` · مشاريع لحد ${(ceiling / 1e6).toFixed(1)}م` : ''}
           </span>
         </span>
         <span className="text-[11px] font-bold text-[#A07A26] shrink-0">
@@ -152,16 +153,17 @@ export const QuickBriefRow: React.FC<Props> = ({ lead, byName, onUpdateLead }) =
                 ))}
               </div>
 
-              {/* الحسبة بتبان وهو بيكتب — عشان يعرف إحنا بنطابق على كام */}
+              {/* القاعدة صريحة: الريسيل كاش، والتقسيط مشاريع */}
               {ceiling > 0 && (
                 <p className="text-[11px] bg-[#EEF5F0] border border-[#BFE0CC] text-[#1E7A45] rounded-lg px-2.5 py-1.5 leading-relaxed flex items-start gap-1.5">
                   <Check size={13} className="shrink-0 mt-0.5" />
                   <span>
-                    يقدر على شقة لحد{' '}
-                    <b className="font-mono">{money(ceiling)}</b> ج.م — المقدم{' '}
-                    <b className="font-mono">{money(b.downCash)}</b> + القسط{' '}
-                    <b className="font-mono">{money(b.monthly)}</b> × 12 ×{' '}
-                    {b.years || DEFAULT_INSTALMENT_YEARS} سنين. المطابقة بتشتغل على الرقم ده.
+                    في المشاريع يقدر على وحدة لحد{' '}
+                    <b className="font-mono">{money(ceiling)}</b> ج.م — مقدم{' '}
+                    <b className="font-mono">{money(b.downCash)}</b> + قسط{' '}
+                    <b className="font-mono">{money(b.monthly)}</b> ×{' '}
+                    {b.years || DEFAULT_INSTALMENT_YEARS} سنين.
+                    {' '}<b>الريسيل مش هيظهرله</b> لأن المالك مش بيقسّط.
                   </span>
                 </p>
               )}

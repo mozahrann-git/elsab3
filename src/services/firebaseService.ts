@@ -11,7 +11,8 @@ import {
   deleteDoc, 
   onSnapshot, 
   writeBatch,
-  updateDoc
+  updateDoc,
+  runTransaction
 } from 'firebase/firestore';
 import { 
   getAuth, 
@@ -28,6 +29,7 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { buildLeadPatch } from './leadSync';
 import { Property, SalesAgent, Lead, OwnerSubmission, OwnerPrivateDetails, BrokerProfile, ViewingRequest, ViewingFeedback, ClosedDeal } from '../types';
 import { ensureUploaded } from './mediaStorage';
 
@@ -589,6 +591,30 @@ export async function saveLeadToDb(lead: Lead): Promise<void> {
     } catch {
       // ignore
     }
+  }
+}
+
+/**
+ * بيحفظ تعديلات الليد من غير ما يمسح شغل حد تاني.
+ *
+ * بدل ما نكتب الليد كامل (وده كان بيرجّع نسخة قديمة فوق الجديدة لما
+ * اتنين يشتغلوا في نفس الوقت)، بنقرا اللي على السيرفر جوّه ترانزاكشن،
+ * وبنكتب اللي اتغيّر عندنا بس، والنشاط بيتدمج من الطرفين.
+ */
+export async function saveLeadMerged(lead: Lead, prev?: Lead | null): Promise<void> {
+  try {
+    await ensureAuth();
+    const ref = doc(db, 'crm_leads', lead.id);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const server = snap.exists() ? (snap.data() as Partial<Lead>) : null;
+      const patch = buildLeadPatch(lead, prev, server);
+      tx.set(ref, cleanFirestoreData(patch), { merge: true });
+    });
+  } catch (error) {
+    console.warn('[Firebase] Notice merging CRM lead:', error);
+    // الشبكة وقعت — بنحفظ محلياً والسنابشوت هيصلّح نفسه لما ترجع
+    await saveLeadToDb(lead);
   }
 }
 

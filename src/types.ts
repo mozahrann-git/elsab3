@@ -113,6 +113,10 @@ export interface Property {
   registeredContract: boolean;      // مسجلة / حصة بالأرض
   createdAt: string;
   clicks: PropertyClicks;
+  /* الإحالة والمراجعة — مين جاب الشقة ومين راجعها قبل النشر */
+  referredBy?: string;
+  reviewedBy?: string;
+  reviewedAt?: number;
 }
 
 export interface FilterState {
@@ -183,6 +187,11 @@ export interface OwnerSubmission {
   realOwnerName?: string;           // صاحب الشقة الحقيقي لو اللي عارضها بروكر
   realOwnerPhone?: string;
   qualityCheck?: { by: string; at: number; accountDelivered?: boolean; note?: string };
+  /* المراجعة قبل النشر */
+  code?: string;                    // الكود اللي الإدارة دّته للشقة
+  reviewedBy?: string;
+  reviewedAt?: number;
+  reviewChecks?: Record<string, boolean>;
 }
 
 export interface AdminCredentials {
@@ -413,6 +422,9 @@ export interface DailyQuest {
   currentCount: number;
   isCompleted: boolean;
   category: 'facebook_share' | 'calls' | 'site_visit' | 'add_listing' | 'close_deal';
+  /* الإثبات المطلوب — جاي من قالب التحدي */
+  proof?: 'none' | 'photo' | 'note' | 'both';
+  proofHint?: string;
 }
 
 export interface BroadcastEmergencyAlert {

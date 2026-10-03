@@ -105,6 +105,7 @@ import {
 } from 'lucide-react';
 import { generateCallLink, generateWhatsAppLink, formatPrice } from './utils/helpers';
 import { ExcelImportModal } from './components/ExcelImportModal';
+import { captureRef, creditCode, logStep } from './services/referralService';
 import {
   getInitialPropertiesCache,
   persistPropertiesCache,
@@ -132,6 +133,7 @@ import {
   seedSalesAgentsToDb,
   subscribeToCrmLeads,
   saveLeadToDb,
+  saveLeadMerged,
   updateLeadInDb,
   subscribeToClosedDeals,
   saveClosedDealToDb,
@@ -585,6 +587,11 @@ export default function App() {
 
   // 5. Modals State
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  /* رحلة العميل: كل شقة بيفتحها بتتسجّل، فالسيلز يعرف هو مهتم بإيه
+     قبل ما يكلّمه — مش بيبدأ المكالمة من الصفر. */
+  useEffect(() => {
+    if (selectedProperty) logStep('فتح شقة', selectedProperty.code);
+  }, [selectedProperty]);
   const [detailModalInitialMedia, setDetailModalInitialMedia] = useState<'photos' | 'video'>('photos');
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
@@ -596,8 +603,15 @@ export default function App() {
       return q.get('owner') !== null || q.get('addunit') !== null;
     } catch { return false; }
   });
+  /* الإحالة بتتقرا مرة واحدة أول ما الصفحة تفتح.
+     أول لمسة بتتقفل: لو العميل رجع بعدين من غير لينك، الكريدت بيفضل
+     لأول سيلز جابه. */
+  const refRecord = useMemo(() => captureRef(), []);
   const ownerLinkBy = useMemo(() => {
-    try { return new URLSearchParams(window.location.search).get('by') || ''; } catch { return ''; }
+    try {
+      const q = new URLSearchParams(window.location.search);
+      return q.get('ref') || q.get('by') || creditCode() || '';
+    } catch { return creditCode() || ''; }
   }, []);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
@@ -1274,7 +1288,9 @@ export default function App() {
     }
 
     setCrmLeads((prev) => prev.map((l) => (l.id === lead.id ? lead : l)));
-    saveLeadToDb(lead).catch(err => console.error('[Firebase] Error saving lead:', err));
+    /* بنبعت اللي اتغيّر بس، والنشاط بيتدمج مع اللي على السيرفر —
+       عشان لو حد تاني شغال على نفس العميل، محدش يمسح شغل التاني. */
+    saveLeadMerged(lead, before).catch(err => console.error('[Firebase] Error saving lead:', err));
   };
 
   /* المهام اليومية من إعدادات الأدمن — بنمسكها في مرجع عشان
@@ -1599,6 +1615,16 @@ export default function App() {
     }
     if (!sub) return;
 
+    /* حفظ تعديلات المراجعة من غير نشر — الطلب بيفضل قيد المراجعة.
+       ده بيخلي الإدارة تراجع على مرات من غير ما الشقة تطلع للناس. */
+    if ((sub as any).__draftOnly) {
+      const draft = { ...(sub as any) };
+      delete draft.__draftOnly;
+      setOwnerSubmissions((prev) => prev.map((s) => (s.id === draft.id ? draft : s)));
+      saveOwnerSubmissionToDb(draft).catch((err) => console.error(err));
+      return;
+    }
+
     // Create a live property from submission using latest edited attributes
     const newProperty: Property = {
       id: `prop-${Date.now()}`,
@@ -1639,8 +1665,12 @@ export default function App() {
       ownerName: (sub as any).realOwnerName || sub.ownerName,
       ownerPhone: (sub as any).realOwnerPhone || sub.phone,
       createdAt: new Date().toISOString().split('T')[0],
-      clicks: { whatsapp: 0, call: 0, views: 0, favorites: 0 }
-    };
+      clicks: { whatsapp: 0, call: 0, views: 0, favorites: 0 },
+      /* مين جاب الشقة دي — بيفضل على الشقة نفسها مش على الطلب بس */
+      referredBy: (sub as any).referredBy || undefined,
+      reviewedBy: (sub as any).reviewedBy || undefined,
+      reviewedAt: (sub as any).reviewedAt || undefined,
+    } as Property;
 
     setProperties((prev) => {
       const updated = [newProperty, ...prev];

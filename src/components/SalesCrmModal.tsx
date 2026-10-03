@@ -48,7 +48,7 @@ import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
-import { matchProperties, briefLine, briefGaps, readBrief, payModeOf, budgetCeiling, instalmentCeiling, PayMode } from '../services/clientBrief';
+import { matchProperties, briefLine, briefGaps, readBrief, payModeOf, resaleFits, projectsFit, resaleCeiling, PayMode } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
 import { humanDuration, followUpBadge } from '../utils/followUpAlerts';
@@ -56,6 +56,9 @@ import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuest
 import { AgentDayPanel } from './crm/AgentDayPanel';
 import { OwnerLinkCard } from './crm/OwnerLinkCard';
 import { QuickBriefRow } from './crm/QuickBriefRow';
+import { ProjectMatchPanel } from './crm/ProjectMatchPanel';
+import { QuestEditor } from './crm/QuestEditor';
+import { SyncBadge } from './crm/SyncBadge';
 import { QuestLogSheet } from './crm/QuestLogSheet';
 import { DayLogSummary } from './crm/DayLogSummary';
 import { QuestLog, subscribeDayLogs, dayKey, summarizeCalls, summarizeAds, CALL_OUTCOMES } from '../services/questLogService';
@@ -277,7 +280,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     [selectedMatchingLead],
   );
   const activePay: PayMode = matchPay || (matchBrief ? payModeOf(matchBrief) : 'cash');
-  const matchCeiling = matchBrief ? budgetCeiling(matchBrief, activePay) : { max: 0, source: 'budget' as const };
+  const showResale = resaleFits(activePay);
+  const showProjects = projectsFit(activePay);
 
   // نفس المحرك اللي بيبني العرض المخصوص — فالشاشتين مستحيل يختلفوا
   const matchedProperties = useMemo(() => {
@@ -305,6 +309,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [logQuest, setLogQuest] = useState<DailyQuest | null>(null);
   const [toast, setToast] = useState('');
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2800); };
+
+  /* توقيع الداتا — بيتغيّر أول ما أي تعديل يوصل من أي حد تاني،
+     فالمؤشر بيلمع ويقول "وصل تحديث". */
+  const syncSignature = useMemo(
+    () => `${leads.length}:${leads.reduce((n, l) => n + (Number((l as any).updatedAt) || 0) + (l.activity?.length || 0), 0)}`,
+    [leads],
+  );
 
   const [offerPicks, setOfferPicks] = useState<string[]>([]);
   useEffect(() => { setOfferPicks([]); }, [matchingLeadId]);
@@ -547,6 +558,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* بيقول إن الشاشة بتتحدّث لوحدها — فمحدش يقعد يعمل Refresh */}
+              <SyncBadge signature={syncSignature} />
 
               {/* بتتبع اللي إنت شايفه. الإدارة من غير اختيار = مفيش نقط، مش نقط حد تاني */}
               <span className="px-2 py-0.5 bg-[#FAF4E5]/10 border border-[#E9DFCA]/20 text-[#FAF4E5] text-[10px] font-mono font-bold rounded-lg">
@@ -1491,28 +1505,35 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         )}
                       </div>
 
-                      {/* الرقم اللي بنفلتر بيه فعلاً — عشان مايبقاش سحر */}
+                      {/* القاعدة بالكلام — الريسيل كاش، والتقسيط مشاريع */}
                       <p className="text-[11px] text-[#6B665C] leading-relaxed">
-                        {matchCeiling.source === 'instalment' ? (
+                        {activePay === 'instalment' ? (
                           <>
-                            بنطابق على <b className="text-[#141414] font-mono">{matchCeiling.max.toLocaleString('en-US')}</b> ج.م
-                            {' '}= مقدم <b className="font-mono">{matchBrief.downCash.toLocaleString('en-US')}</b>
-                            {' + '}قسط <b className="font-mono">{matchBrief.monthly.toLocaleString('en-US')}</b> × {matchBrief.years} سنين
+                            <b className="text-[#141414]">مشاريع بس.</b> الريسيل كاش — المالك مش بيقسّط،
+                            فمش بنوريه شقق ريسيل خالص. الفلتر بيشتغل على مقدمه{' '}
+                            <b className="font-mono">{matchBrief.downCash.toLocaleString('en-US')}</b> وقسطه{' '}
+                            <b className="font-mono">{matchBrief.monthly.toLocaleString('en-US')}</b>.
                           </>
-                        ) : matchCeiling.max ? (
-                          <>بنطابق على الميزانية: لحد <b className="text-[#141414] font-mono">{matchCeiling.max.toLocaleString('en-US')}</b> ج.م</>
+                        ) : activePay === 'cash' ? (
+                          resaleCeiling(matchBrief) ? (
+                            <><b className="text-[#141414]">ريسيل كاش</b> — لحد <b className="text-[#141414] font-mono">{resaleCeiling(matchBrief).toLocaleString('en-US')}</b> ج.م</>
+                          ) : 'مفيش ميزانية متسجّلة — بيطلّع كل حاجة'
                         ) : (
-                          'مفيش ميزانية ولا مقدم متسجّلين — بيطلّع كل حاجة'
+                          <>
+                            <b className="text-[#141414]">الاتنين:</b> ريسيل كاش لحد{' '}
+                            <b className="font-mono">{(resaleCeiling(matchBrief) || 0).toLocaleString('en-US')}</b> ج.م،
+                            ومشاريع على مقدمه وقسطه.
+                          </>
                         )}
                       </p>
 
-                      {activePay !== 'cash' && !instalmentCeiling(matchBrief) && (
+                      {activePay !== 'cash' && !matchBrief.downCash && !matchBrief.monthly && (
                         <button
                           type="button"
                           onClick={() => setDiscoveryLead(selectedMatchingLead!)}
                           className="text-[11px] font-bold text-[#7A5E12] bg-[#FFF8E6] border border-[#EBD9A6] rounded-lg px-2.5 py-1.5 cursor-pointer"
                         >
-                          اكتب المقدم والقسط عشان الحسبة تشتغل
+                          اكتب المقدم والقسط عشان نفلتر المشاريع
                         </button>
                       )}
                     </div>
@@ -1522,7 +1543,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 {/* Matching Counter Badge */}
                 <div className="bg-[#E6F7ED] border border-[#B3E8C8] text-[#0E7A5A] px-3 sm:px-4 py-1.5 sm:py-2 rounded-2xl font-bold text-xs sm:text-sm whitespace-nowrap shadow-2xs shrink-0 flex items-center gap-1.5">
                   <Sparkles size={14} className="text-[#0E7A5A]" />
-                  <span>{matchedProperties.length} شقق مطابقة</span>
+                  <span>{showResale ? `${matchedProperties.length} شقق مطابقة` : 'تقسيط · مشاريع'}</span>
                 </div>
               </div>
 
@@ -1545,8 +1566,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
             </div>
 
+            {/* التقسيط = مشاريع. الريسيل مبيظهرش هنا خالص. */}
+            {showProjects && selectedMatchingLead && (
+              <ProjectMatchPanel lead={selectedMatchingLead} />
+            )}
+
             {/* Matched Codes Header & Pills Grid */}
-            <div className="space-y-2.5">
+            <div className={`space-y-2.5 ${showResale ? '' : 'hidden'}`}>
               <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#141414]">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
                 <span>أكواد الشقق المطابقة ({matchedProperties.length}):</span>
@@ -1577,7 +1603,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             </div>
 
             {/* من المطابقة للعرض المخصوص مباشرة — نفس الشقق، مفيش اختيار من الأول */}
-            {selectedMatchingLead && matchedProperties.length > 0 && (
+            {selectedMatchingLead && showResale && matchedProperties.length > 0 && (
               <div className="bg-[#141414] text-white rounded-2xl p-3.5 flex items-center justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <p className="font-bold text-sm">ابعتله عرض مخصوص</p>
@@ -1601,7 +1627,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             )}
 
             {/* Matched Properties Cards List (Exact layout from Screenshot 1) */}
-            <div className="space-y-3 sm:space-y-3.5 pt-1">
+            <div className={`space-y-3 sm:space-y-3.5 pt-1 ${showResale ? '' : 'hidden'}`}>
               {matchedProperties.map((prop) => (
                 <div
                   key={prop.id}
@@ -1742,25 +1768,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               {/* Quest Items List */}
               <div className="space-y-3.5">
                 {isAdmin && editBoard !== 'quests' && (
-                  <button onClick={() => { setDraftBoard({ quests: questTemplate.map((q) => ({ ...q })) }); setEditBoard('quests'); }} className="text-xs font-bold text-[#A07A26]">✎ تعديل تحديات اليوم</button>
+                  <button onClick={() => setEditBoard('quests')} className="text-xs font-bold text-[#A07A26] cursor-pointer">✎ تعديل تحديات اليوم</button>
                 )}
                 {isAdmin && editBoard === 'quests' && (
-                  <div className="rounded-2xl border-2 border-[#A07A26] bg-white p-4 space-y-3">
-                    {(draftBoard.quests || []).map((q, qi) => (
-                      <div key={q.id} className="grid gap-2 sm:grid-cols-12 border-b border-[#F0ECE4] pb-3">
-                        <input value={q.title} onChange={(e) => { const n = [...(draftBoard.quests || [])]; n[qi] = { ...q, title: e.target.value }; setDraftBoard({ quests: n }); }} placeholder="اسم التحدي" className="sm:col-span-5 p-2.5 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-sm font-bold" />
-                        <input value={q.description} onChange={(e) => { const n = [...(draftBoard.quests || [])]; n[qi] = { ...q, description: e.target.value }; setDraftBoard({ quests: n }); }} placeholder="الوصف" className="sm:col-span-4 p-2.5 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-sm" />
-                        <label className="sm:col-span-1 text-[10px]">العدد<input type="number" min={1} value={q.targetCount} onChange={(e) => { const n = [...(draftBoard.quests || [])]; n[qi] = { ...q, targetCount: Number(e.target.value) || 1 }; setDraftBoard({ quests: n }); }} className="w-full p-2 rounded-lg bg-[#F6F4EF] border border-[#ECE8DF] text-sm" /></label>
-                        <label className="sm:col-span-1 text-[10px]">XP<input type="number" min={0} value={q.xpReward} onChange={(e) => { const n = [...(draftBoard.quests || [])]; n[qi] = { ...q, xpReward: Number(e.target.value) || 0 }; setDraftBoard({ quests: n }); }} className="w-full p-2 rounded-lg bg-[#F6F4EF] border border-[#ECE8DF] text-sm" /></label>
-                        <button onClick={() => setDraftBoard({ quests: (draftBoard.quests || []).filter((_, j) => j !== qi) })} className="sm:col-span-1 text-xs font-bold text-[#C2412D]">مسح</button>
-                      </div>
-                    ))}
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => setDraftBoard({ quests: [...(draftBoard.quests || []), { id: `q_${Date.now()}`, title: '', description: '', xpReward: 50, targetCount: 1, currentCount: 0, isCompleted: false, category: 'calls' }] })} className="px-3 py-2 rounded-xl bg-[#F6F4EF] text-sm font-bold">+ تحدي جديد</button>
-                      <button onClick={async () => { await saveCrmBoard({ quests: (draftBoard.quests || []).filter((q) => q.title.trim()) }); setEditBoard(null); }} className="px-4 py-2 rounded-xl bg-[#141414] text-white text-sm font-bold">حفظ التحديات</button>
-                      <button onClick={() => setEditBoard(null)} className="px-4 py-2 rounded-xl bg-[#F6F4EF] text-sm font-bold">إلغاء</button>
-                    </div>
-                  </div>
+                  <QuestEditor
+                    templates={questTemplates}
+                    onDone={() => setEditBoard(null)}
+                    showToast={showToast}
+                  />
                 )}
                 {agentQuests.map((quest) => {
                   const isDone = quest.isCompleted || quest.currentCount >= quest.targetCount;
@@ -1808,8 +1823,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                           ) : (
                             <button
                               onClick={() => {
-                                /* المكالمة والإعلان محتاجين تفاصيل — مش مجرد +1 */
-                                if (quest.category === 'calls' || quest.category === 'facebook_share') setLogQuest(quest);
+                                /* المكالمة والإعلان محتاجين تفاصيل، وأي تحدي
+                                   الإدارة طلبت عليه إثبات محتاج دليل — مش مجرد +1 */
+                                if (quest.category === 'calls' || quest.category === 'facebook_share'
+                                    || ((quest as any).proof && (quest as any).proof !== 'none')) setLogQuest(quest);
                                 else handleIncrementQuest(quest.id);
                               }}
                               className="px-3.5 py-1.5 bg-[#141414] hover:bg-black text-white text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 flex items-center gap-1 shadow-2xs"
@@ -1818,6 +1835,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                               <span>
                                 {quest.category === 'calls' ? 'سجّل مكالمة'
                                   : quest.category === 'facebook_share' ? 'سجّل إعلان'
+                                  : ((quest as any).proof && (quest as any).proof !== 'none') ? 'سجّل بالإثبات'
                                   : 'تسجيل نشاط (+1)'}
                               </span>
                             </button>

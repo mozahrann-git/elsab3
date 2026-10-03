@@ -47,8 +47,10 @@ export function payModeOf(b: ClientBrief): PayMode {
 }
 
 /**
- * أقصى سعر يقدر عليه بالتقسيط = المقدم + (القسط × ١٢ × السنين).
- * بترجّع 0 لو مكتبناش مقدم ولا قسط — ساعتها الميزانية هي اللي بتحكم.
+ * أقصى سعر وحدة يقدر عليها في المشاريع = المقدم + (القسط × ١٢ × السنين).
+ *
+ * ده للمشاريع بس — العمارات تحت الإنشاء والكمبوندات، لأن المطوّر هو اللي
+ * بيقسّط. الريسيل مالهوش علاقة بالرقم ده خالص.
  */
 export function instalmentCeiling(b: ClientBrief): number {
   if (!b.downCash && !b.monthly) return 0;
@@ -56,25 +58,29 @@ export function instalmentCeiling(b: ClientBrief): number {
 }
 
 /**
- * السقف الحقيقي اللي بنطابق عليه.
+ * هل نوريه شقق ريسيل أصلاً؟
  *
- * ده اللي كان ناقص: الميزانية اللي فوق كانت بتغلب على كل حاجة، فلما السيلز
- * يكتب «معاه ٨٠٠ ألف مقدم و٢٠ ألف قسط» الرقم ده مكانش بيدخل الحسبة خالص.
+ * الريسيل كاش. المالك بيستلم فلوسه كلها عند العقد — مش بيقسّط. فالعميل
+ * اللي بيدوّر على مقدم وقسط، شقق الريسيل بالنسباله مش موجودة، وعرضها عليه
+ * بيضيّع وقته ووقت السيلز وبيخلّي المعاينة تفشل.
  *
- *  كاش      → الميزانية زي ما هي
- *  تقسيط    → المقدم + القسط × المدة (لو اتكتبوا)، وإلا الميزانية
- *  الاتنين  → الأعلى فيهم، عشان يشوف اللي يقدر عليه بالطريقتين
+ * اللي ليه = المشاريع: العمارات تحت الإنشاء والكمبوندات.
  */
-export function budgetCeiling(b: ClientBrief, mode?: PayMode): { max: number; source: 'budget' | 'instalment' } {
-  const m = mode || payModeOf(b);
-  const inst = instalmentCeiling(b);
-  const budget = b.budgetMax || 0;
+export function resaleFits(mode: PayMode): boolean {
+  return mode !== 'instalment';
+}
 
-  if (m === 'cash' || !inst) return { max: budget, source: 'budget' };
-  if (m === 'instalment') return { max: inst, source: 'instalment' };
-  return inst > budget
-    ? { max: inst, source: 'instalment' }
-    : { max: budget, source: 'budget' };
+/** هل نوريه مشاريع (تقسيط)؟ */
+export function projectsFit(mode: PayMode): boolean {
+  return mode !== 'cash';
+}
+
+/**
+ * سقف الريسيل — الميزانية وبس، مهما كان المقدم والقسط.
+ * بنفصلها في دالة عشان مفيش حد يخلط بينها وبين حسبة التقسيط تاني.
+ */
+export function resaleCeiling(b: ClientBrief): number {
+  return b.budgetMax || 0;
 }
 
 const S = (v: any) => (typeof v === 'string' ? v.trim() : '');
@@ -176,11 +182,14 @@ export function matchDetailed(
   const tol = opts.tolerance || 0;
   const strict = opts.strictDistrict !== false;
 
-  /* السقف بيتحسب من نوع الدفع — مش من الميزانية وبس */
-  const ceil = budgetCeiling(b, opts.payMode);
+  /* الريسيل كاش. اللي بيدوّر تقسيط مش بنوريه ريسيل خالص — المشاريع هي بتاعته. */
+  const mode = opts.payMode || payModeOf(b);
+  if (!resaleFits(mode)) return [];
+
+  const ceilMax = resaleCeiling(b);
   const minB = b.budgetMin ? b.budgetMin * (1 - tol) : 0;
-  const maxB = ceil.max ? ceil.max * (1 + tol) : Infinity;
-  const target = ceil.max ? ((b.budgetMin || ceil.max) + ceil.max) / 2 : 0;
+  const maxB = ceilMax ? ceilMax * (1 + tol) : Infinity;
+  const target = ceilMax ? ((b.budgetMin || ceilMax) + ceilMax) / 2 : 0;
 
   const out: MatchResult[] = [];
 
@@ -206,8 +215,8 @@ export function matchDetailed(
     const misses: string[] = [];
     if (hit && b.districts.length) reasons.push(p.neighborhood || '');
     else if (b.districts.length) misses.push('برّه الأحياء اللي طلبها');
-    if (ceil.max && price <= ceil.max) reasons.push(ceil.source === 'instalment' ? 'يقدر عليها بالمقدم والقسط' : 'جوه الميزانية');
-    else if (ceil.max) misses.push(ceil.source === 'instalment' ? 'أعلى من قدرته بالتقسيط' : 'أعلى من ميزانيته');
+    if (ceilMax && price <= ceilMax) reasons.push('جوه الميزانية');
+    else if (ceilMax) misses.push('أعلى من ميزانيته');
     if (b.bedrooms && (Number(p.bedrooms) || 0) > b.bedrooms) reasons.push('غرف أكتر');
     if (fstat === 'violation') misses.push('الدور مخالف');
     else if (fstat === 'unknown') misses.push('الدور محتاج تأكيد');
@@ -220,7 +229,18 @@ export function matchDetailed(
     out.push({ property: p, score, inDistrict: hit, reasons: reasons.filter(Boolean), misses });
   });
 
-  return out.sort((x, y) => x.score - y.score);
+  /* نفس الكود مرتين = الشقة اتسجّلت مرتين في الداتا. السيلز مايبعتش
+     لعميل نفس الكود ٤ مرات في عرض واحد. */
+  const seen = new Set<string>();
+  return out
+    .sort((x, y) => x.score - y.score)
+    .filter((r) => {
+      const key = (r.property.code || r.property.id || '').trim();
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 /** نفس المحرك، بيرجّع الشقق بس */
@@ -236,10 +256,10 @@ export function briefLine(lead: Lead): string {
   parts.push(b.districts.length ? b.districts.join('، ') : 'أي حي');
   parts.push(b.bedrooms ? `${b.bedrooms}+ غرف` : 'أي عدد غرف');
   if (b.budgetMax) parts.push(b.budgetMin ? `${money(b.budgetMin)}–${money(b.budgetMax)}` : `لحد ${money(b.budgetMax)}`);
-  /* لما يكون بيقسّط، الرقم اللي بنطابق عليه فعلاً لازم يبان — مش الميزانية بس */
-  const inst = instalmentCeiling(b);
-  if (inst && payModeOf(b) !== 'cash') {
-    parts.push(`تقسيط: مقدم ${money(b.downCash)} + ${Math.round(b.monthly / 1000)} ألف/شهر = لحد ${money(inst)}`);
+  /* التقسيط بيوصّف المشاريع — مش الريسيل */
+  const mode = payModeOf(b);
+  if (mode !== 'cash' && (b.downCash || b.monthly)) {
+    parts.push(`تقسيط (مشاريع): مقدم ${money(b.downCash)} + ${Math.round(b.monthly / 1000)} ألف/شهر`);
   }
   if (b.violationOk === 'no') parts.push('مايقبلش مخالف');
   else if (b.violationOk === 'yes') parts.push('يقبل مخالف');

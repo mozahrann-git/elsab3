@@ -22,6 +22,13 @@ export interface QuestTemplate {
   category: DailyQuest['category'];
   active: boolean;                // متقفلة من غير ما تتمسح
   order?: number;
+  /* الإثبات: التحدي ما يتحسبش غير لما السيلز يرفع دليل.
+     'none'   = من غير إثبات (الثقة بس)
+     'photo'  = صورة أو اسكرين شوت
+     'note'   = كلام مكتوب (كود الشقة، اسم العميل، رقم)
+     'both'   = صورة وكلام */
+  proof?: 'none' | 'photo' | 'note' | 'both';
+  proofHint?: string;             // إيه اللي المفروض يترفع بالظبط
 }
 
 export const QUEST_CATEGORIES: { id: DailyQuest['category']; label: string }[] = [
@@ -33,10 +40,10 @@ export const QUEST_CATEGORIES: { id: DailyQuest['category']; label: string }[] =
 ];
 
 export const DEFAULT_QUESTS: QuestTemplate[] = [
-  { id: 'q_fb', title: 'نشر 5 إعلانات على جروبات فيسبوك', description: 'استخدم أداة تجهيز إعلان فيسبوك للشقق وانشرها بجروبات المقطم والهضبة', xpReward: 50, targetCount: 5, category: 'facebook_share', active: true, order: 1 },
-  { id: 'q_calls', title: 'إجراء 15 مكالمة متابعة لليدز', description: 'تواصل مع العملاء في مراحل المتابعة المسجلة بالسيستم', xpReward: 100, targetCount: 15, category: 'calls', active: true, order: 2 },
-  { id: 'q_visit', title: 'تأكيد معاينة على أرض الواقع', description: 'تنسيق ونزول معاينة لشقة ريسيل مسجلة مع عميل جاد', xpReward: 300, targetCount: 1, category: 'site_visit', active: true, order: 3 },
-  { id: 'q_listing', title: 'إدخال وحدة جديدة برقم المالك', description: 'إضافة تفاصيل وصور شقة ريسيل جديدة من صاحب العقار', xpReward: 200, targetCount: 1, category: 'add_listing', active: true, order: 4 },
+  { id: 'q_fb', title: 'نشر 5 إعلانات على جروبات فيسبوك', description: 'استخدم أداة تجهيز إعلان فيسبوك للشقق وانشرها بجروبات المقطم والهضبة', xpReward: 50, targetCount: 5, category: 'facebook_share', active: true, order: 1, proof: 'photo', proofHint: 'اسكرين شوت للبوست في الجروب' },
+  { id: 'q_calls', title: 'إجراء 15 مكالمة متابعة لليدز', description: 'تواصل مع العملاء في مراحل المتابعة المسجلة بالسيستم', xpReward: 100, targetCount: 15, category: 'calls', active: true, order: 2, proof: 'none' },
+  { id: 'q_visit', title: 'تأكيد معاينة على أرض الواقع', description: 'تنسيق ونزول معاينة لشقة ريسيل مسجلة مع عميل جاد', xpReward: 300, targetCount: 1, category: 'site_visit', active: true, order: 3, proof: 'both', proofHint: 'صورة من قدام العمارة + كود الشقة واسم العميل' },
+  { id: 'q_listing', title: 'إدخال وحدة جديدة برقم المالك', description: 'إضافة تفاصيل وصور شقة ريسيل جديدة من صاحب العقار', xpReward: 200, targetCount: 1, category: 'add_listing', active: true, order: 4, proof: 'note', proofHint: 'كود الشقة اللي اتضافت' },
 ];
 
 export function subscribeQuestTemplates(cb: (list: QuestTemplate[]) => void) {
@@ -82,6 +89,8 @@ export function buildAgentQuests(templates: QuestTemplate[], agent?: SalesAgent 
         currentCount,
         isCompleted: currentCount >= t.targetCount,
         category: t.category,
+        proof: t.proof || 'none',
+        proofHint: t.proofHint,
       };
     });
 }

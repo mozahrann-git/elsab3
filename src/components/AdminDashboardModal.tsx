@@ -15,6 +15,8 @@ import { INITIAL_SALES_AGENTS, INITIAL_BADGES, INITIAL_DAILY_QUESTS } from '../d
 import { INITIAL_PRICE_MAP_DATA, INITIAL_CLOSED_DEALS } from '../data/marketPriceData';
 import { saveClosedDealToDb, deleteClosedDealFromDb } from '../services/firebaseService';
 import { DEFAULT_BROKERS } from '../data/brokerData';
+import { DuplicatesPanel } from './admin/DuplicatesPanel';
+import { SubmissionReviewModal } from './admin/SubmissionReviewModal';
 import { 
   X, 
   PlusCircle, 
@@ -191,6 +193,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [isAccountsOpen, setIsAccountsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [isChangePassOpen, setIsChangePassOpen] = useState(false);
+  /* الطلب اللي بنراجعه دلوقتي — النشر مش بيحصل غير من جوّه المراجعة */
+  const [reviewSub, setReviewSub] = useState<any>(null);
 
   const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'projects' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings'>('manage');
   const [searchQuery, setSearchQuery] = useState('');
@@ -1464,7 +1468,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {activeTab === 'manage' && (
             <div className="space-y-5">
-              
+
+              {/* الشقق المكررة — بتظهر فوق عشان متعديش */}
+              <DuplicatesPanel properties={properties} onDeleteProperty={onDeleteProperty} />
+
               {/* Search & Filter Bar - Smooth rounded bar */}
               <div className="bg-white p-4 rounded-3xl flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
                 <div className="relative flex-1">
@@ -2377,15 +2384,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <div className="pt-2 flex items-center justify-end gap-2">
                         {sub.status === 'pending' && (
                           <>
+                            {/* مفيش نشر بدوسة واحدة. بتراجع الأول وتدّيها كود. */}
                             <button
-                              onClick={() => {
-                                onApproveSubmission(sub);
-                                showToast(`تمت الموافقة ونقل شقة المالك ${sub.ownerName} للمعرض`);
-                              }}
+                              onClick={() => setReviewSub(sub)}
                               className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
                             >
                               <CheckCircle2 size={14} />
-                              <span>موافقة ونشر بالمعرض</span>
+                              <span>راجع الطلب وادّيله كود</span>
                             </button>
 
                             <button
@@ -3930,6 +3935,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       </div>
       <AccountsManagerModal isOpen={isAccountsOpen} onClose={() => setIsAccountsOpen(false)} showToast={showToast} />
       <ChangePasswordModal isOpen={isChangePassOpen} onClose={() => setIsChangePassOpen(false)} />
+      <SubmissionReviewModal
+        isOpen={!!reviewSub}
+        submission={reviewSub}
+        existingCodes={properties.map((p) => p.code)}
+        byName="الإدارة"
+        onClose={() => setReviewSub(null)}
+        onSaveDraft={(s) => { onApproveSubmission({ ...s, __draftOnly: true }); showToast('اتحفظت التعديلات — الطلب لسه قيد المراجعة'); }}
+        onPublish={(s) => {
+          onApproveSubmission(s);
+          setReviewSub(null);
+          showToast(`اتنشرت شقة ${s.ownerName} بكود ${(s as any).code}`);
+        }}
+      />
     </div>
   );
 };

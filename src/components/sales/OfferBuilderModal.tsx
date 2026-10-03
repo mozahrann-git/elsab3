@@ -8,7 +8,7 @@ import { VoiceRecorder } from '../portal/VoiceRecorder';
 import { SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveOffer, OfferUnit, createTrackedLink, linkUrl } from '../../services/salesToolsService';
 import { formatWhen } from '../common/WhenPicker';
 import { waLink } from '../../utils/helpers';
-import { matchProperties, briefLine, briefGaps } from '../../services/clientBrief';
+import { matchProperties, briefLine, briefGaps, readBrief, payModeOf } from '../../services/clientBrief';
 import { copyText, downloadAll } from '../../utils/shareKit';
 
 /*
@@ -207,7 +207,13 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
                           <Plus size={12} />{p.code} · {fmt(p.price)}
                         </button>
                       ))}
-                      {!pool.length && <span className="text-xs text-[#8C877D]">مفيش شقق تانية مطابقة</span>}
+                      {!pool.length && (
+                        <span className="text-xs text-[#8C877D]">
+                          {payModeOf(readBrief(lead)) === 'instalment'
+                            ? 'العميل ده بيدوّر تقسيط — الريسيل كاش فمش بنرشّحله شقق. رشّحله مشاريع من المطابقة، أو غيّر الدفع لكاش من «عدّل طلبه».'
+                            : 'مفيش شقق تانية مطابقة'}
+                        </span>
+                      )}
                     </div>
                   </>
                 )}

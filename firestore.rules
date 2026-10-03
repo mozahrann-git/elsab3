@@ -75,6 +75,15 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    /* لمسات الإحالة: الزائر لسه مش مسجّل دخول، فلازم يقدر يكتب لمسته.
+       بس القراءة للفريق بس — ومحدش يقدر يغيّر أو يمسح لمسة اتسجّلت،
+       عشان حد ما يسرقش إحالة غيره. */
+    match /ref_touches/{id} {
+      allow read: if isStaff() || isOps() || isBoss() || isMkt();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
     match /crm_leads/{leadId} {
       allow read: if isBoss();
       allow create: if true;
