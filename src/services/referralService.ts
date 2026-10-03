@@ -167,3 +167,35 @@ export async function countTouchesByCode(max = 1000): Promise<Record<string, num
   });
   return out;
 }
+
+// ---------------- كود السيلز ----------------
+
+/* حروف عربية ← إنجليزي، عشان الكود يبقى قصير ومقروء في اللينك */
+const AR_MAP: Record<string, string> = {
+  ا: 'A', أ: 'A', إ: 'A', آ: 'A', ب: 'B', ت: 'T', ث: 'TH', ج: 'G', ح: 'H', خ: 'KH',
+  د: 'D', ذ: 'Z', ر: 'R', ز: 'Z', س: 'S', ش: 'SH', ص: 'S', ض: 'D', ط: 'T', ظ: 'Z',
+  ع: 'A', غ: 'GH', ف: 'F', ق: 'Q', ك: 'K', ل: 'L', م: 'M', ن: 'N', ه: 'H', ة: 'H',
+  و: 'W', ي: 'Y', ى: 'A', ئ: 'Y', ء: 'A',
+};
+
+/**
+ * كود قصير ومقروء للسيلز من اسمه.
+ *
+ * بدل `agent-1790595231677` اللي كان بيتبعت للمالك في اللينك — ده رقم
+ * داخلي، مش حاجة حد يشوفها. دلوقتي: MARIAM أو MARIAMK لو في تكرار.
+ */
+export function agentCode(name?: string, fallbackId?: string): string {
+  const raw = String(name || '').trim();
+  if (!raw) return String(fallbackId || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 8).toUpperCase() || 'TEAM';
+
+  const parts = raw.split(/\s+/).filter(Boolean);
+  const translit = (w: string) =>
+    [...w].map((ch) => (AR_MAP[ch] !== undefined ? AR_MAP[ch] : /[A-Za-z0-9]/.test(ch) ? ch : '')).join('');
+
+  let code = translit(parts[0]).toUpperCase();
+  // الاسم التاني بيدخل بأول حرف بس — عشان الكود يفضل قصير
+  if (parts[1]) code += translit(parts[1]).toUpperCase().slice(0, 1);
+
+  code = code.replace(/[^A-Z0-9]/g, '').slice(0, 10);
+  return code || 'TEAM';
+}

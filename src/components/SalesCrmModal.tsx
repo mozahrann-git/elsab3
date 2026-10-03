@@ -58,7 +58,6 @@ import { OwnerLinkCard } from './crm/OwnerLinkCard';
 import { QuickBriefRow } from './crm/QuickBriefRow';
 import { ProjectMatchPanel } from './crm/ProjectMatchPanel';
 import { QuestEditor } from './crm/QuestEditor';
-import { SyncBadge } from './crm/SyncBadge';
 import { QuestLogSheet } from './crm/QuestLogSheet';
 import { DayLogSummary } from './crm/DayLogSummary';
 import { QuestLog, subscribeDayLogs, dayKey, summarizeCalls, summarizeAds, CALL_OUTCOMES } from '../services/questLogService';
@@ -310,13 +309,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [toast, setToast] = useState('');
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2800); };
 
-  /* توقيع الداتا — بيتغيّر أول ما أي تعديل يوصل من أي حد تاني،
-     فالمؤشر بيلمع ويقول "وصل تحديث". */
-  const syncSignature = useMemo(
-    () => `${leads.length}:${leads.reduce((n, l) => n + (Number((l as any).updatedAt) || 0) + (l.activity?.length || 0), 0)}`,
-    [leads],
-  );
-
   const [offerPicks, setOfferPicks] = useState<string[]>([]);
   useEffect(() => { setOfferPicks([]); }, [matchingLeadId]);
   const togglePick = (id: string) => setOfferPicks((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
@@ -559,9 +551,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 </div>
               </div>
 
-              {/* بيقول إن الشاشة بتتحدّث لوحدها — فمحدش يقعد يعمل Refresh */}
-              <SyncBadge signature={syncSignature} />
-
               {/* بتتبع اللي إنت شايفه. الإدارة من غير اختيار = مفيش نقط، مش نقط حد تاني */}
               <span className="px-2 py-0.5 bg-[#FAF4E5]/10 border border-[#E9DFCA]/20 text-[#FAF4E5] text-[10px] font-mono font-bold rounded-lg">
                 {shownAgent ? `${(shownAgent.xp || 0).toLocaleString('en-US')} XP` : 'إدارة'}
@@ -740,6 +729,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
           {/* Top Actions */}
           <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            {/* لينكات الإحالة — زرار صغير، مش كارت في نص الشاشة */}
+            <OwnerLinkCard
+              byCode={currentSalesAgent?.id || (isAdmin ? 'admin' : undefined)}
+              byName={currentSalesAgent?.name || (isAdmin ? 'الإدارة' : undefined)}
+            />
+
             <button
               onClick={() => setIsNotificationsOpen(true)}
               className="p-2 sm:px-3 sm:py-2 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 relative border border-[#ECE8DF]"
@@ -832,12 +827,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
             )}
             
-            {/* لينك المالك — السيلز يبعته للمالك يملا شقته بنفسه */}
-            <OwnerLinkCard
-              byCode={currentSalesAgent?.id || (isAdmin ? 'admin' : undefined)}
-              byName={currentSalesAgent?.name || (isAdmin ? 'الإدارة' : undefined)}
-            />
-
             {/* Urgent Broadcast Banner */}
             {(isAdmin || isLead) && (
               <div className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">

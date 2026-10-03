@@ -18,6 +18,18 @@ import { readBrief, instalmentCeiling, payModeOf, DEFAULT_INSTALMENT_YEARS } fro
 const n = (v: string) => Number(String(v).replace(/[^\d]/g, '')) || 0;
 const money = (v: number) => (v ? v.toLocaleString('en-US') : '');
 
+/* بيحوّل الأرقام العربية ويشيل المسافات وكود الدولة — الأرقام الجاية
+   من الكامبين بتيجي بأشكال كتير والواتساب بيرفض الشكل الغلط. */
+const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+export function normalizePhone(raw: string): string {
+  let s = String(raw || '')
+    .replace(/[٠-٩]/g, (d) => String(AR_DIGITS.indexOf(d)))
+    .replace(/[^\d+]/g, '');
+  s = s.replace(/^\+?20/, '0');      // +20 أو 20 → 0
+  if (!s.startsWith('0')) s = `0${s}`;
+  return s.slice(0, 11);
+}
+
 interface Props {
   lead: Lead;
   byName: string;
@@ -48,6 +60,27 @@ export const QuickBriefRow: React.FC<Props> = ({ lead, byName, onUpdateLead }) =
     } as Lead);
   };
 
+  /* الاسم والرقم بيتعدّلوا على الليد نفسه — مش جوه discovery.
+     الأسماء بتتكتب غلط في الكامبين، والأرقام بتيجي ناقصة أو بمسافات. */
+  const saveField = (key: 'name' | 'phone', raw: string) => {
+    const value = key === 'phone' ? normalizePhone(raw) : raw.trim();
+    const old = String((lead as any)[key] || '');
+    if (!value || value === old) return;
+    onUpdateLead({
+      ...lead,
+      [key]: value,
+      activity: [
+        {
+          at: Date.now(),
+          by: byName,
+          outcome: key === 'name' ? 'تعديل الاسم' : 'تعديل الرقم',
+          comment: `${old || '(فاضي)'} ← ${value}`,
+        },
+        ...(lead.activity || []),
+      ].slice(0, 80),
+    } as Lead);
+  };
+
   const chip = (on: boolean) =>
     `px-2.5 py-1 rounded-full text-[11px] font-bold border cursor-pointer transition ${
       on ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white text-[#141414] border-[#E4DFD4]'
@@ -72,12 +105,44 @@ export const QuickBriefRow: React.FC<Props> = ({ lead, byName, onUpdateLead }) =
           </span>
         </span>
         <span className="text-[11px] font-bold text-[#A07A26] shrink-0">
-          {open ? 'اقفل' : 'عدّل طلبه'}
+          {open ? 'اقفل' : 'عدّل البيانات والطلب'}
         </span>
       </button>
 
       {open && (
         <div className="space-y-2.5 pt-1 border-t border-[#F0ECE4]">
+          {/* الاسم والرقم — بيتصلحوا هنا، الكامبين بيجيبهم غلط كتير */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-bold text-[#8C877D]">الاسم والرقم</p>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block space-y-1">
+                <span className="text-[10px] text-[#8C877D]">اسم العميل</span>
+                <input
+                  defaultValue={lead.name || ''}
+                  onBlur={(e) => saveField('name', e.target.value)}
+                  placeholder="اكتب الاسم"
+                  className="w-full bg-[#FAF9F5] border border-[#ECE8DF] rounded-lg px-2 py-1.5 text-[11px] font-bold"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-[10px] text-[#8C877D]">الموبايل</span>
+                <input
+                  defaultValue={lead.phone || ''}
+                  dir="ltr"
+                  inputMode="tel"
+                  onBlur={(e) => saveField('phone', e.target.value)}
+                  placeholder="01xxxxxxxxx"
+                  className="w-full bg-[#FAF9F5] border border-[#ECE8DF] rounded-lg px-2 py-1.5 text-[11px] font-mono"
+                />
+              </label>
+            </div>
+            {lead.phone && normalizePhone(lead.phone).length !== 11 && (
+              <p className="text-[10px] font-bold text-[#9E2A1B] leading-relaxed">
+                الرقم ده مش ١١ رقم — الاتصال والواتساب مش هيشتغلوا صح. صلّحه.
+              </p>
+            )}
+          </div>
+
           <div className="space-y-1">
             <p className="text-[10px] font-bold text-[#8C877D]">التشطيب</p>
             <div className="flex flex-wrap gap-1.5">
