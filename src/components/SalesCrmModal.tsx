@@ -37,6 +37,7 @@ import {
   MapPin,
   DollarSign,
   AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { CampaignLeadsModal } from './crm/CampaignLeadsModal';
 import { saveDraft, loadDraft, clearDraft } from '../utils/uiSession';
@@ -51,7 +52,7 @@ import { LeaderboardTab } from './sales/LeaderboardTab';
 import { matchProperties, briefLine, briefGaps, readBrief, payModeOf, resaleFits, projectsFit, resaleCeiling, PayMode } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
-import { humanDuration, followUpBadge } from '../utils/followUpAlerts';
+import { humanDuration, followUpBadge, clockSkewMinutes } from '../utils/followUpAlerts';
 import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpQuest } from '../services/questService';
 import { AgentDayPanel } from './crm/AgentDayPanel';
 import { OwnerLinkCard } from './crm/OwnerLinkCard';
@@ -75,6 +76,8 @@ interface SalesCrmModalProps {
   properties: Property[];
   agents: SalesAgent[];
   leads: Lead[];
+  /** المزامنة واقفة؟ السبب بالعربي — بيظهر كتحذير أحمر جوه الغرفة */
+  syncError?: string;
   onUpdateLead: (updatedLead: Lead) => void;
   onAddLead: (newLead: Lead) => void;
   /* توزيع ليدات الكامبين دفعة واحدة — الأدمن بس */
@@ -121,6 +124,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   properties,
   agents,
   leads,
+  syncError,
   onUpdateLead,
   onAddLead,
   onAddLeadsBulk,
@@ -184,6 +188,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     followUpUrgency: 'urgent' as 'urgent' | 'today' | 'upcoming',
     assignedAgentId: '',
     nextAt: null as WhenValue | null,
+    /* نوع الليد — السيلز بيختار «بيرسونال» لو هو اللي جابه */
+    leadKind: 'personal' as 'personal' | 'fresh' | 'old_campaign',
   };
 
   const [newLeadForm, setNewLeadForm] = useState(() => loadDraft('new_lead', EMPTY_LEAD_FORM));
@@ -207,14 +213,18 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
      من غير ما حد ياخد باله: نقطها هي اللي بتظهر، ومهامها هي،
      وأي مكالمة الأدمن يسجّلها كانت هتتسجّل باسمها.
 
-     دلوقتي: مفيش سيلز داخل = مفيش سيلز. الأدمن إدارة، مش سيلز. */
+     وبعدين رجع من باب تاني: `isCurrentSession` حقل متخزّن في الداتابيز
+     على كارت السيلز. أول ما أي حد يسجّل دخول من أي جهاز، الحقل بيتكتب
+     على كارته في الداتابيز المشتركة — فكل اللي فاتحين الموقع، الإدارة
+     كمان، بيقروا نفس الحقل ويفتكروا إن الجلسة بتاعته هو.
+
+     حقل واحد مشترك ما ينفعش يقول "مين فاتح دلوقتي" لأن كل واحد قاعد
+     على جهاز لوحده. فبنقرا من الجهاز نفسه بس، والإدارة إدارة مهما كان. */
   const currentSalesAgent = useMemo(() => {
-    if (currentAgentId) {
-      const found = agents.find((a) => a.id === currentAgentId);
-      if (found) return found;
-    }
-    return agents.find((a) => a.isCurrentSession) || undefined;
-  }, [agents, currentAgentId]);
+    if (isAdmin) return undefined;
+    if (!currentAgentId) return undefined;
+    return agents.find((a) => a.id === currentAgentId) || undefined;
+  }, [agents, currentAgentId, isAdmin]);
 
   const currentAgent = currentSalesAgent;
 
@@ -308,6 +318,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [logQuest, setLogQuest] = useState<DailyQuest | null>(null);
   const [toast, setToast] = useState('');
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2800); };
+
+  /* ساعة الجهاز مقارنة بآخر تعديل جاي من أجهزة الفريق التانية */
+  const clockSkew = useMemo(() => clockSkewMinutes(leads as any), [leads]);
 
   const [offerPicks, setOfferPicks] = useState<string[]>([]);
   useEffect(() => { setOfferPicks([]); }, [matchingLeadId]);
@@ -448,6 +461,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
          وعميل الإدارة وزّعته عليه */
       addedByName: currentAgent?.name || (isAdmin ? 'الإدارة' : 'الفريق'),
       addedById: currentAgent?.id,
+      /* اختيار صريح — اللون بيتبعه، مش بيتخمّن */
+      leadKind: newLeadForm.leadKind,
       createdAt: new Date().toISOString(),
       lastContactDate: 'الآن',
       followUpStatus: 'pending',
@@ -703,6 +718,39 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
       {/* 2. MAIN CRM WORKSPACE */}
       <main className="flex-1 flex flex-col h-full overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4">
+
+        {/* المزامنة واقفة — بيظهر لما تقع بس، مش مؤشر دايم.
+            من غيره كل واحد بيفضل على نسخته القديمة ومحدش عارف. */}
+        {/* ساعة الجهاز نفسها غلط — كل كلام «متأخر كذا» بيبقى غلط معاها */}
+        {clockSkew > 20 && (
+          <div className="bg-[#FFF8E6] border-2 border-[#EBD9A6] rounded-2xl p-3.5 flex items-start gap-2.5">
+            <AlertTriangle size={18} className="text-[#7A5E12] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-extrabold text-sm text-[#7A5E12]">ساعة الجهاز ده غلط</p>
+              <p className="text-[11px] text-[#7A5E12]/90 leading-relaxed">
+                متأخرة حوالي {clockSkew < 60 ? `${clockSkew} دقيقة` : `${Math.round(clockSkew / 60)} ساعة`} عن
+                باقي الفريق — فمواعيد المتابعة و«متأخر كذا» هيبانوا غلط على الشاشة دي.
+                ظبّط التاريخ والوقت في إعدادات الجهاز.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {syncError && (
+          <div className="bg-[#FBEDEA] border-2 border-[#C2412D] rounded-2xl p-3.5 flex items-start gap-2.5">
+            <AlertTriangle size={18} className="text-[#9E2A1B] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-extrabold text-sm text-[#9E2A1B]">
+                المزامنة واقفة — إنت شايف نسخة قديمة
+              </p>
+              <p className="text-[11px] text-[#9E2A1B]/90 leading-relaxed">
+                {syncError} · أي تعديل تعمله دلوقتي ممكن ما يوصلش لباقي الفريق.
+                اقفل وافتح الصفحة، ولو فضلت كده بلّغني.
+              </p>
+            </div>
+          </div>
+        )}
+
         
         {/* Top Control Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white border border-[#ECE8DF] p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-2xs">
@@ -1999,6 +2047,42 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             </div>
 
             <form onSubmit={handleAddNewLead} className="space-y-3 text-xs">
+              {/* نوع الليد — اللون بيتبع الاختيار ده، مش بيتخمّن */}
+              <div>
+                <label className="text-[#141414] block mb-1 font-bold">العميل ده جاي منين؟</label>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ['personal', 'بيرسونال ليد', 'أنا اللي جبته — كارت أبيض'],
+                    ['fresh', 'ليد فريش', 'نازل من الإدارة دلوقتي'],
+                    ['old_campaign', 'كامبين قديم', 'من كامبين قديم'],
+                  ] as const)
+                    /* السيلز مش بيوزّع على نفسه ليدات إدارة */
+                    .filter(([k]) => isAdmin || k === 'personal')
+                    .map(([k, label, hint]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setNewLeadForm({ ...newLeadForm, leadKind: k })}
+                        title={hint}
+                        className={`px-3 py-2 rounded-xl font-bold border cursor-pointer transition ${
+                          newLeadForm.leadKind === k
+                            ? 'bg-[#141414] text-white border-[#141414]'
+                            : 'bg-white text-[#141414] border-[#E4DFD4]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                </div>
+                <p className="text-[11px] text-[#8C877D] mt-1 leading-relaxed">
+                  {newLeadForm.leadKind === 'personal'
+                    ? 'العميل ده بتاعك إنت — الكارت هيفضل أبيض عادي.'
+                    : newLeadForm.leadKind === 'fresh'
+                    ? 'الكارت هيبقى برتقالي عند السيلز لحد ما يكلّمه.'
+                    : 'الكارت هيبقى رمادي غامق عند السيلز لحد ما يكلّمه.'}
+                </p>
+              </div>
+
               <div>
                 <label className="text-[#141414] block mb-1 font-bold">اسم العميل:</label>
                 <input

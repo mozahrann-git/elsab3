@@ -212,6 +212,8 @@ export default function App() {
   // Database Connection & Quota State Indicator
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
+  /* سبب وقوف المزامنة — بيتعرض جوه غرفة العمليات لما يحصل بس */
+  const [leadsSyncError, setLeadsSyncError] = useState<string>('');
   // نوع العرض: بيقرر الصفحة بتعرض ريسيل ولا مشاريع تحت الإنشاء
   const [listingMode, setListingMode] = useState<'resale' | 'off_plan'>('resale');
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>(EMPTY_PROJECT_FILTER);
@@ -338,12 +340,22 @@ export default function App() {
       if (liveLeads && liveLeads.length > 0) {
         setCrmLeads(liveLeads);
         safeLocalStorageSet('lion_crm_leads', JSON.stringify(liveLeads));
+        setLeadsSyncError('');          // وصلت داتا = المزامنة رجعت
       } else {
         setCrmLeads([]);
+        setLeadsSyncError('');
         seedOnce('leads', () => seedCrmLeadsToDb(INITIAL_LEADS));
       }
-    }, (_err, isQuota) => {
+    }, (err, isQuota) => {
       if (isQuota) setIsQuotaExceeded(true);
+      /* المزامنة وقعت. لازم الفريق يعرف، مش كل واحد يفضل على نسخته
+         القديمة وهو فاكر إنه شايف الصح. */
+      const code = (err as any)?.code || '';
+      setLeadsSyncError(
+        isQuota ? 'اتخطينا حد القراءات المجاني اليومي لقاعدة البيانات'
+        : code === 'permission-denied' ? 'الصلاحيات رافضة القراءة — قواعد Firestore محتاجة deploy'
+        : 'الاتصال بقاعدة البيانات اتقطع',
+      );
     });
 
     // 4. Subscribe to Owner Submissions
@@ -1078,12 +1090,14 @@ export default function App() {
   );
 
   // Current active sales agent session
+  /* مين فاتح على الجهاز ده — من الجهاز نفسه بس.
+     مينفعش نقرا `isCurrentSession` من الداتابيز: ده حقل واحد مشترك،
+     أول ما حد يسجّل دخول بيتكتب على كارته، فكل الناس التانية (والإدارة)
+     بيفتكروا إنهم هو. ومينفعش نرجّع أول واحد في القايمة كمان — ده كان
+     بيخلّي الإدارة تشتغل باسم سيلز من غير ما تعرف. */
   const currentAgent = useMemo(() => {
-    if (currentSalesAgentId) {
-      const found = salesAgents.find(a => a.id === currentSalesAgentId);
-      if (found) return found;
-    }
-    return salesAgents.find(a => a.isCurrentSession) || salesAgents[0];
+    if (!currentSalesAgentId) return undefined;
+    return salesAgents.find(a => a.id === currentSalesAgentId) || undefined;
   }, [salesAgents, currentSalesAgentId]);
 
   const handleSalesLoginSuccess = (agent: SalesAgent) => {
@@ -1091,10 +1105,9 @@ export default function App() {
     setCurrentSalesAgentId(agent.id);
     safeLocalStorageSet('lion_sales_logged_in', 'true');
     safeLocalStorageSet('lion_current_sales_agent_id', agent.id);
-    setSalesAgents(prev => prev.map(a => ({
-      ...a,
-      isCurrentSession: a.id === agent.id
-    })));
+    /* مش بنكتب `isCurrentSession` خالص. الجلسة بتاعة الجهاز ده،
+       والداتابيز مشتركة بين كل الناس — فالحقل ده كان بيخلّي اللي
+       بيفتح بعد كده يفتكر نفسه آخر واحد سجّل دخول. */
     setIsSalesLoginOpen(false);
     setIsCrmOpen(true);
   };
@@ -2440,6 +2453,7 @@ export default function App() {
         properties={properties}
         agents={salesAgents}
         leads={crmLeads}
+        syncError={leadsSyncError}
         isAdmin={isAdminLoggedIn || staffAccess?.role === 'company_owner'}
         canEdit={isAdminLoggedIn || isSalesLoggedIn}
         onDeleteLead={(id) => setCrmLeads((prev) => prev.filter((l) => l.id !== id))}

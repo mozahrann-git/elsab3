@@ -252,6 +252,12 @@ export interface Lead {
   nextActionAt?: number | null;     // ميعاد الأكشن الجاي بالظبط (تنبيه حقيقي)
   campaignName?: string;            // اسم الكامبين اللي الليد جه منه
   isFresh?: boolean;                // ليد فريش لسه محدش كلّمه — بيتشال أول اتصال
+  /* نوع الليد — اختيار صريح، مش تخمين.
+     'personal'     = السيلز جابه بنفسه (كارت أبيض، مفيش لون)
+     'fresh'        = الإدارة نزّلته دلوقتي
+     'old_campaign' = كامبين قديم الإدارة وزّعته
+     مش متكتوب = كارت أبيض. مبنخمّنش. */
+  leadKind?: 'personal' | 'fresh' | 'old_campaign';
   distributedAt?: number;           // وقت توزيعه على السيلز
   /* مين اللي ضاف العميل ووزّعه. لو الإدارة وزّعته على سيلز،
      لازم يبان على الكارت إنه موزّع مش من شغل السيلز نفسه. */
@@ -334,6 +340,8 @@ export interface SalesAgent {
   badges: Badge[];
   activeQuests: DailyQuest[];
   questDay?: string;                // اليوم اللي العدّادات دي بتاعته (YYYY-MM-DD)
+  /** @deprecated حقل مشترك كان بيخلّي كل الناس تفتكر نفسها آخر واحد
+   *  سجّل دخول. الجلسة بقت على الجهاز نفسه. متستخدمهوش. */
   isCurrentSession?: boolean;
 }
 

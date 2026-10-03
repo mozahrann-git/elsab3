@@ -75,6 +75,8 @@ export const CampaignLeadsModal: React.FC<Props> = ({ isOpen, onClose, agents, e
   const [campaign, setCampaign] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  /* فريش ولا كامبين قديم — اختيار الإدارة، مش محسوب من التاريخ */
+  const [kind, setKind] = useState<'fresh' | 'old_campaign'>('fresh');
   const [err, setErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -150,9 +152,12 @@ export const CampaignLeadsModal: React.FC<Props> = ({ isOpen, onClose, agents, e
       status: 'new',
       source: 'campaign',
       campaignName: campaign.trim() || undefined,
-      isFresh: true,
+      isFresh: kind === 'fresh',
+      leadKind: kind,
       distributedAt: now,
-      notes: [campaign.trim() ? `ليد من كامبين: ${campaign.trim()}` : 'ليد من الكامبين'],
+      notes: [campaign.trim()
+        ? `${kind === 'fresh' ? 'ليد فريش' : 'كامبين قديم'} — ${campaign.trim()}`
+        : (kind === 'fresh' ? 'ليد فريش من الكامبين' : 'ليد من كامبين قديم')],
       assignedAgentId: r.agent.id,
       assignedAgentName: r.agent.name,
       addedByName: distributorName || 'الإدارة',
@@ -160,10 +165,11 @@ export const CampaignLeadsModal: React.FC<Props> = ({ isOpen, onClose, agents, e
       lastContactDate: 'لسه محدش كلّمه',
       followUpStatus: 'pending',
       followUpScheduledAt: 'النهارده',
-      followUpNote: 'أول اتصال مع ليد الكامبين',
-      followUpUrgency: 'urgent',
-      // أول اتصال خلال ساعتين — الليد الفريش بيبرد بسرعة
-      nextActionAt: now + 2 * 3600000,
+      followUpNote: kind === 'fresh' ? 'أول اتصال مع ليد فريش' : 'إعادة تواصل مع ليد كامبين قديم',
+      followUpUrgency: kind === 'fresh' ? 'urgent' : 'today',
+      /* الفريش بيبرد بسرعة فأول اتصال خلال ساعتين.
+         القديم مستني من زمان، فمفيش داعي لنفس الاستعجال. */
+      nextActionAt: now + (kind === 'fresh' ? 2 : 8) * 3600000,
     }));
 
     onDistribute(leads);
@@ -190,6 +196,35 @@ export const CampaignLeadsModal: React.FC<Props> = ({ isOpen, onClose, agents, e
         </header>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* نوع الليدات دي — إنت اللي بتقرر، مش النظام */}
+          <div className="space-y-2">
+            <span className="text-xs font-bold text-[#141414]">الليدات دي نوعها إيه؟</span>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                ['fresh', 'ليد فريش', '#C2410C', 'نازلة دلوقتي — أول اتصال خلال ساعتين'],
+                ['old_campaign', 'كامبين قديم', '#4A5568', 'من كامبين قديم — إعادة تواصل'],
+              ] as const).map(([k, label, hex, hint]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKind(k)}
+                  className={`py-3 px-3 rounded-xl text-right border-2 cursor-pointer transition ${
+                    kind === k ? 'text-white' : 'bg-white text-[#141414] border-[#E4DFD4]'
+                  }`}
+                  style={kind === k ? { background: hex, borderColor: hex } : undefined}
+                >
+                  <span className="block text-sm font-extrabold">{label}</span>
+                  <span className={`block text-[11px] leading-relaxed ${kind === k ? 'text-white/85' : 'text-[#8C877D]'}`}>
+                    {hint}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-[#8C877D] leading-relaxed">
+              ده بيحدد لون الكارت عند السيلز، واللون بيروح أول ما يكلّم العميل.
+            </p>
+          </div>
+
           <label className="block space-y-1">
             <span className="text-xs font-bold text-[#141414]">اسم الكامبين (اختياري)</span>
             <input

@@ -25,53 +25,34 @@ export interface ToneStyle {
   divider: string;        // لون الخط الفاصل
 }
 
-/* بعد كام يوم الليد بيبقى "كامبين قديم" */
-const OLD_AFTER_DAYS = 3;
-
-/** إمتى وصل العميل */
-function arrivedAt(lead: Lead): number {
-  return lead.distributedAt || Date.parse(lead.createdAt || '') || 0;
-}
-
 /** لسه محدش كلّمه فعلاً؟ */
 function untouched(lead: Lead): boolean {
   return lead.status === 'new' && (lead.activity?.length || 0) === 0;
 }
 
 /**
- * الليد ده نازل من الإدارة ولا السيلز جابه بنفسه؟
+ * لون الكارت.
  *
- * اللون معناه "ده شغل نازل عليك من فوق" — فالعميل اللي السيلز ضافه
- * بنفسه مبياخدش لون، عشان اللون يفضل معناه واضح.
+ * كان بيتحدد بالتخمين، وده كان بيلوّن كروت غلط:
+ *  - الليد اللي مش مكتوب مين ضافه كان بيتحسب "نازل من الإدارة" ويتلوّن،
+ *    حتى لو السيلز هو اللي جابه بنفسه.
+ *  - و"فريش ولا كامبين قديم" كانت بتتحسب من تاريخ الوصول — يعني أي ليد
+ *    عدى عليه ٣ أيام يبقى "كامبين قديم" من غير ما حد يقول كده.
  *
- * الليدات القديمة اللي مفيهاش بيانات الإضافة بنعاملها كأنها نازلة،
- * عشان متختفيش فجأة من اللي متعوّد عليه.
+ * دلوقتي اللون بيتقرا من اختيار صريح اتسجّل وقت الإضافة أو التوزيع.
+ * مفيش اختيار = كارت أبيض. مبنلوّنش بالشك.
  */
-function handedDown(lead: Lead): boolean {
-  const by = (lead as any).addedByName as string | undefined;
-  if (!by) return true;
-  return by !== lead.assignedAgentName;
-}
-
 export function leadTone(lead: Lead, now = Date.now()): LeadTone {
   // ١) تحديث من سارة على المعاينة والسيلز لسه مشافهوش — ده الأهم
   const upd = (lead as any).viewingUpdateAt as number | undefined;
   const seen = (lead as any).viewingSeenAt as number | undefined;
   if (upd && (!seen || seen < upd)) return 'viewing_update';
 
-  /* ٢) ليد لسه محدش كلّمه.
+  // ٢) اللي الإدارة نزّلته ولسه محدش كلّمه
+  const kind = lead.leadKind;
+  if ((kind === 'fresh' || kind === 'old_campaign') && untouched(lead)) return kind;
 
-     كان فيه بق: اللون كان بيعتمد على علامة isFresh، وديـ مكانت بتتحط
-     إلا من توزيع الكامبين. فأي عميل تضيفه بإيدك أو ييجي من الموقع
-     كان بيبقى أبيض عادي حتى لو لسه نازل دلوقتي ومحدش كلّمه.
-
-     دلوقتي المعيار هو الحقيقة نفسها: في خانة "جديد" + مفيش أي نشاط. */
-  if (untouched(lead) && handedDown(lead)) {
-    const at = arrivedAt(lead);
-    const old = at && now - at > OLD_AFTER_DAYS * 86400000;
-    return old ? 'old_campaign' : 'fresh';
-  }
-
+  // السيلز جابه بنفسه، أو مفيش اختيار متسجّل = أبيض
   return 'none';
 }
 

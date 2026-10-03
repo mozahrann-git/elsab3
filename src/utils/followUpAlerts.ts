@@ -68,18 +68,64 @@ export const humanDuration = (mins: number): string => {
 
 const rel = (mins: number) => humanDuration(mins);
 
+
+/*
+  التوقيت ثابت على القاهرة.
+
+  المشكلة اللي بيحلّها: الوقت كان بيتعرض بتوقيت الجهاز نفسه. فلو جهاز
+  واحد في الفريق توقيته أو ساعته مظبوطة غلط، نفس الميعاد المحفوظ بيظهر
+  عنده بساعة تانية — واحد يقرا «امبارح ٥:٣٦ م» والتاني يقرا «النهارده
+  ٦:٠٠ ص» لنفس العميل بالظبط. والداتا واحدة، العرض هو اللي مختلف.
+
+  دلوقتي كله بتوقيت القاهرة مهما كان إعداد الجهاز.
+*/
+const TZ = 'Africa/Cairo';
+
+export const fmtTime = (d: Date) =>
+  d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit', timeZone: TZ });
+
+export const fmtDate = (d: Date) =>
+  d.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'short', timeZone: TZ });
+
+/** بداية/نهاية اليوم بتوقيت القاهرة — مش بتوقيت الجهاز */
+export function endOfCairoDay(now: number): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date(now));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value || 0);
+  const secsIntoDay = get('hour') * 3600 + get('minute') * 60 + get('second');
+  return now + (86400 - secsIntoDay) * 1000 - 1;
+}
+
+/**
+ * ساعة الجهاز غلط؟
+ *
+ * بنقارن ساعة الجهاز بآخر تعديل اتكتب من أي جهاز تاني. لو فيه تعديل
+ * "في المستقبل" بالنسبالنا بفرق كبير، يبقى ساعتنا إحنا المتأخرة —
+ * وكل كلام «متأخر كذا» اللي بيظهر غلط.
+ */
+export function clockSkewMinutes(leads: { updatedAt?: number }[], now = Date.now()): number {
+  let newest = 0;
+  leads.forEach((l) => {
+    const u = Number((l as any).updatedAt) || 0;
+    if (u > newest) newest = u;
+  });
+  if (!newest) return 0;
+  const diff = newest - now;
+  return diff > 0 ? Math.round(diff / 60000) : 0;
+}
+
 /** بيبني كل التنبيهات من الليدات. الليد المقفول أو الخسران مبيطلّعش تنبيه. */
 export function buildAlerts(leads: Lead[], now = Date.now()): LeadAlert[] {
-  const endOfDay = new Date(now);
-  endOfDay.setHours(23, 59, 59, 999);
-  const eod = endOfDay.getTime();
+  const eod = endOfCairoDay(now);
 
   const fmt = (at: number) => {
     const d = new Date(at);
-    const t = d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+    const t = fmtTime(d);
     const m = Math.round((at - now) / 60000);
     return {
-      t: at <= eod ? `النهارده ${t}` : `${d.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'short' })} ${t}`,
+      t: at <= eod ? `النهارده ${t}` : `${fmtDate(d)} ${t}`,
       rel: m < 0 ? `متأخر من ${rel(m)}` : `بعد ${rel(m)}`,
     };
   };
@@ -160,9 +206,9 @@ export function followUpState(nextActionAt?: number | null, status?: string, now
   if (!nextActionAt || status === 'completed') return 'none';
   if (nextActionAt <= now) return 'late';
 
-  const eod = new Date(now);
-  eod.setHours(23, 59, 59, 999);
-  if (nextActionAt <= eod.getTime()) {
+  /* نهاية اليوم بتوقيت القاهرة — مش بتوقيت الجهاز، عشان «النهارده»
+     تبقى نفس اليوم عند كل الفريق */
+  if (nextActionAt <= endOfCairoDay(now)) {
     // باقي أقل من ساعتين على الميعاد = قرّب
     return nextActionAt - now <= 2 * 3600000 ? 'soon' : 'today';
   }
@@ -177,12 +223,12 @@ export function followUpBadge(nextActionAt?: number | null, status?: string, fal
   if (state === 'soon') return { text: `بعد ${humanDuration(((nextActionAt || now) - now) / 60000)}`, tone: 'soon' as const };
 
   const d = new Date(nextActionAt!);
-  const time = d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+  const time = fmtTime(d);
   if (state === 'today') return { text: `النهارده ${time}`, tone: 'today' as const };
 
-  const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(23, 59, 59, 999);
-  const label = nextActionAt! <= tomorrow.getTime()
+  const endTomorrow = endOfCairoDay(now) + 86400000;
+  const label = nextActionAt! <= endTomorrow
     ? `بكرة ${time}`
-    : `${d.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'short' })} ${time}`;
+    : `${fmtDate(d)} ${time}`;
   return { text: label, tone: 'calm' as const };
 }
