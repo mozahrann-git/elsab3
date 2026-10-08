@@ -9,6 +9,12 @@ interface Props { children: React.ReactNode }
 interface State { error: Error | null; info: string }
 
 export class ErrorBoundary extends React.Component<Props, State> {
+  /* المشروع مفيهوش @types/react، فـ TypeScript مش شايف أعضاء الكلاس
+     اللي جاية بالوراثة. بنعرّفهم هنا بس — declare مبتطلعش أي كود،
+     دي معلومة لـ TypeScript وبس، والسلوك وقت التشغيل زي ما هو. */
+  declare props: Props;
+  declare setState: (patch: Partial<State>) => void;
+
   state: State = { error: null, info: '' };
 
   static getDerivedStateFromError(error: Error): Partial<State> {

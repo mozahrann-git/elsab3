@@ -1105,9 +1105,14 @@ export default function App() {
      فالرقم اللي على الجرس هو نفسه اللي في "الكل" جوه. */
   const [alertTick, setAlertTick] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setAlertTick(Date.now()), 30000); return () => clearInterval(t); }, []);
+  /* رقم الجرس = متابعات الشخص الداخل هو، حتى لو أدمن.
+     قبل كده الأدمن كان بياخد عدّاد الفريق كله (٢٠٩)، واللوحة بتفتح على
+     "عملائي" فالرقم مكانش بيطابق اللي جوه. ومين تنبيهاته دي أصلاً؟
+     تنبيه متابعة لعميل عند سيلز تانية مش شغل الأدمن.
+     الأدمن لسه بيشوف الفريق كله — بس لما يدوس "الفريق كله" بإيده. */
   const salesAlertsCount = useMemo(
-    () => alertCount(crmLeads, currentSalesAgentId, isAdminLoggedIn || staffAccess?.role === 'admin', alertTick),
-    [crmLeads, currentSalesAgentId, isAdminLoggedIn, staffAccess, alertTick],
+    () => alertCount(crmLeads, currentSalesAgentId, false, alertTick),
+    [crmLeads, currentSalesAgentId, alertTick],
   );
 
   // Current active sales agent session
@@ -1486,13 +1491,17 @@ export default function App() {
     if (!isSalesLoggedIn && !isAdminLoggedIn) return;
     try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch { /* */ }
     const check = () => {
+      // مفيش حد مفتوح بحسابه كسيلز = مفيش متابعات بتخصه = مفيش تنبيه
+      if (!currentSalesAgentId) return;
       const now = Date.now();
       let seen: Record<string, number> = {};
       try { seen = JSON.parse(localStorage.getItem('lion_followup_seen') || '{}'); } catch { /* */ }
       crmLeads.forEach((l: any) => {
         const at = l.nextActionAt as number | undefined;
         if (!at || at > now || now - at > 12 * 3600000) return;
-        if (!isAdminLoggedIn && currentSalesAgentId && l.assignedAgentId !== currentSalesAgentId) return;
+        /* التنبيه المنبثق بيروح لصاحب العميل بس — الأدمن كمان.
+           قبل كده الأدمن كان بيتنطّ له تنبيه كل عميل في الشركة طول اليوم. */
+        if (l.assignedAgentId !== currentSalesAgentId) return;
         if (seen[l.id] === at) return;
         seen[l.id] = at;
         const msg = `⏰ ميعاد متابعة ${l.name}: ${l.followUpNote || 'كلّمه دلوقتي'}`;

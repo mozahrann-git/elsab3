@@ -285,7 +285,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                     filterScope === 'all_team' ? 'bg-white text-[#141414] shadow-2xs' : 'text-[#6B665C]'
                   }`}
                 >
-                  الفريق
+                  الفريق{alerts.length ? ` (${alerts.length})` : ''}
                 </button>
               </div>
               )}
