@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Users, MessageSquareText, FilePen, Home, Plus, Phone, Send, LogOut, FileSpreadsheet, Sun } from 'lucide-react';
 import { Property, OwnerSubmission } from '../../types';
-import { fetchPropertyPrivateOwner, subscribeToViewingRequests, saveAccount } from '../../services/firebaseService';
+import { fetchPropertyPrivateOwner, subscribeToViewingRequests, saveAccount, savePropertyPrivateOwner, stripPublicOwnerContact } from '../../services/firebaseService';
 import { WhenPicker, WhenValue, formatWhen } from '../common/WhenPicker';
 import { ViewingRequest } from '../../types';
 import * as XLSX from 'xlsx';
@@ -10,8 +10,9 @@ import {
   subscribeAllUnitViewings, subscribeAllChangeRequests, subscribeFieldAgents, subscribeTrips, subscribeFieldFeedback,
   createUnitViewing, renotifyOwner, findBrokerContact, deleteUnitViewing, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
   acceptOwnerProposal, askClientAboutProposal, counterProposeToOwner, cancelViewing,
-  saraConfirmFeedback, rejectFeedback,
+  saraConfirmFeedback, rejectFeedback, notifyBroker, revealOwnerToSara,
 } from '../../services/portalService';
+import { brokerEscalation, minsText, MAX_SLOTS } from '../../services/brokerEscalation';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { waLink } from '../../utils/helpers';
 import { MorningRollCall } from './MorningRollCall';
@@ -84,7 +85,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       {tab === 'feedback' && <FeedbackTab fbs={fbs} />}
       {tab === 'changes' && <ChangesTab changes={changes} />}
       {tab === 'excel' && isAdmin && <OwnersExcelTab properties={properties} />}
-      {tab === 'units' && <UnitsTab submissions={submissions} byName={name || 'الإدارة'} onApprove={onApproveSubmission} onReject={onRejectSubmission} onUpdateSubmission={onUpdateSubmission} />}
+      {tab === 'units' && <UnitsTab submissions={submissions} properties={properties} byName={name || 'الإدارة'} onApprove={onApproveSubmission} onReject={onRejectSubmission} onUpdateSubmission={onUpdateSubmission} />}
     </PortalShell>
   );
 };
@@ -168,6 +169,27 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
     return ph;
   };
   const active = viewings.filter((v) => v.ownerStatus !== 'done' && v.ownerStatus !== 'canceled');
+
+  /* بيانات البروكر صاحب الوحدة — ده اللي سارة بتتعامل معاه، مش المالك */
+  const [brokers, setBrokers] = useState<Record<string, { name: string; phone: string } | null>>({});
+  useEffect(() => {
+    [...active, ...openReqs].forEach((v: any) => {
+      const bid = v.brokerId;
+      if (bid && brokers[bid] === undefined) findBrokerContact(bid).then((b) => setBrokers((s) => ({ ...s, [bid]: b })));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active.length, openReqs.length]);
+
+  /* عدّى ٤٥ دقيقة والبروكر مردّش: رقم المالك يتكشف لسارة لوحده،
+     والمعاينة تتعلّم إن البروكر فاتت عليه. بيتنفّذ مرة واحدة. */
+  useEffect(() => {
+    const t = Date.now();
+    active.forEach((v) => {
+      const e = brokerEscalation(v, t);
+      if (e.active && e.shouldReveal && !e.revealed) revealOwnerToSara(v).catch(() => {});
+    });
+  });
+
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <Card className="lg:col-span-1 content-start">
@@ -197,6 +219,7 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
         }}>بلّغ {p?.brokerId ? 'البروكر' : 'المالك'}</Btn>
       </Card>
       <div className="lg:col-span-2 grid gap-3 content-start">
+        {isAdmin && <BrokerScoreCard viewings={viewings} brokers={brokers} />}
         {openReqs.map((r) => (
           <Card key={r.id} tone="gold">
             <div className="flex flex-wrap justify-between items-center gap-2">
@@ -212,6 +235,9 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
         {active.length === 0 && <p className="text-center text-sm text-[#6B665C] py-10">مفيش معاينات مفتوحة</p>}
         {active.map((v) => {
           const late = v.ownerStatus === 'pending' && Date.now() - v.lastNotifiedAt > 15 * 60000;
+          const esc = brokerEscalation(v, Date.now());
+          const br = v.brokerId ? brokers[v.brokerId] : null;
+          const brokerMsg = `أهلاً ${br?.name || ''}، في طلب معاينة على وحدتك ${v.propertyCode} ${v.scheduledText}. كلّم المالك وأكّدها من بوابة البروكر على elsab3.com. — سارة · السبع للعقارات`;
           return (
             <Card key={v.id} tone={v.ownerStatus === 'pending' ? 'alert' : undefined}>
               <div className="flex flex-wrap justify-between gap-2">
@@ -221,8 +247,57 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
                   : v.ownerStatus === 'canceled' ? <Chip tone="grey">اتلغت{v.canceledReason ? ` · ${v.canceledReason}` : ''}</Chip>
                   : <Chip tone="gold">طلب ميعاد تاني: {v.ownerProposedText || v.ownerNote}</Chip>}
               </div>
-              <p className="text-sm text-[#6B665C]">{v.propertyTitle} · المالك: <b>{v.ownerName || owners[v.propertyId] || '—'}</b>{v.salesAgentName ? ` · طلب ${v.salesAgentName}` : ''} · اتبلّغ {v.notifyCount} مرة{late ? ' · فات ربع ساعة' : ''}</p>
-              {v.ownerStatus === 'pending' && (
+
+              {/* وحدة بروكر: سارة بتتعامل مع البروكر. رقم المالك مقفول لحد ٤٥ دقيقة. */}
+              {v.brokerId ? (
+                <p className="text-sm text-[#6B665C]">
+                  {v.propertyTitle} · البروكر: <b>{br?.name || v.brokerId}</b>
+                  {v.salesAgentName ? ` · طلب ${v.salesAgentName}` : ''} · اتبلّغ {esc.notified} من {MAX_SLOTS}
+                </p>
+              ) : (
+                <p className="text-sm text-[#6B665C]">{v.propertyTitle} · المالك: <b>{v.ownerName || owners[v.propertyId] || '—'}</b>{v.salesAgentName ? ` · طلب ${v.salesAgentName}` : ''} · اتبلّغ {v.notifyCount} مرة{late ? ' · فات ربع ساعة' : ''}</p>
+              )}
+
+              {/* شريط حالة التصعيد */}
+              {esc.active && (
+                esc.revealed ? (
+                  <p className="text-xs font-bold rounded-xl bg-[#FBEDEA] border border-[#E8B5AC] text-[#9A2E1F] p-2.5 leading-6">
+                    فات {minsText(esc.elapsedMs)} والبروكر مأكّدش. رقم المالك اتفتح لك دلوقتي — كلّميه إنتي، واتسجّلت على البروكر.
+                  </p>
+                ) : esc.dueNow ? (
+                  <p className="text-xs font-bold rounded-xl bg-[#FBF8F1] border border-[#E8D3A6] text-[#6E5418] p-2.5 leading-6">
+                    حان وقت التنبيه {esc.notified + 1} من {MAX_SLOTS} — دوسي "نبّه البروكر".
+                  </p>
+                ) : (
+                  <p className="text-xs rounded-xl bg-[#F6F4EF] text-[#6B665C] p-2.5 leading-6">
+                    التنبيه الجاي بعد {minsText(esc.nextDueInMs)} · رقم المالك بيتفتح بعد {minsText(Math.max(0, 45 * 60000 - esc.elapsedMs))}
+                  </p>
+                )
+              )}
+
+              {v.ownerStatus === 'pending' && v.brokerId && (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Btn tone={esc.dueNow ? 'green' : 'light'} className="!px-2 text-xs"
+                      onClick={() => { if (br?.phone) window.open(wa(br.phone, brokerMsg)); else alert('مفيش رقم للبروكر ده'); notifyBroker(v).catch(() => {}); }}>
+                      نبّه البروكر
+                    </Btn>
+                    <Btn tone="blue" className="!px-2 text-xs"
+                      onClick={() => { if (br?.phone) window.location.href = `tel:${br.phone}`; else alert('مفيش رقم للبروكر ده'); }}>
+                      <Phone size={14} />البروكر
+                    </Btn>
+                    <Btn tone="light" className="!px-2 text-xs" onClick={() => renotifyOwner(v)}>سجّلي تبليغ</Btn>
+                  </div>
+                  {esc.revealed && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Btn tone="green" className="!px-2 text-xs" onClick={async () => { const ph = await phoneOf(v); if (ph) window.open(wa(ph, `أهلاً، في معاينة على شقتك ${v.propertyCode} ${v.scheduledText}. ينفع؟ — سارة · السبع للعقارات`)); else alert('مفيش رقم مالك متسجل للوحدة دي'); }}>واتساب المالك</Btn>
+                      <Btn tone="blue" className="!px-2 text-xs" onClick={async () => { const ph = await phoneOf(v); if (ph) window.location.href = `tel:${ph}`; else alert('مفيش رقم مالك متسجل'); }}><Phone size={14} />اتصال بالمالك</Btn>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {v.ownerStatus === 'pending' && !v.brokerId && (
                 <div className="grid grid-cols-3 gap-2">
                   <Btn className="!px-2 text-xs" onClick={() => renotifyOwner(v)}>بلّغه تاني</Btn>
                   <Btn tone="green" className="!px-2 text-xs" onClick={async () => { const ph = await phoneOf(v); if (ph) window.open(wa(ph, `أهلاً، في معاينة على شقتك ${v.propertyCode} ${v.scheduledText}. أكّدها من بوابة الملاك على elsab3.com أو رد هنا. — سارة · السبع للعقارات`)); else alert('مفيش رقم مالك متسجل للوحدة دي'); }}>واتساب</Btn>
@@ -249,6 +324,43 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
         })}
       </div>
     </div>
+  );
+};
+
+/* أداء البروكرز — كله محسوب من المعاينات نفسها، مفيش رقم محفوظ على جنب.
+   ده اللي بيخلي "البروكر ده بيكسبني ولا بيضيّعني؟" سؤال بإجابة، مش بإحساس. */
+const BrokerScoreCard: React.FC<{ viewings: UnitViewing[]; brokers: Record<string, { name: string; phone: string } | null> }> = ({ viewings, brokers }) => {
+  const rows = useMemo(() => {
+    const by: Record<string, { total: number; confirmed: number; missed: number }> = {};
+    viewings.filter((v) => v.brokerId).forEach((v) => {
+      const k = v.brokerId!;
+      const r = by[k] || { total: 0, confirmed: 0, missed: 0 };
+      r.total += 1;
+      if (v.brokerStatus === 'confirmed') r.confirmed += 1;
+      if (v.brokerMissed) r.missed += 1;
+      by[k] = r;
+    });
+    return Object.entries(by).sort((a, b) => b[1].missed - a[1].missed || b[1].total - a[1].total);
+  }, [viewings]);
+
+  if (!rows.length) return null;
+  return (
+    <Card>
+      <p className="font-bold">أداء البروكرز</p>
+      <p className="text-xs text-[#6B665C]">"فاتت عليه" = عدّى ٤٥ دقيقة من غير ما يأكّد، وسارة اضطرت تكلّم المالك بنفسها.</p>
+      {rows.map(([bid, r]) => {
+        const rate = r.total ? Math.round((r.confirmed / r.total) * 100) : 0;
+        return (
+          <div key={bid} className="border-t border-[#F0ECE4] pt-2 flex flex-wrap justify-between items-center gap-2">
+            <span className="font-bold text-sm">{brokers[bid]?.name || bid}</span>
+            <span className="text-xs text-[#6B665C]">
+              {r.total} طلب · أكّد {r.confirmed} ({rate}%)
+              {r.missed > 0 && <b className="text-[#C2412D]"> · فاتت عليه {r.missed}</b>}
+            </span>
+          </div>
+        );
+      })}
+    </Card>
   );
 };
 
@@ -404,7 +516,7 @@ const ChangesTab: React.FC<{ changes: ChangeRequest[] }> = ({ changes }) => {
 };
 
 // ---------------- الشقق الجديدة: مراجعة قبل النشر ----------------
-const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; byName: string; onApprove: (s: OwnerSubmission) => void; onReject: (id: string) => void; onUpdateSubmission?: (s: OwnerSubmission) => void }> = ({ submissions, byName, onApprove, onReject, onUpdateSubmission }) => {
+const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; properties: Property[]; byName: string; onApprove: (s: OwnerSubmission) => void; onReject: (id: string) => void; onUpdateSubmission?: (s: OwnerSubmission) => void }> = ({ submissions, properties, byName, onApprove, onReject, onUpdateSubmission }) => {
   const [open, setOpen] = useState<OwnerSubmission | null>(null);
   const pend = submissions.filter((s) => s.status === 'pending');
   return (
@@ -430,19 +542,29 @@ const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; byName: string; onApp
           </Card>
         );
       })}
-      {open && <ReviewModal sub={open} byName={byName} onClose={() => setOpen(null)} onApprove={onApprove} onUpdateSubmission={onUpdateSubmission} />}
+      {open && <ReviewModal sub={open} properties={properties} byName={byName} onClose={() => setOpen(null)} onApprove={onApprove} onUpdateSubmission={onUpdateSubmission} />}
     </div>
   );
 };
 
 /* شاشة المراجعة: تعديل كل البيانات، كتابة الكود بإيدك، شيل الصور الوحشة، وتأكيد الجودة */
-const ReviewModal: React.FC<{ sub: OwnerSubmission; byName: string; onClose: () => void; onApprove: (s: OwnerSubmission) => void; onUpdateSubmission?: (s: OwnerSubmission) => void }> = ({ sub, byName, onClose, onApprove, onUpdateSubmission }) => {
-  // كود مقترح ثابت: مشتق من رقم الطلب نفسه، فمش بيتغيّر كل ما تفتح الشاشة
+const ReviewModal: React.FC<{ sub: OwnerSubmission; properties: Property[]; byName: string; onClose: () => void; onApprove: (s: OwnerSubmission) => void; onUpdateSubmission?: (s: OwnerSubmission) => void }> = ({ sub, properties, byName, onClose, onApprove, onUpdateSubmission }) => {
+  const isBrokerUnit = !!(sub as any).brokerId;
+  /* كود مقترح ثابت.
+     وحدة البروكر بتاخد BR-00n عشان أول ما تشوف الكود تعرف إنها وحدة بروكر —
+     الرقم بيكمّل على آخر BR موجود. الباقي بياخد H + آخر ٤ أرقام من رقم الطلب. */
   const suggestedCode = React.useMemo(() => {
+    if (isBrokerUnit) {
+      const used = properties
+        .map((p) => /^BR-(\d+)$/i.exec(String(p.code || '').trim().toUpperCase()))
+        .map((m) => (m ? Number(m[1]) : 0));
+      const next = (used.length ? Math.max(...used) : 0) + 1;
+      return `BR-${String(next).padStart(3, '0')}`;
+    }
     const digits = String(sub.id || '').replace(/\D/g, '');
     const tail = digits.slice(-4).padStart(4, '0');
     return `H${tail}`;
-  }, [sub.id]);
+  }, [sub.id, isBrokerUnit, properties]);
   const [d, setD] = useState<any>({ ...sub, code: (sub as any).code || suggestedCode });
   const [busy, setBusy] = useState(false);
   const q = d.qualityCheck;
@@ -477,7 +599,11 @@ const ReviewModal: React.FC<{ sub: OwnerSubmission; byName: string; onClose: () 
             <p className="font-bold text-sm">2. الكود والبيانات</p>
             <label className="text-xs font-bold space-y-1 block">كود الوحدة
               <input value={d.code} onChange={(e) => setD({ ...d, code: e.target.value.toUpperCase().replace(/\s+/g, '') })} dir="ltr" className={`${inp} font-mono`} />
-              <span className="block text-[11px] font-normal text-[#6B665C]">ده الكود اللي الشقة هتتنشر بيه على الموقع. غيّره زي ما تحب قبل النشر.</span>
+              <span className="block text-[11px] font-normal text-[#6B665C]">
+                {isBrokerUnit
+                  ? 'دي وحدة بروكر — كودها بيبدأ بـ BR- عشان نعرفها من الكود على طول.'
+                  : 'ده الكود اللي الشقة هتتنشر بيه على الموقع. غيّره زي ما تحب قبل النشر.'}
+              </span>
             </label>
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="text-xs font-bold space-y-1">السعر<input type="number" value={d.askingPrice} onChange={(e) => setD({ ...d, askingPrice: Number(e.target.value) })} className={inp} /></label>
@@ -572,6 +698,31 @@ const OwnersExcelTab: React.FC<{ properties: Property[] }> = ({ properties }) =>
         <p className="font-bold text-lg">1. نزّل شيت الملاك</p>
         <p className="text-sm text-[#6B665C] leading-7">كل شقة بكودها واسم المالك ورقمه، وباسوورد مقترح جاهز. املا الإيميل ونسبة العمولة بعد ما تتفق مع كل مالك.</p>
         <Btn onClick={exportSheet} disabled={!!busy}><FileSpreadsheet size={16} />{busy && busy.includes('تجميع') ? busy : `تنزيل الشيت (${properties.length} شقة)`}</Btn>
+      </Card>
+      <Card tone="alert">
+        <p className="font-bold text-lg">تنضيف أرقام الملاك من المستندات العامة</p>
+        <p className="text-sm text-[#6B665C] leading-7">
+          الشقق القديمة لسه شايلة اسم المالك ورقمه على المستند العام اللي أي حد على النت بيقراه.
+          الزرار ده بينقلهم للمستند المحمي وبيمسحهم من العام. محتاج يتعمل مرة واحدة بس.
+        </p>
+        <Btn tone="danger" disabled={!!busy} onClick={async () => {
+          const dirty = properties.filter((p) => (p as any).ownerPhone || (p as any).ownerName);
+          if (!dirty.length) { setLog(['مفيش شقة فيها رقم مكشوف — كله نضيف']); return; }
+          if (!window.confirm(`${dirty.length} شقة فيها رقم مكشوف. ننقلهم للمستند المحمي؟`)) return;
+          setBusy('بننقل الأرقام...'); const out: string[] = [];
+          for (const p of dirty) {
+            try {
+              const name = String((p as any).ownerName || '').trim();
+              const phone = String((p as any).ownerPhone || '').trim();
+              if (phone) await savePropertyPrivateOwner(p.id, { ownerName: name, ownerPhone: phone, ...(p.brokerId ? { brokerId: p.brokerId } : {}) });
+              await stripPublicOwnerContact(p.id);
+              out.push(`✓ ${p.code}`);
+            } catch (err: any) { out.push(`✗ ${p.code}: ${err?.message || 'خطأ'}`); }
+            setLog([...out]);
+          }
+          setBusy('');
+        }}>نضّف الأرقام المكشوفة</Btn>
+        {busy && busy.includes('ننقل') && <p className="text-sm font-bold">{busy}</p>}
       </Card>
       <Card tone="gold">
         <p className="font-bold text-lg">2. ارفع الشيت بعد ما تملاه</p>

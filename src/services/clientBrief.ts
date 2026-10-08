@@ -169,8 +169,19 @@ export interface MatchResult {
   misses: string[];              // فين مش مظبوطة
 }
 
+/* أسماء الأحياء بتتكتب بأشكال مختلفة: «الحى» و«الحي»، مسافات زيادة،
+   «ه» بدل «ة». المقارنة الحرفية كانت بتفشل وتستبعد شقق مظبوطة. */
+export const normHood = (s?: string): string =>
+  String(s || '')
+    .replace(/[\u064B-\u0652\u0640]/g, '')   // تشكيل وتطويل
+    .replace(/[ىي]/g, 'ي')
+    .replace(/[أإآا]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 const inList = (hood: string | undefined, districts: string[]) =>
-  districts.length === 0 || districts.some((d) => d === hood);
+  districts.length === 0 || districts.some((d) => normHood(d) === normHood(hood));
 
 /** المحرك الوحيد. كل شاشة بتطابق بتندهه — فمستحيل الأرقام تختلف. */
 export function matchDetailed(

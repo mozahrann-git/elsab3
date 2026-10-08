@@ -1,4 +1,5 @@
 import { Lead } from '../types';
+import { now as serverNow } from '../services/serverClock';
 
 /*
   مصدر واحد لحساب التنبيهات.
@@ -98,26 +99,9 @@ export function endOfCairoDay(now: number): number {
   return now + (86400 - secsIntoDay) * 1000 - 1;
 }
 
-/**
- * ساعة الجهاز غلط؟
- *
- * بنقارن ساعة الجهاز بآخر تعديل اتكتب من أي جهاز تاني. لو فيه تعديل
- * "في المستقبل" بالنسبالنا بفرق كبير، يبقى ساعتنا إحنا المتأخرة —
- * وكل كلام «متأخر كذا» اللي بيظهر غلط.
- */
-export function clockSkewMinutes(leads: { updatedAt?: number }[], now = Date.now()): number {
-  let newest = 0;
-  leads.forEach((l) => {
-    const u = Number((l as any).updatedAt) || 0;
-    if (u > newest) newest = u;
-  });
-  if (!newest) return 0;
-  const diff = newest - now;
-  return diff > 0 ? Math.round(diff / 60000) : 0;
-}
 
 /** بيبني كل التنبيهات من الليدات. الليد المقفول أو الخسران مبيطلّعش تنبيه. */
-export function buildAlerts(leads: Lead[], now = Date.now()): LeadAlert[] {
+export function buildAlerts(leads: Lead[], now = serverNow()): LeadAlert[] {
   const eod = endOfCairoDay(now);
 
   const fmt = (at: number) => {
@@ -186,7 +170,7 @@ export function scopeAlerts(alerts: LeadAlert[], agentId?: string | null, seeAll
 }
 
 /** الرقم اللي بيظهر على الجرس ونفسه اللي بيظهر جوه في "الكل" */
-export function alertCount(leads: Lead[], agentId?: string | null, seeAll = false, now = Date.now()): number {
+export function alertCount(leads: Lead[], agentId?: string | null, seeAll = false, now = serverNow()): number {
   return scopeAlerts(buildAlerts(leads, now), agentId, seeAll).length;
 }
 
@@ -202,7 +186,7 @@ export function alertCount(leads: Lead[], agentId?: string | null, seeAll = fals
 */
 export type FollowUpState = 'late' | 'today' | 'soon' | 'later' | 'none';
 
-export function followUpState(nextActionAt?: number | null, status?: string, now = Date.now()): FollowUpState {
+export function followUpState(nextActionAt?: number | null, status?: string, now = serverNow()): FollowUpState {
   if (!nextActionAt || status === 'completed') return 'none';
   if (nextActionAt <= now) return 'late';
 
@@ -216,7 +200,7 @@ export function followUpState(nextActionAt?: number | null, status?: string, now
 }
 
 /** الكلام اللي بيتكتب على الكارت */
-export function followUpBadge(nextActionAt?: number | null, status?: string, fallback = '', now = Date.now()) {
+export function followUpBadge(nextActionAt?: number | null, status?: string, fallback = '', now = serverNow()) {
   const state = followUpState(nextActionAt, status, now);
   if (state === 'none') return { text: fallback, tone: 'calm' as const };
   if (state === 'late') return { text: `متأخر ${humanDuration((now - (nextActionAt || now)) / 60000)}`, tone: 'late' as const };

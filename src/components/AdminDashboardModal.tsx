@@ -16,6 +16,7 @@ import { INITIAL_PRICE_MAP_DATA, INITIAL_CLOSED_DEALS } from '../data/marketPric
 import { saveClosedDealToDb, deleteClosedDealFromDb } from '../services/firebaseService';
 import { DEFAULT_BROKERS } from '../data/brokerData';
 import { DuplicatesPanel } from './admin/DuplicatesPanel';
+import { LeadDuplicatesPanel } from './admin/LeadDuplicatesPanel';
 import { SubmissionReviewModal } from './admin/SubmissionReviewModal';
 import { 
   X, 
@@ -73,7 +74,8 @@ import {
   Navigation,
   UserCheck,
   DollarSign,
-  Compass
+  Compass,
+  ImageOff,
 } from 'lucide-react';
 import { formatPrice, formatNumber, generateWhatsAppLink, generateCallLink, compressImage } from '../utils/helpers';
 import { uploadFile, uploadDataUrl } from '../services/mediaStorage';
@@ -200,6 +202,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterNeighborhood, setFilterNeighborhood] = useState<string>('all');
   const [filterFinishing, setFilterFinishing] = useState<string>('all');
+  /* الشقق اللي ناقصة وسائط — الشقة من غير صور مبتتعرضش على عميل */
+  const [filterMedia, setFilterMedia] = useState<'all' | 'no_photos' | 'no_video' | 'no_media'>('all');
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [isConfirmClearModalOpen, setIsConfirmClearModalOpen] = useState(false);
@@ -910,9 +914,29 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       const matchNeigh = filterNeighborhood === 'all' || p.neighborhood === filterNeighborhood;
       const matchFinish = filterFinishing === 'all' || p.finishing === filterFinishing;
 
-      return matchSearch && matchNeigh && matchFinish;
+      /* بنعد الصور الحقيقية بس — الرابط الفاضي مش صورة */
+      const photos = (p.images || []).filter((u) => typeof u === 'string' && u.trim()).length;
+      const hasVideo = !!(p.videoUrl && String(p.videoUrl).trim());
+      const matchMedia =
+        filterMedia === 'all' ? true
+        : filterMedia === 'no_photos' ? photos === 0
+        : filterMedia === 'no_video' ? !hasVideo
+        : photos === 0 && !hasVideo;
+
+      return matchSearch && matchNeigh && matchFinish && matchMedia;
     });
-  }, [properties, searchQuery, filterNeighborhood, filterFinishing]);
+  }, [properties, searchQuery, filterNeighborhood, filterFinishing, filterMedia]);
+
+  /* عدادات بتبان جنب الفلتر عشان تعرف الحجم من غير ما تفلتر */
+  const mediaGaps = useMemo(() => {
+    let noPhotos = 0, noVideo = 0;
+    properties.forEach((p) => {
+      const photos = (p.images || []).filter((u) => typeof u === 'string' && u.trim()).length;
+      if (photos === 0) noPhotos += 1;
+      if (!(p.videoUrl && String(p.videoUrl).trim())) noVideo += 1;
+    });
+    return { noPhotos, noVideo };
+  }, [properties]);
 
   const pendingSubmissions = useMemo(() => {
     return ownerSubmissions.filter(s => s.status === 'pending');
@@ -1472,6 +1496,27 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               {/* الشقق المكررة — بتظهر فوق عشان متعديش */}
               <DuplicatesPanel properties={properties} onDeleteProperty={onDeleteProperty} />
 
+              {/* الشقق من غير صور — دي مش بتتعرض على عميل أصلاً */}
+              {mediaGaps.noPhotos > 0 && filterMedia !== 'no_photos' && (
+                <button
+                  onClick={() => setFilterMedia('no_photos')}
+                  className="w-full bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-2 text-right cursor-pointer"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <ImageOff size={16} className="text-rose-700 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block font-extrabold text-sm text-rose-800">
+                        {mediaGaps.noPhotos} شقة من غير صور
+                      </span>
+                      <span className="block text-[11px] text-rose-700/80">
+                        الشقة من غير صور مش بتتبعت لعميل ولا بتتعرض في العروض
+                      </span>
+                    </span>
+                  </span>
+                  <span className="text-[11px] font-bold text-rose-800 shrink-0">اعرضها</span>
+                </button>
+              )}
+
               {/* Search & Filter Bar - Smooth rounded bar */}
               <div className="bg-white p-4 rounded-3xl flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
                 <div className="relative flex-1">
@@ -1505,6 +1550,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     <option value="all">كل التشطيبات</option>
                     <option value="finished">متشطب</option>
                     <option value="semi_finished">نصف تشطيب</option>
+                  </select>
+
+                  {/* الوسائط — الشقة من غير صور مستحيل تتعرض على عميل */}
+                  <select
+                    value={filterMedia}
+                    onChange={(e) => setFilterMedia(e.target.value as any)}
+                    className={`rounded-2xl py-2.5 px-3.5 text-xs font-bold focus:outline-none cursor-pointer ${
+                      filterMedia === 'all' ? 'bg-stone-50/80 text-stone-700' : 'bg-rose-50 text-rose-800 ring-1 ring-rose-200'
+                    }`}
+                  >
+                    <option value="all">كل الشقق</option>
+                    <option value="no_photos">من غير صور ({mediaGaps.noPhotos})</option>
+                    <option value="no_video">من غير فيديو ({mediaGaps.noVideo})</option>
+                    <option value="no_media">من غير صور ولا فيديو</option>
                   </select>
 
                   <button
@@ -1552,17 +1611,31 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {filteredManagementProps.map((prop) => {
+                    /* الصور الحقيقية بس. الكارت كان بيحط صورة جاهزة مكان
+                       الشقة الفاضية — فالشقة اللي مالهاش صور كانت شكلها
+                       زي اللي ليها، ومستحيل تعرف الناقص. */
+                    const photoCount = (prop.images || []).filter((u) => typeof u === 'string' && u.trim()).length;
+                    const hasVideo = !!(prop.videoUrl && String(prop.videoUrl).trim());
                     return (
                       <div
                         key={prop.id}
-                        className="bg-white rounded-3xl p-4 sm:p-5 flex flex-col justify-between gap-3 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.06)]"
+                        className={`bg-white rounded-3xl p-4 sm:p-5 flex flex-col justify-between gap-3 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.06)] ${
+                          photoCount === 0 ? 'ring-2 ring-rose-200' : ''
+                        }`}
                       >
                         <div className="flex gap-4">
-                          <img
-                            src={prop.images?.[0] || DEFAULT_ARCH_PHOTOS[0]}
-                            alt={prop.title}
-                            className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl shrink-0"
-                          />
+                          {photoCount === 0 ? (
+                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl shrink-0 bg-rose-50 border-2 border-dashed border-rose-200 flex flex-col items-center justify-center gap-1 text-rose-700">
+                              <ImageOff size={20} />
+                              <span className="text-[9px] font-extrabold">مفيش صور</span>
+                            </div>
+                          ) : (
+                            <img
+                              src={prop.images[0]}
+                              alt={prop.title}
+                              className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl shrink-0"
+                            />
+                          )}
                           <div className="flex-1 min-w-0 space-y-1.5">
                             <div className="flex items-center justify-between gap-1">
                               <span className="text-[11px] font-mono font-black bg-stone-100 text-stone-800 px-2.5 py-0.5 rounded-full">
@@ -2442,6 +2515,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {activeTab === 'sales_team' && (
             <div className="space-y-5">
+              {/* الأرقام المكررة بين السيلز — فوق عشان متعديش */}
+              <LeadDuplicatesPanel leads={crmLeads || []} />
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-stone-900">

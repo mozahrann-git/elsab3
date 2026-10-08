@@ -87,6 +87,8 @@ export function buildLeadPatch(
     else delete patch[k];
   });
 
-  patch.updatedAt = Date.now();
+  /* مبنحطش updatedAt هنا. بيتحط بوقت قاعدة البيانات نفسها وقت الكتابة،
+     بعد التنظيف — لأن التنظيف بيعيد بناء الكائنات وبيدمّر علامة وقت
+     السيرفر لو مرّت عليه. */
   return patch;
 }

@@ -12,7 +12,9 @@ import {
   onSnapshot, 
   writeBatch,
   updateDoc,
-  runTransaction
+  runTransaction,
+  deleteField,
+  serverTimestamp
 } from 'firebase/firestore';
 import { 
   getAuth, 
@@ -602,20 +604,22 @@ export async function saveLeadToDb(lead: Lead): Promise<void> {
  * وبنكتب اللي اتغيّر عندنا بس، والنشاط بيتدمج من الطرفين.
  */
 export async function saveLeadMerged(lead: Lead, prev?: Lead | null): Promise<void> {
-  try {
-    await ensureAuth();
-    const ref = doc(db, 'crm_leads', lead.id);
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      const server = snap.exists() ? (snap.data() as Partial<Lead>) : null;
-      const patch = buildLeadPatch(lead, prev, server);
-      tx.set(ref, cleanFirestoreData(patch), { merge: true });
-    });
-  } catch (error) {
-    console.warn('[Firebase] Notice merging CRM lead:', error);
-    // الشبكة وقعت — بنحفظ محلياً والسنابشوت هيصلّح نفسه لما ترجع
-    await saveLeadToDb(lead);
-  }
+  await ensureAuth();
+  const ref = doc(db, 'crm_leads', lead.id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const server = snap.exists() ? (snap.data() as Partial<Lead>) : null;
+    const patch = buildLeadPatch(lead, prev, server);
+    tx.set(ref, cleanFirestoreData(patch), { merge: true });
+  });
+  /* مفيش catch هنا بقصد.
+
+     كان فيه catch بيبلع الغلط ويحفظ في المتصفح بدل الداتابيز. النتيجة:
+     السيلز يغيّر ميعاد متابعة، يشوفه على شاشته، والكتابة تكون اترفضت —
+     فالتعديل عايش على جهازه هو بس وبقية الفريق شايفين القديم للأبد،
+     ومحدش عارف إن في حاجة فشلت.
+
+     دلوقتي الغلط بيطلع لفوق، والواجهة بتقول إن التعديل مااتحفظش. */
 }
 
 export async function updateLeadInDb(leadId: string, updates: Partial<Lead>): Promise<void> {
@@ -1038,6 +1042,15 @@ export async function savePropertyPrivateOwner(
   } catch (error) {
     console.warn('[Firebase] Notice saving private owner details:', error);
   }
+}
+
+/** بيشيل اسم المالك ورقمه من مستند الشقة العام (اللي الدنيا كلها بتقراه) */
+export async function stripPublicOwnerContact(propertyId: string): Promise<void> {
+  await ensureAuth();
+  await updateDoc(doc(db, 'properties', propertyId), {
+    ownerName: deleteField(),
+    ownerPhone: deleteField(),
+  });
 }
 
 export async function fetchPropertyPrivateOwner(

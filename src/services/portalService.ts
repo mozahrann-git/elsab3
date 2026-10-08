@@ -44,6 +44,11 @@ export interface UnitViewing {
   clientAskedAt?: number;          // سارة بعتت الميعاد البديل للسيلز يسأل العميل
   clientAskedBy?: string;
   canceledReason?: string;
+  /* تصعيد وحدة البروكر: كام تنبيه راح له، وإمتى، وإمتى اتكشف رقم المالك لسارة */
+  brokerNotifyCount?: number;
+  brokerLastNotifiedAt?: number;
+  ownerRevealedAt?: number;        // سارة بقت تشوف رقم المالك (بعد ٤٥ دقيقة)
+  brokerMissed?: boolean;          // البروكر مردّش في الوقت — بيتحسب في أدائه
   createdAt: number;
 }
 
@@ -303,6 +308,24 @@ export async function createUnitViewing(v: Omit<UnitViewing, 'id' | 'createdAt' 
 }
 export async function renotifyOwner(v: UnitViewing) {
   await updateDoc(doc(db, 'unit_viewings', v.id), { notifyCount: (v.notifyCount || 0) + 1, lastNotifiedAt: Date.now() });
+}
+
+/** تنبيه البروكر: العدّاد ده هو اللي بوابة البروكر بتقرا منه وبيبان لسارة */
+export async function notifyBroker(v: UnitViewing) {
+  await updateDoc(doc(db, 'unit_viewings', v.id), {
+    brokerNotifyCount: Math.max(1, v.brokerNotifyCount || 1) + 1,
+    brokerLastNotifiedAt: Date.now(),
+  });
+}
+
+/* بعد ٤٥ دقيقة من غير تأكيد: سارة تشوف رقم المالك وتكلّمه بنفسها،
+   والمعاينة بتتعلّم إن البروكر فاتت عليه. الكتابة دي بتتعمل مرة واحدة. */
+export async function revealOwnerToSara(v: UnitViewing) {
+  if (v.ownerRevealedAt) return;
+  await updateDoc(doc(db, 'unit_viewings', v.id), {
+    ownerRevealedAt: Date.now(),
+    brokerMissed: true,
+  });
 }
 export async function setViewingStatus(id: string, ownerStatus: OwnerViewingStatus) {
   await updateDoc(doc(db, 'unit_viewings', id), { ownerStatus });

@@ -1,5 +1,5 @@
 import { db } from './firebaseService';
-import { collection, addDoc, query, where, orderBy, getDocs, limit as qLimit } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, deleteDoc, query, where, orderBy, getDocs, limit as qLimit } from 'firebase/firestore';
 
 /*
   الإحالة: مين جاب مين.
@@ -27,6 +27,7 @@ export interface RefTouch {
   at: number;
   landing: string;         // أول صفحة دخل عليها
   source?: string;         // utm_source لو موجود
+  token?: string;          // اللينك اتبعت لمين بالظبط — عشان نعرف فتحه ولا لأ
 }
 
 export interface JourneyStep {
@@ -80,10 +81,12 @@ export function logStep(what: string, detail?: string) {
 export function captureRef(): RefRecord | null {
   let code = '';
   let source = '';
+  let token = '';
   try {
     const q = new URLSearchParams(window.location.search);
     code = (q.get('ref') || q.get('by') || '').trim();
     source = (q.get('utm_source') || '').trim();
+    token = (q.get('t') || '').trim();
   } catch { /* لا يوجد window */ }
 
   const existing = readRef();
@@ -104,6 +107,7 @@ export function captureRef(): RefRecord | null {
     at: Date.now(),
     landing: (() => { try { return window.location.pathname + window.location.search; } catch { return '/'; } })(),
     source: source || undefined,
+    token: token || undefined,
   };
 
   /* أول لمسة بتتقفل. اللينك التاني بيتسجّل كآخر لمسة بس — الكريدت
@@ -115,8 +119,9 @@ export function captureRef(): RefRecord | null {
   safeSet(KEY, JSON.stringify(rec));
   logStep(existing ? 'فتح لينك تاني' : 'دخل من لينك السيلز', code);
 
-  // نسخة للإدارة — لو فشلت مبنوقعش الصفحة
-  if (!existing) {
+  /* بنسجّل اللمسة لو أول مرة، أو لو اللينك شخصي (فيه توكن) —
+     لأن ده اللي بيقول للسيلز إن اللي بعتله فتح فعلاً. */
+  if (!existing || token) {
     recordTouchToDb(touch).catch(() => { /* أوفلاين أو الصلاحيات */ });
   }
 
@@ -198,4 +203,82 @@ export function agentCode(name?: string, fallbackId?: string): string {
 
   code = code.replace(/[^A-Z0-9]/g, '').slice(0, 10);
   return code || 'TEAM';
+}
+
+// ---------------- اللينكات المبعوتة ----------------
+
+/*
+  اللينك العام مبيقولش مين فتحه — أي حد يفتحه يبقى مجهول.
+
+  عشان نعرف إن اللي بعتله فتح فعلاً، كل واحد بياخد لينك بتوكن خاص بيه.
+  بنسجّل: بعتناه لمين وإمتى. وأول ما حد يفتح اللينك ده، بتتسجّل لمسة
+  عليها نفس التوكن — فبنعرف إنه فتح، وإمتى، وكام مرة.
+
+  واللي مفتحش بعد كذا ساعة بيبان عشان السيلز يتابعه.
+*/
+
+export interface SentLink {
+  id: string;              // هو نفسه التوكن
+  code: string;            // كود السيلز
+  byName: string;
+  kind: 'owner' | 'client';
+  toName: string;
+  toPhone?: string;
+  sentAt: number;
+  // بتتحسب من اللمسات، مش متخزّنة
+  openedAt?: number;
+  opens?: number;
+}
+
+/** توكن قصير، صعب يتخمّن، وبيفضل مقروء في اللينك */
+export function newToken(): string {
+  const a = Math.random().toString(36).slice(2, 8);
+  const b = Date.now().toString(36).slice(-4);
+  return `${a}${b}`;
+}
+
+export async function recordSentLink(l: Omit<SentLink, 'openedAt' | 'opens'>): Promise<void> {
+  if (!db) return;
+  await setDoc(doc(db, 'sent_links', l.id), {
+    code: l.code, byName: l.byName, kind: l.kind,
+    toName: l.toName, toPhone: l.toPhone || '', sentAt: l.sentAt,
+  });
+}
+
+export async function deleteSentLink(id: string): Promise<void> {
+  if (!db) return;
+  await deleteDoc(doc(db, 'sent_links', id));
+}
+
+/**
+ * اللينكات اللي السيلز بعتها، وكل واحد فتح ولا لأ.
+ * بنقرا اللمسات ونطابقها بالتوكن — مفيش كتابة من الزائر على اللينك نفسه.
+ */
+export async function fetchSentLinks(code: string, max = 100): Promise<SentLink[]> {
+  if (!db) return [];
+  const [linksSnap, touchSnap] = await Promise.all([
+    getDocs(query(collection(db, 'sent_links'), where('code', '==', code), orderBy('sentAt', 'desc'), qLimit(max))),
+    getDocs(query(collection(db, 'ref_touches'), where('code', '==', code), orderBy('at', 'desc'), qLimit(500))),
+  ]);
+
+  // التوكن ← أول فتحة وعدد الفتحات
+  const opens = new Map<string, { first: number; count: number }>();
+  touchSnap.docs.forEach((d) => {
+    const t = (d.data() as any).token as string | undefined;
+    const at = Number((d.data() as any).at) || 0;
+    if (!t) return;
+    const cur = opens.get(t);
+    if (!cur) opens.set(t, { first: at, count: 1 });
+    else opens.set(t, { first: Math.min(cur.first, at), count: cur.count + 1 });
+  });
+
+  return linksSnap.docs.map((d) => {
+    const v = d.data() as any;
+    const o = opens.get(d.id);
+    return {
+      id: d.id, code: v.code, byName: v.byName, kind: v.kind,
+      toName: v.toName, toPhone: v.toPhone, sentAt: Number(v.sentAt) || 0,
+      openedAt: o?.first, opens: o?.count || 0,
+    } as SentLink;
+  });
 }

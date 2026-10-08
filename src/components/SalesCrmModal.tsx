@@ -49,10 +49,10 @@ import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
-import { matchProperties, briefLine, briefGaps, readBrief, payModeOf, resaleFits, projectsFit, resaleCeiling, PayMode } from '../services/clientBrief';
+import { matchDetailed, briefLine, briefGaps, readBrief, payModeOf, resaleFits, projectsFit, resaleCeiling, PayMode } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
-import { humanDuration, followUpBadge, clockSkewMinutes } from '../utils/followUpAlerts';
+import { humanDuration, followUpBadge } from '../utils/followUpAlerts';
 import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpQuest } from '../services/questService';
 import { AgentDayPanel } from './crm/AgentDayPanel';
 import { OwnerLinkCard } from './crm/OwnerLinkCard';
@@ -228,6 +228,11 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   const currentAgent = currentSalesAgent;
 
+  /* مين بيتكتب اسمه على الأكشن.
+     الإدارة بتتكتب «الإدارة» — مش اسم سيلز، ومش «الفريق» المبهمة.
+     كان فيه بق بيخلّي أكشن الإدارة يتسجّل باسم آخر سيلز سجّل دخول. */
+  const actorName = currentSalesAgent?.name || (isAdmin ? 'الإدارة' : 'الفريق');
+
   // من بشوف شغله؟ (الأدمن والتيم ليدر بيختاروا)
   const [viewAgentId, setViewAgentId] = useState<string>('all');
   const myTeam = useMemo(() => agents.filter((a) => (a as any).teamLeadId === currentSalesAgent?.id), [agents, currentSalesAgent]);
@@ -293,14 +298,21 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const showProjects = projectsFit(activePay);
 
   // نفس المحرك اللي بيبني العرض المخصوص — فالشاشتين مستحيل يختلفوا
-  const matchedProperties = useMemo(() => {
+  const matchDetail = useMemo(() => {
     if (!selectedMatchingLead) return [];
-    return matchProperties(selectedMatchingLead, properties, {
+    return matchDetailed(selectedMatchingLead, properties, {
       tolerance: matchTolerance,
       strictDistrict: matchStrictHood,
       payMode: activePay,
     });
   }, [selectedMatchingLead, properties, matchTolerance, matchStrictHood, activePay]);
+
+  /* بنفصل اللي جوه الأحياء اللي طلبها عن اللي برّه.
+     كانوا في قايمة واحدة، فالسيلز بيبعت شقة في حي العميل مقالش عليه
+     وهو فاكرها مطابقة. دلوقتي اللي برّه تحت عنوان واضح. */
+  const inDistrictProps = useMemo(() => matchDetail.filter((r) => r.inDistrict).map((r) => r.property), [matchDetail]);
+  const outDistrictProps = useMemo(() => matchDetail.filter((r) => !r.inDistrict).map((r) => r.property), [matchDetail]);
+  const matchedProperties = inDistrictProps;
 
   // الشقق اللي السيلز معلّم عليها عشان يبعتها عرض مخصوص
   // الليدات اللي فيها طلب تعديل ميزانية مستني
@@ -318,9 +330,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [logQuest, setLogQuest] = useState<DailyQuest | null>(null);
   const [toast, setToast] = useState('');
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2800); };
-
-  /* ساعة الجهاز مقارنة بآخر تعديل جاي من أجهزة الفريق التانية */
-  const clockSkew = useMemo(() => clockSkewMinutes(leads as any), [leads]);
 
   const [offerPicks, setOfferPicks] = useState<string[]>([]);
   useEffect(() => { setOfferPicks([]); }, [matchingLeadId]);
@@ -387,7 +396,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const shownAgent = (viewAgentId !== 'all' ? agents.find((a) => a.id === viewAgentId) : null) || currentAgent;
   const viewingSomeoneElse = !!shownAgent && shownAgent.id !== currentAgent?.id;
   const agentQuests: DailyQuest[] = shownAgent ? buildAgentQuests(questTemplates, shownAgent) : [];
-  const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م' };
+  const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م', showMatching: true };
   const deleteRequests = isAdmin && canEdit ? leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved) : [];
   const [moveComment, setMoveComment] = useState('');
   const [moveNext, setMoveNext] = useState<WhenValue | null>(null);
@@ -409,7 +418,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       status: newStatus,
       lastContactDate: new Date().toISOString(),
       notes: [noteText, ...(lead.notes || [])],
-      activity: [{ at: Date.now(), by: currentAgent?.name || 'الفريق', outcome: `نقل إلى: ${stageLabel}`, comment, nextAt: next?.at }, ...(lead.activity || [])].slice(0, 80),
+      activity: [{ at: Date.now(), by: actorName, outcome: `نقل إلى: ${stageLabel}`, comment, nextAt: next?.at }, ...(lead.activity || [])].slice(0, 80),
       nextActionAt: newStatus === 'closed' || newStatus === 'lost' ? null : next?.at ?? null,
       followUpScheduledAt: next?.label || lead.followUpScheduledAt,
       followUpNote: comment,
@@ -447,7 +456,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         districts: newLeadForm.districts?.length ? newLeadForm.districts : (newLeadForm.preferredNeighborhood ? [newLeadForm.preferredNeighborhood] : []),
         rooms: String(newLeadForm.preferredBedrooms || ''),
         finishing: newLeadForm.preferredFinishing === 'finished' ? 'متشطبة' : newLeadForm.preferredFinishing === 'semi_finished' ? 'نص تشطيب' : '',
-        by: currentAgent?.name || 'الفريق',
+        by: actorName,
       },
       budgetMin: Number(newLeadForm.budgetMin) || 0,
       budgetMax: Number(newLeadForm.budgetMax) || 0,
@@ -721,21 +730,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
         {/* المزامنة واقفة — بيظهر لما تقع بس، مش مؤشر دايم.
             من غيره كل واحد بيفضل على نسخته القديمة ومحدش عارف. */}
-        {/* ساعة الجهاز نفسها غلط — كل كلام «متأخر كذا» بيبقى غلط معاها */}
-        {clockSkew > 20 && (
-          <div className="bg-[#FFF8E6] border-2 border-[#EBD9A6] rounded-2xl p-3.5 flex items-start gap-2.5">
-            <AlertTriangle size={18} className="text-[#7A5E12] shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <p className="font-extrabold text-sm text-[#7A5E12]">ساعة الجهاز ده غلط</p>
-              <p className="text-[11px] text-[#7A5E12]/90 leading-relaxed">
-                متأخرة حوالي {clockSkew < 60 ? `${clockSkew} دقيقة` : `${Math.round(clockSkew / 60)} ساعة`} عن
-                باقي الفريق — فمواعيد المتابعة و«متأخر كذا» هيبانوا غلط على الشاشة دي.
-                ظبّط التاريخ والوقت في إعدادات الجهاز.
-              </p>
-            </div>
-          </div>
-        )}
-
         {syncError && (
           <div className="bg-[#FBEDEA] border-2 border-[#C2412D] rounded-2xl p-3.5 flex items-start gap-2.5">
             <AlertTriangle size={18} className="text-[#9E2A1B] shrink-0 mt-0.5" />
@@ -961,6 +955,20 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 <input value={draftBoard.banner?.subtitle || ''} onChange={(e) => setDraftBoard({ banner: { ...(draftBoard.banner as CrmBanner), subtitle: e.target.value } })} placeholder="التفاصيل" className="w-full p-2.5 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-sm" />
                 <input value={draftBoard.banner?.bonus || ''} onChange={(e) => setDraftBoard({ banner: { ...(draftBoard.banner as CrmBanner), bonus: e.target.value } })} placeholder="البونص (اختياري)" className="w-full p-2.5 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-sm" />
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draftBoard.banner?.active !== false} onChange={(e) => setDraftBoard({ banner: { ...(draftBoard.banner as CrmBanner), active: e.target.checked } })} />ظاهر للسيلز</label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={draftBoard.banner?.showMatching !== false}
+                    onChange={(e) => setDraftBoard({ banner: { ...(draftBoard.banner as CrmBanner), showMatching: e.target.checked } })}
+                  />
+                  <span>
+                    الطلب ده بخصوص عميل
+                    <span className="block text-[11px] text-[#8C877D] leading-relaxed">
+                      شيل العلامة لو ده كلام عام للفريق — زرار «شوف المطابقات» هيختفي.
+                    </span>
+                  </span>
+                </label>
                 <div className="flex gap-2"><button onClick={async () => { await saveCrmBoard({ banner: draftBoard.banner }); setEditBoard(null); }} className="flex-1 py-2.5 rounded-xl bg-[#141414] text-white text-sm font-bold">حفظ</button><button onClick={() => setEditBoard(null)} className="px-4 py-2.5 rounded-xl bg-[#F6F4EF] text-sm font-bold">إلغاء</button></div>
               </div>
             )}
@@ -982,15 +990,21 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
 
               <div className="flex items-center gap-2 sm:gap-2.5 self-end sm:self-auto shrink-0">
-                <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-[#FAF4E5] border border-[#E9DFCA] text-[#9E7A26] font-bold text-[11px] sm:text-xs rounded-xl">
-                  {banner.bonus}
-                </span>
-                <button
-                  onClick={() => setActiveTab('matching')}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-[#141414] hover:bg-black text-white font-readex font-bold text-[11px] sm:text-xs rounded-xl transition-all cursor-pointer active:scale-98"
-                >
-                  شوف المطابقات
-                </button>
+                {!!(banner.bonus || '').trim() && (
+                  <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-[#FAF4E5] border border-[#E9DFCA] text-[#9E7A26] font-bold text-[11px] sm:text-xs rounded-xl">
+                    {banner.bonus}
+                  </span>
+                )}
+                {/* الزرار بيظهر بس لما الطلب يكون بخصوص عميل —
+                    الطلب العام مفيش حاجة يطابقها */}
+                {banner.showMatching !== false && (
+                  <button
+                    onClick={() => setActiveTab('matching')}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-[#141414] hover:bg-black text-white font-readex font-bold text-[11px] sm:text-xs rounded-xl transition-all cursor-pointer active:scale-98"
+                  >
+                    شوف المطابقات
+                  </button>
+                )}
               </div>
             </div>
             )}
@@ -1367,7 +1381,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     </div>
 
                     {/* الطلب — بيتعدّل من هنا على طول، من غير ما تفتح شاشة تانية */}
-                    <QuickBriefRow lead={lead} onUpdateLead={onUpdateLead} byName={currentAgent?.name || 'السيلز'} />
+                    <QuickBriefRow lead={lead} onUpdateLead={onUpdateLead} byName={actorName} />
 
                     {/* Field Viewing Report Box in List View */}
                     {lead.fieldViewingComment && (
@@ -1471,7 +1485,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         ) : (
                           <button onClick={() => {
                             const reason = window.prompt('ليه عايز تمسح العميل ده؟');
-                            if (reason && reason.trim()) onUpdateLead({ ...lead, deleteRequest: { by: currentAgent?.name || 'السيلز', reason: reason.trim(), at: Date.now() } } as any);
+                            if (reason && reason.trim()) onUpdateLead({ ...lead, deleteRequest: { by: actorName, reason: reason.trim(), at: Date.now() } } as any);
                           }} className="px-2.5 py-1.5 bg-white text-[#C2412D] text-[11px] font-bold rounded-xl border border-[#E9B8AE]">
                             اطلب مسح
                           </button>
@@ -1610,11 +1624,24 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* Matched Codes Header & Pills Grid */}
             <div className={`space-y-2.5 ${showResale ? '' : 'hidden'}`}>
-              <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#141414]">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#141414] flex-wrap">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
                 <span>أكواد الشقق المطابقة ({matchedProperties.length}):</span>
                 <span className="text-xs text-stone-500 font-normal">اضغط على أي كود للمعاينة</span>
               </div>
+
+              {/* الأحياء اللي بنطابق عليها مكتوبة — عشان متبصّش في القايمة
+                  وتلاقي حي مقالش عليه وتفتكره مطابق */}
+              {matchBrief && matchBrief.districts.length > 0 && (
+                <p className="text-[11px] text-[#6B665C] leading-relaxed">
+                  طلب الأحياء دي بس: <b className="text-[#141414]">{matchBrief.districts.join('، ')}</b>
+                </p>
+              )}
+              {matchBrief && matchBrief.districts.length === 0 && (
+                <p className="text-[11px] font-bold text-[#7A5E12] bg-[#FFF8E6] border border-[#EBD9A6] rounded-xl px-3 py-2 leading-relaxed">
+                  محددش أحياء في المكالمة — فبنعرض كل الأحياء. حدّدها من «عدّل الطلب كله».
+                </p>
+              )}
 
               {/* Grid of Pill Buttons (Exact layout from Screenshot 1) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
@@ -1637,6 +1664,32 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   </button>
                 ))}
               </div>
+
+              {/* برّه الأحياء اللي طلبها — تحت عنوان واضح، مش مخلوطة */}
+              {outDistrictProps.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="bg-[#FFF8E6] border border-[#EBD9A6] rounded-xl px-3 py-2">
+                    <p className="text-[11px] font-extrabold text-[#7A5E12]">
+                      برّه الأحياء اللي طلبها ({outDistrictProps.length})
+                    </p>
+                    <p className="text-[11px] text-[#7A5E12]/85 leading-relaxed">
+                      دول مطابقين في السعر والغرف بس في أحياء مقالش عليها. اسأله الأول قبل ما تبعتهم.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+                    {outDistrictProps.map((prop) => (
+                      <button
+                        key={`out-${prop.id}`}
+                        onClick={() => scrollToProperty(prop.code)}
+                        className="bg-[#FFFCF5] border border-[#EBD9A6] rounded-2xl px-3 py-2 text-right flex items-center justify-between gap-1.5 cursor-pointer"
+                      >
+                        <span className="font-mono font-bold text-xs text-[#7A5E12]">#{prop.code}</span>
+                        <span className="text-[11px] font-bold text-[#9E7A26] truncate">• {prop.neighborhood}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* من المطابقة للعرض المخصوص مباشرة — نفس الشقق، مفيش اختيار من الأول */}
@@ -2313,7 +2366,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       />
 
     {discoveryLead && (
-        <DiscoveryCallModal isOpen={!!discoveryLead} lead={discoveryLead} properties={properties} byName={currentAgent?.name || 'الفريق'}
+        <DiscoveryCallModal isOpen={!!discoveryLead} lead={discoveryLead} properties={properties} byName={actorName}
           onClose={() => setDiscoveryLead(null)}
           onSaved={(u) => { onUpdateLead(u); setDiscoveryLead((d) => (d ? u : d)); }}
           onBuildOffer={(u) => { setDiscoveryLead(null); setOfferLead(u); }} />

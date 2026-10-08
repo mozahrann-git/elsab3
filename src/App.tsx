@@ -106,6 +106,7 @@ import {
 import { generateCallLink, generateWhatsAppLink, formatPrice } from './utils/helpers';
 import { ExcelImportModal } from './components/ExcelImportModal';
 import { captureRef, creditCode, logStep } from './services/referralService';
+import { syncClock, deviceSkewMinutes } from './services/serverClock';
 import {
   getInitialPropertiesCache,
   persistPropertiesCache,
@@ -154,6 +155,7 @@ import {
   seedBrokersToDb,
   subscribeToStaffAuth,
   getStaffRole,
+  savePropertyPrivateOwner,
   signOutToGuest
 } from './services/firebaseService';
 
@@ -619,6 +621,23 @@ export default function App() {
      أول لمسة بتتقفل: لو العميل رجع بعدين من غير لينك، الكريدت بيفضل
      لأول سيلز جابه. */
   const refRecord = useMemo(() => captureRef(), []);
+
+  /* بنضبط ساعتنا على ساعة السيرفر أول ما الصفحة تفتح.
+     من غير كده، جهاز ساعته غلط بيعرض «متأخر كذا» غلط للناس اللي عليه. */
+  const [clockReady, setClockReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    syncClock().then(() => {
+      if (!alive) return;
+      const skew = deviceSkewMinutes();
+      if (Math.abs(skew) >= 5) {
+        console.info(`[Clock] ساعة الجهاز فرقها ${skew} دقيقة عن السيرفر — اتصحّحت.`);
+      }
+      setClockReady(true);   // بيعيد الرسم بالوقت المصحّح
+    });
+    return () => { alive = false; };
+  }, []);
+  void clockReady;
   const ownerLinkBy = useMemo(() => {
     try {
       const q = new URLSearchParams(window.location.search);
@@ -921,8 +940,10 @@ export default function App() {
         createdAtTimestamp: Date.now(),
         remindersSent: 0,
         nextReminderCountdownSeconds: 900,
-        ownerName: property.ownerName || 'أ/ محمد خيري',
-        ownerPhone: property.ownerPhone || '01001234567'
+        /* مفيش اسم ولا رقم مالك هنا. سارة بتجيبهم من المستند المحمي وقت
+           ما تحتاجهم — والأرقام الوهمية القديمة كانت بتضلّلها. */
+        ownerName: '',
+        ownerPhone: ''
       };
 
       saveViewingRequestToDb(newReq).catch(() => {});
@@ -1303,7 +1324,19 @@ export default function App() {
     setCrmLeads((prev) => prev.map((l) => (l.id === lead.id ? lead : l)));
     /* بنبعت اللي اتغيّر بس، والنشاط بيتدمج مع اللي على السيرفر —
        عشان لو حد تاني شغال على نفس العميل، محدش يمسح شغل التاني. */
-    saveLeadMerged(lead, before).catch(err => console.error('[Firebase] Error saving lead:', err));
+    /* لو الحفظ فشل لازم تعرف فوراً. قبل كده كان بيفشل في صمت
+       والتعديل يفضل على جهازك إنت بس. */
+    saveLeadMerged(lead, before).catch((err) => {
+      console.error('[Firebase] Error saving lead:', err);
+      const code = (err as any)?.code || '';
+      setLeadsSyncError(
+        code === 'permission-denied'
+          ? `التعديل على «${lead.name}» مااتحفظش — الصلاحيات رافضة الكتابة. قواعد Firestore محتاجة deploy.`
+          : `التعديل على «${lead.name}» مااتحفظش — ${(err as any)?.message || 'جرّب تاني'}.`,
+      );
+      // بنرجّع اللي كان على الشاشة للقديم عشان متفتكرش إنه اتحفظ
+      if (before) setCrmLeads((prev) => prev.map((l) => (l.id === before.id ? before : l)));
+    });
   };
 
   /* المهام اليومية من إعدادات الأدمن — بنمسكها في مرجع عشان
@@ -1317,6 +1350,12 @@ export default function App() {
   useEffect(() => {
     const unsub = subscribeToViewingRequests(null, (reqs) => {
       if (!reqs?.length) return;
+
+      /* الحفظ بيتجمّع هنا وبيتنفّذ بعد ما نخلص الحساب — مش جوه
+         الـupdater. الكتابة جوه الـupdater كانت بتتنفّذ على نسخة قديمة
+         من الذاكرة. */
+      const toSave: { next: Lead; prev: Lead }[] = [];
+
       setCrmLeads((prev) => {
         let changed = false;
         const next = prev.map((lead) => {
@@ -1325,7 +1364,12 @@ export default function App() {
           const res = syncLeadWithViewing(lead, req);
           if (!res) return lead;
           changed = true;
-          saveLeadToDb(res.lead).catch(() => {});
+          /* البق اللي كان بيرجّع الأكشن: الكود كان بيكتب الليد **كامل**
+             من نسخة في الذاكرة. فلو السيلز نقل المرحلة وحدّد ميعاد جديد،
+             أول ما سنابشوت المعاينات يوصل، الكتابة دي كانت بتحط القيم
+             القديمة فوق الجديدة — والأكشن يرجع زي ما كان.
+             دلوقتي: اللي اتغيّر بس، ومدموج مع اللي على السيرفر. */
+          toSave.push({ next: res.lead, prev: lead });
           logEvent(res.movedTo === 'visit_booked' ? 'viewing_confirmed' : 'viewing_done', {
             leadId: lead.id, actorId: lead.assignedAgentId, actorName: lead.assignedAgentName,
             code: req.propertyCode, propertyId: req.propertyId,
@@ -1347,6 +1391,13 @@ export default function App() {
           return res.lead;
         });
         return changed ? next : prev;
+      });
+
+      toSave.forEach(({ next, prev }) => {
+        saveLeadMerged(next, prev).catch((err) => {
+          console.error('[Firebase] viewing sync save failed:', err);
+          setLeadsSyncError(`تحديث المعاينة على «${next.name}» مااتحفظش — ${(err as any)?.message || 'جرّب تاني'}.`);
+        });
       });
     });
     return () => { try { unsub?.(); } catch { /* */ } };
@@ -1675,8 +1726,10 @@ export default function App() {
       hasElevator: true,
       hasGarage: true,
       registeredContract: true,
-      ownerName: (sub as any).realOwnerName || sub.ownerName,
-      ownerPhone: (sub as any).realOwnerPhone || sub.phone,
+      /* اسم المالك ورقمه مش بيتكتبوا هنا خالص.
+         مستند الشقة مقروء لأي حد على النت (allow read: if true في firestore.rules)،
+         فأي رقم بيتحط هنا بيبقى مكشوف للدنيا كلها. مكانهم الصح هو
+         properties/{id}/private/owner اللي الموظفين بس بيوصلوا له — بيتكتب تحت. */
       createdAt: new Date().toISOString().split('T')[0],
       clicks: { whatsapp: 0, call: 0, views: 0, favorites: 0 },
       /* مين جاب الشقة دي — بيفضل على الشقة نفسها مش على الطلب بس */
@@ -1691,6 +1744,20 @@ export default function App() {
       return updated;
     });
     savePropertyToDb(newProperty).catch(err => console.error(err));
+    /* بيانات المالك الحقيقي في المستند المحمي — مش على الشقة العامة.
+       في وحدة البروكر: ده الرقم اللي البروكر بس بيستخدمه، وسارة مبتشوفوش
+       غير لما يعدّي ٤٥ دقيقة من غير ما البروكر يأكّد. */
+    {
+      const realName = String((sub as any).realOwnerName || sub.ownerName || '').trim();
+      const realPhone = String((sub as any).realOwnerPhone || sub.phone || '').trim();
+      if (realPhone) {
+        savePropertyPrivateOwner(newProperty.id, {
+          ownerName: realName,
+          ownerPhone: realPhone,
+          ...(sub.brokerId ? { brokerId: sub.brokerId } : {}),
+        }).catch(err => console.error(err));
+      }
+    }
     // ربط الوحدة بحساب المالك في البوابة
     if (sub.ownerEmail && !sub.brokerId) linkPropertyToOwner(sub.ownerEmail, newProperty.code).catch(err => console.error(err));
 

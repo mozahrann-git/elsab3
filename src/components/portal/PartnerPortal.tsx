@@ -15,6 +15,7 @@ import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { ChangePasswordModal } from '../ChangePasswordModal';
 import { WhenPicker, WhenValue, formatWhen } from '../common/WhenPicker';
 import { waLink } from '../../utils/helpers';
+import { brokerEscalation, minsText, MAX_SLOTS, REVEAL_MS } from '../../services/brokerEscalation';
 
 /*
   بوابة المالك والبروكر (نفس الهيكل):
@@ -48,6 +49,9 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
   const [myFb, setMyFb] = useState<BrokerFeedback[]>([]);
   const [visits, setVisits] = useState<UnitVisit[]>([]);
   useEffect(() => subscribeVisits(setVisits), []);
+  // نبضة كل دقيقة عشان العدّاد اللي على كارت المعاينة يفضل صح من غير ريفريش
+  const [, tickMin] = useState(0);
+  useEffect(() => { const t = setInterval(() => tickMin((x) => x + 1), 60000); return () => clearInterval(t); }, []);
   const statsOf = (code: string) => summarize(visits.filter((v) => v.code === code));
   useEffect(() => (isBroker && access.brokerId ? subscribeMyBrokerFeedback(access.brokerId, setMyFb) : undefined), [isBroker, access.brokerId]);
 
@@ -307,6 +311,7 @@ const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: st
     return () => { alive = false; };
   }, [v.propertyId]);
   const [when, setWhen] = useState<WhenValue | null>(v.scheduledAt ? { at: v.scheduledAt, label: formatWhen(v.scheduledAt) } : null);
+  const esc = brokerEscalation(v, Date.now());
   const step = v.brokerStatus === 'confirmed' ? 4 : v.brokerStatus === 'messaged' ? 3 : saved ? 2 : 1;
   const [err, setErr] = useState('');
   const msg = `أهلاً أستاذ ${ownerName || ''}، في عميل جاد عايز يعاين شقتك (${v.propertyTitle}) ${v.scheduledText}. ينفع؟ — ${brokerName} · السبع للعقارات`;
@@ -324,6 +329,18 @@ const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: st
         {step < 4 ? <Chip tone="red">من {since(v.createdAt)}</Chip> : <Chip tone="green">اتأكدت {v.brokerConfirmedTime}</Chip>}
       </div>
       <p className="text-sm text-[#6B665C]">{v.propertyTitle} · العميل يفضّل: {v.scheduledText}</p>
+      {/* العدّاد: نفس الحساب اللي قدام سارة بالظبط، عشان محدش يتفاجئ */}
+      {esc.active && (
+        esc.revealed ? (
+          <p className="text-xs font-bold rounded-xl bg-[#FBEDEA] border border-[#E8B5AC] text-[#9A2E1F] p-2.5 leading-6">
+            فات {minsText(esc.elapsedMs)} من غير تأكيد — الإدارة بقت تكلّم المالك بنفسها، والمعاينة دي اتسجّلت عليك.
+          </p>
+        ) : (
+          <p className="text-xs rounded-xl bg-[#FBF8F1] border border-[#E8D3A6] text-[#6E5418] p-2.5 leading-6">
+            اتبلّغت {esc.notified} من {MAX_SLOTS} · لو مأكدتش خلال {minsText(Math.max(0, REVEAL_MS - esc.elapsedMs))} الإدارة هتكلّم المالك بنفسها.
+          </p>
+        )
+      )}
       {step === 4 && v.salesAgentId && (
         sentFeedback ? (
           <div className="rounded-xl bg-[#EEF5F0] text-[#1E7A45] p-3 text-sm">✓ فيدباكك وصل للسيلز اللي طلب المعاينة: "{sentFeedback.text}"</div>

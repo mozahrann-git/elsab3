@@ -1,4 +1,5 @@
 import { Lead } from '../types';
+import { now as serverNow } from '../services/serverClock';
 
 /*
   ألوان كارت العميل.
@@ -42,7 +43,7 @@ function untouched(lead: Lead): boolean {
  * دلوقتي اللون بيتقرا من اختيار صريح اتسجّل وقت الإضافة أو التوزيع.
  * مفيش اختيار = كارت أبيض. مبنلوّنش بالشك.
  */
-export function leadTone(lead: Lead, now = Date.now()): LeadTone {
+export function leadTone(lead: Lead, now = serverNow()): LeadTone {
   // ١) تحديث من سارة على المعاينة والسيلز لسه مشافهوش — ده الأهم
   const upd = (lead as any).viewingUpdateAt as number | undefined;
   const seen = (lead as any).viewingSeenAt as number | undefined;
@@ -117,7 +118,7 @@ export function assignedByOther(lead: Lead): string | null {
   return by === lead.assignedAgentName ? null : by;
 }
 
-export function toneStyle(lead: Lead, now = Date.now()): ToneStyle {
+export function toneStyle(lead: Lead, now = serverNow()): ToneStyle {
   // التسميات ثابتة: ليد فريش / كامبين قديم. مفيش اسم اللي وزّعه على الكارت.
   return STYLES[leadTone(lead, now)];
 }
@@ -132,5 +133,5 @@ export function viewingUpdateText(lead: Lead): string {
 
 /** السيلز دوس "شفت" — اللون بيرجع عادي */
 export function markViewingSeen(lead: Lead): Lead {
-  return { ...lead, viewingSeenAt: Date.now() } as Lead;
+  return { ...lead, viewingSeenAt: serverNow() } as Lead;
 }

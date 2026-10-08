@@ -242,7 +242,9 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
   };
 
   const whatsappVideoMessage = submittedData 
-    ? `مرحباً شركة السبع للعقارات، أنا المالك (${submittedData.ownerName})، قمت بعرض شقتي في (${submittedData.neighborhood}) مساحة ${submittedData.area}م بسعر ${submittedData.askingPrice} ج.م، وأود إرسال فيديو الشقة وجولة المعاينة لكم هنا عبر الواتساب.`
+    ? (isBrokerSubmitter
+        ? `مرحباً شركة السبع للعقارات، أنا البروكر (${submittedData.ownerName})، عرضت وحدة في (${submittedData.neighborhood}) مساحة ${submittedData.area}م بسعر ${submittedData.askingPrice} ج.م، وأود إرسال فيديو الوحدة وجولة المعاينة لكم هنا عبر الواتساب.`
+        : `مرحباً شركة السبع للعقارات، أنا المالك (${submittedData.ownerName})، قمت بعرض شقتي في (${submittedData.neighborhood}) مساحة ${submittedData.area}م بسعر ${submittedData.askingPrice} ج.م، وأود إرسال فيديو الشقة وجولة المعاينة لكم هنا عبر الواتساب.`)
     : `مرحباً شركة السبع للعقارات، أنا مالك شقة بالهضبة الوسطى وأود إرسال فيديو جولة المعاينة للشقة لكم عبر الواتساب.`;
 
   return (
@@ -338,12 +340,17 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
                 <div className="p-5 sm:p-6 bg-white rounded-3xl border border-stone-200/80 space-y-4 shadow-xs">
                   <div className="flex items-center gap-2 text-stone-900 font-black text-sm sm:text-base border-b border-stone-100 pb-3">
                     <User size={18} className="text-amber-600" />
-                    <span>بيانات المالك للتواصل والتنسيق:</span>
+                    <span>{isBrokerSubmitter ? 'بياناتك إنت — البروكر المسؤول عن الوحدة:' : 'بيانات المالك للتواصل والتنسيق:'}</span>
                   </div>
-                  
+                  {isBrokerSubmitter && (
+                    <p className="text-[11px] leading-6 text-[#6E5418] bg-[#FBF8F1] border border-[#E8D3A6] rounded-2xl p-3">
+                      إنت اللي هتظهر في كارت المعاينة عند الإدارة، مش المالك. أي طلب معاينة على الوحدة دي بيجي لك إنت الأول.
+                    </p>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs text-stone-700 mb-1.5 block font-bold">اسم المالك بالكامل *</label>
+                      <label className="text-xs text-stone-700 mb-1.5 block font-bold">{isBrokerSubmitter ? 'اسمك بالكامل (البروكر) *' : 'اسم المالك بالكامل *'}</label>
                       <input
                         type="text"
                         required
@@ -355,7 +362,7 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="text-xs text-stone-700 mb-1.5 block font-bold">رقم الهاتف والواتساب الأساسي *</label>
+                      <label className="text-xs text-stone-700 mb-1.5 block font-bold">{isBrokerSubmitter ? 'رقمك إنت على الواتساب (البروكر) *' : 'رقم الهاتف والواتساب الأساسي *'}</label>
                       <input
                         type="tel"
                         required
@@ -368,8 +375,14 @@ export const ResaleSubmissionModal: React.FC<ResaleSubmissionModalProps> = ({
                   </div>
                   {isBrokerSubmitter && (
                     <div className="p-4 rounded-2xl bg-[#FBF8F1] border border-[#E8D3A6] space-y-3">
-                      <p className="font-bold text-sm text-[#141414]">بيانات مالك الشقة (بتظهر للإدارة بس)</p>
-                      <p className="text-[11px] text-[#6B665C]">لازم رقم المالك من الأول عشان تقدر تأكد المعاينة معاه على طول من بوابتك.</p>
+                      <p className="font-bold text-sm text-[#141414]">بيانات مالك الشقة</p>
+                      <p className="text-[11px] text-[#6B665C] leading-6">
+                        الرقم ده بيتقفل عندنا وإنت الوحيد اللي بتستخدمه — بيطلعلك زرار واتساب في بوابتك تبلّغ بيه المالك بالمعاينة.
+                      </p>
+                      <p className="text-[11px] font-bold text-[#9A2E1F] leading-6 bg-white/70 rounded-xl p-2.5 border border-[#E8B5AC]">
+                        الإدارة مش بتشوف رقم المالك خالص. الاستثناء الوحيد: لو عدّى <b>٤٥ دقيقة</b> من ساعة ما نبلّغك بالمعاينة
+                        من غير ما ترد، الرقم بيتفتح للإدارة وبتكلّم المالك بنفسها، وبيتسجّل عليك إن المعاينة فاتت.
+                      </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <input required value={realOwnerName} onChange={(e) => setRealOwnerName(e.target.value)} placeholder="اسم المالك" className="w-full py-3 px-4 bg-white rounded-2xl text-sm border border-[#ECE8DF]" />
                         <input required type="tel" dir="ltr" value={realOwnerPhone} onChange={(e) => setRealOwnerPhone(e.target.value)} placeholder="01XXXXXXXXX" className="w-full py-3 px-4 bg-white rounded-2xl text-sm font-mono border border-[#ECE8DF]" />

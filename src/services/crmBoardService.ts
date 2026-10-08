@@ -3,7 +3,16 @@ import { doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, cleanFirestoreData } from './firebaseService';
 import { DailyQuest } from '../types';
 
-export interface CrmBanner { active: boolean; title: string; subtitle: string; bonus: string }
+export interface CrmBanner {
+  active: boolean;
+  title: string;
+  subtitle: string;
+  bonus: string;
+  /* الطلب ده بخصوص عميل معيّن؟
+     لو لأ (تعليمات عامة للفريق)، زرار «شوف المطابقات» مبيظهرش —
+     لأن مفيش حاجة يطابقها. */
+  showMatching?: boolean;
+}
 export interface CrmBoard { banner?: CrmBanner; quests?: DailyQuest[] }
 
 export function subscribeCrmBoard(cb: (b: CrmBoard) => void) {
