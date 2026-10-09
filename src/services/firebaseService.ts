@@ -1044,6 +1044,12 @@ export async function savePropertyPrivateOwner(
   }
 }
 
+/** بصمات صور الشقة — بتستخدم في كشف الشقة المعروضة مرتين */
+export async function savePropertyImageHashes(propertyId: string, hashes: string[]): Promise<void> {
+  await ensureAuth();
+  await updateDoc(doc(db, 'properties', propertyId), { imageHashes: hashes });
+}
+
 /** بيشيل اسم المالك ورقمه من مستند الشقة العام (اللي الدنيا كلها بتقراه) */
 export async function stripPublicOwnerContact(propertyId: string): Promise<void> {
   await ensureAuth();

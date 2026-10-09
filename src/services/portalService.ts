@@ -89,13 +89,46 @@ export interface ChangeRequest {
 const me = () => (auth.currentUser?.email || '').toLowerCase();
 
 // ---------- الاشتراكات ----------
+/*
+  اشتراك بيصلّح نفسه.
+
+  قبل كده لما الاشتراك كان بيقع كنا بنسجّل تحذير في الكونسول وخلاص. النتيجة:
+  الشاشة بتفضل على بيانات قديمة للأبد، والمستخدم بيدوس زرار، الحاجة بتتحفظ
+  فعلاً في قاعدة البيانات، بس الشاشة متتحركش — فشكلها إن الزرار باظ.
+
+  دلوقتي بنعيد الاتصال، والمهلة بتكبر مع كل محاولة فاشلة (٥ ث، ١٠، ٢٠...
+  لحد دقيقة) عشان منفضلش نضرب على السيرفر. وأول ما نرجع، المهلة بترجع لأولها.
+*/
 function listen<T>(q: any, cb: (list: T[]) => void, sortKey: keyof T = 'createdAt' as keyof T) {
-  return onSnapshot(q, (snap: any) => {
-    const list: T[] = [];
-    snap.forEach((d: any) => list.push({ id: d.id, ...d.data() } as T));
-    list.sort((a: any, b: any) => (b[sortKey] || 0) - (a[sortKey] || 0));
-    cb(list);
-  }, (err: any) => { console.warn('[Portal] listen error:', err?.code || err); /* بنسيب البيانات القديمة مكانها بدل ما تختفي */ });
+  let stopped = false;
+  let unsub: null | (() => void) = null;
+  let wait = 5000;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const start = () => {
+    if (stopped) return;
+    // نقفل القديم قبل ما نفتح جديد — من غير كده بنكوّم اشتراكات مع كل محاولة
+    if (unsub) { try { unsub(); } catch { /* */ } unsub = null; }
+    unsub = onSnapshot(q, (snap: any) => {
+      wait = 5000;                     // رجعنا — المهلة ترجع لأولها
+      const list: T[] = [];
+      snap.forEach((d: any) => list.push({ id: d.id, ...d.data() } as T));
+      list.sort((a: any, b: any) => (b[sortKey] || 0) - (a[sortKey] || 0));
+      cb(list);
+    }, (err: any) => {
+      console.warn('[Portal] listen error:', err?.code || err, '— هنحاول تاني بعد', wait / 1000, 'ث');
+      if (stopped) return;
+      timer = setTimeout(start, wait);
+      wait = Math.min(wait * 2, 60000);
+    });
+  };
+  start();
+
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+    if (unsub) unsub();
+  };
 }
 
 /** المالك: معايناته وآراؤه بأكواد وحداته */
@@ -265,11 +298,21 @@ export async function brokerMarkMessaged(viewingId: string) {
   await updateDoc(doc(db, 'unit_viewings', viewingId), { brokerStatus: 'messaged' });
 }
 export async function brokerConfirmViewing(viewingId: string, time: string) {
+  /* الكتابة دي هي التأكيد نفسه. لو وقعت، الدالة بترمي والبروكر يشوف السبب. */
   await updateDoc(doc(db, 'unit_viewings', viewingId), {
     brokerStatus: 'confirmed', brokerConfirmedTime: time, brokerConfirmedAt: Date.now(), ownerStatus: 'confirmed',
   });
-  const snap = await getDoc(doc(db, 'unit_viewings', viewingId));
-  if (snap.exists()) await syncViewingToLead(snap.data() as UnitViewing, true);
+
+  /* اللي بعد كده مكمّلات — تحديث مسار العميل في الـ CRM.
+     البروكر أصلاً مش مسموح له يكتب في crm_leads، فدي بتقع عنده كل مرة.
+     قبل كده كان أي خطأ هنا بيطلع للبروكر كأن التأكيد فشل، وهو نجح فعلاً.
+     دلوقتي مفصولة تماماً — التأكيد اتسجّل خلاص. */
+  try {
+    const snap = await getDoc(doc(db, 'unit_viewings', viewingId));
+    if (snap.exists()) await syncViewingToLead(snap.data() as UnitViewing, true);
+  } catch (err) {
+    console.warn('[Viewings] التأكيد اتسجّل، بس مسار العميل مااتحدّثش:', err);
+  }
 }
 
 /** ربط المعاينة بمسار العميل: أي تأكيد معاينة بينقل العميل لمرحلة "معاينة مؤكدة" ويتسجل في رحلته */

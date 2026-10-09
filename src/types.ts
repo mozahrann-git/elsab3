@@ -117,6 +117,8 @@ export interface Property {
   referredBy?: string;
   reviewedBy?: string;
   reviewedAt?: number;
+  /* بصمات أول صور الشقة — عشان نعرف لو حد عرض نفس الشقة تاني بصور تانية */
+  imageHashes?: string[];
 }
 
 export interface FilterState {

@@ -312,8 +312,14 @@ const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: st
   }, [v.propertyId]);
   const [when, setWhen] = useState<WhenValue | null>(v.scheduledAt ? { at: v.scheduledAt, label: formatWhen(v.scheduledAt) } : null);
   const esc = brokerEscalation(v, Date.now());
-  const step = v.brokerStatus === 'confirmed' ? 4 : v.brokerStatus === 'messaged' ? 3 : saved ? 2 : 1;
+  /* بعد ما التأكيد ينجح بنحرّك الكارت محلياً على طول.
+     السبب: الاشتراك اللي بيجيب التحديث من قاعدة البيانات لو وقع لأي سبب،
+     بيسيب البيانات القديمة مكانها — فالبروكر كان بيدوس "تأكيد"، الحفظ
+     بينجح فعلاً، والشاشة متتحركش. فكان شكلها إن الزرار مش شغال. */
+  const [justConfirmed, setJustConfirmed] = useState(false);
+  const step = (justConfirmed || v.brokerStatus === 'confirmed') ? 4 : v.brokerStatus === 'messaged' ? 3 : saved ? 2 : 1;
   const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
   const msg = `أهلاً أستاذ ${ownerName || ''}، في عميل جاد عايز يعاين شقتك (${v.propertyTitle}) ${v.scheduledText}. ينفع؟ — ${brokerName} · السبع للعقارات`;
   const phone = ownerPhone.replace(/\D/g, '').replace(/^0/, '20');
   const Step: React.FC<{ n: number; t: string }> = ({ n, t }) => (
@@ -380,12 +386,25 @@ const BrokerViewing: React.FC<{ v: UnitViewing; brokerId: string; brokerName: st
           {step >= 2 && (
             <>
               <WhenPicker value={when} onChange={setWhen} quick={false} label="الميعاد اللي المالك وافق عليه" />
-              <Btn tone="gold" disabled={!when} onClick={async () => {
-                setErr('');
-                try { await brokerConfirmViewing(v.id, when!.label); }
-                catch (e: any) { setErr(e?.code === 'permission-denied' ? 'الحساب ده مش مربوط بالوحدة دي. كلّم الإدارة.' : 'مقدرناش نأكد دلوقتي، جرّب تاني.'); }
-              }}>تأكيد المعاد {when?.label || ''}</Btn>
-              {err && <p className="text-xs text-[#C2412D] font-bold">{err}</p>}
+              <Btn tone="gold" disabled={!when || saving} onClick={async () => {
+                setErr(''); setSaving(true);
+                try {
+                  await brokerConfirmViewing(v.id, when!.label);
+                  setJustConfirmed(true);
+                } catch (e: any) {
+                  /* بنكتب الخطأ الحقيقي. الرسالة العامة كانت بتخفي السبب
+                     وتخلّينا نخمّن بدل ما نعرف. */
+                  const code = e?.code || '';
+                  setErr(
+                    code === 'permission-denied'
+                      ? 'الحساب ده مش مربوط بالوحدة دي — كلّم الإدارة.'
+                      : code === 'unavailable'
+                        ? 'النت فاصل. اتأكد من الاتصال وجرّب تاني.'
+                        : `مقدرناش نأكد: ${code || e?.message || 'خطأ غير معروف'}`,
+                  );
+                } finally { setSaving(false); }
+              }}>{saving ? 'بيأكّد...' : `تأكيد المعاد ${when?.label || ''}`}</Btn>
+              {err && <p className="text-xs text-[#C2412D] font-bold leading-6">{err}</p>}
             </>
           )}
         </div>

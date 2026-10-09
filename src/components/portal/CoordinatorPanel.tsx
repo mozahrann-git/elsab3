@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Users, MessageSquareText, FilePen, Home, Plus, Phone, Send, LogOut, FileSpreadsheet, Sun } from 'lucide-react';
 import { Property, OwnerSubmission } from '../../types';
-import { fetchPropertyPrivateOwner, subscribeToViewingRequests, saveAccount, savePropertyPrivateOwner, stripPublicOwnerContact } from '../../services/firebaseService';
+import { fetchPropertyPrivateOwner, subscribeToViewingRequests, saveAccount, savePropertyPrivateOwner, stripPublicOwnerContact, savePropertyImageHashes } from '../../services/firebaseService';
+import { imageHashes } from '../../services/imageFingerprint';
 import { WhenPicker, WhenValue, formatWhen } from '../common/WhenPicker';
 import { ViewingRequest } from '../../types';
 import * as XLSX from 'xlsx';
@@ -16,6 +17,7 @@ import { brokerEscalation, minsText, MAX_SLOTS } from '../../services/brokerEsca
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { waLink } from '../../utils/helpers';
 import { MorningRollCall } from './MorningRollCall';
+import { SimilarUnitsWarning } from '../admin/SimilarUnitsWarning';
 
 /*
   لوحة سارة (مسؤولة الملاك) والأدمن:
@@ -595,6 +597,19 @@ const ReviewModal: React.FC<{ sub: OwnerSubmission; properties: Property[]; byNa
             )}
           </Card>
 
+          {/* هل الشقة دي عندنا قبل كده؟ — بيتحسب من المواصفات والصور */}
+          <SimilarUnitsWarning
+            properties={properties}
+            images={d.images || []}
+            sub={{
+              neighborhood: d.neighborhood,
+              area: Number(d.area) || 0,
+              price: Number(d.askingPrice) || 0,
+              bedrooms: Number(d.bedrooms) || 0,
+              floor: d.floor,
+            }}
+          />
+
           <Card>
             <p className="font-bold text-sm">2. الكود والبيانات</p>
             <label className="text-xs font-bold space-y-1 block">كود الوحدة
@@ -723,6 +738,31 @@ const OwnersExcelTab: React.FC<{ properties: Property[] }> = ({ properties }) =>
           setBusy('');
         }}>نضّف الأرقام المكشوفة</Btn>
         {busy && busy.includes('ننقل') && <p className="text-sm font-bold">{busy}</p>}
+      </Card>
+      <Card>
+        <p className="font-bold text-lg">بصمات صور الشقق</p>
+        <p className="text-sm text-[#6B665C] leading-7">
+          عشان نكشف لو حد عرض شقة موجودة عندنا بصور مختلفة. بيتعمل مرة واحدة للشقق القديمة —
+          الجديدة بتتحسب لوحدها وقت النشر. ممكن ياخد دقايق على حسب عدد الصور.
+        </p>
+        <Btn tone="light" disabled={!!busy} onClick={async () => {
+          const need = properties.filter((p) => (p.images?.length || 0) > 0 && !(p as any).imageHashes?.length);
+          if (!need.length) { setLog(['كل الشقق اللي ليها صور عندها بصمة خلاص']); return; }
+          setBusy(`بيحسب 0 من ${need.length}...`); setLog([]);
+          let ok = 0, fail = 0;
+          for (let i = 0; i < need.length; i++) {
+            const p = need[i];
+            try {
+              const hashes = await imageHashes(p.images || [], 3);
+              if (hashes.length) { await savePropertyImageHashes(p.id, hashes); ok++; } else fail++;
+            } catch { fail++; }
+            setBusy(`بيحسب ${i + 1} من ${need.length}...`);
+          }
+          setBusy('');
+          setLog([`✓ اتحسبت ${ok} شقة`, fail ? `✗ ${fail} شقة صورها مقدرتش تتقري (غالباً مشكلة في رابط الصورة)` : '']
+            .filter(Boolean));
+        }}>احسب البصمات الناقصة</Btn>
+        {busy && busy.includes('بيحسب') && <p className="text-sm font-bold">{busy}</p>}
       </Card>
       <Card tone="gold">
         <p className="font-bold text-lg">2. ارفع الشيت بعد ما تملاه</p>

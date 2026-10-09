@@ -15,6 +15,7 @@ import { OfferPublicPage } from './components/sales/OfferPublicPage';
 import { getTrackedLink, logLinkHit } from './services/salesToolsService';
 import { getStaffAccess, StaffAccess } from './services/firebaseService';
 import { linkPropertyToOwner } from './services/portalService';
+import { imageHashes } from './services/imageFingerprint';
 import { 
   Property, 
   FilterState, 
@@ -1753,6 +1754,18 @@ export default function App() {
       return updated;
     });
     savePropertyToDb(newProperty).catch(err => console.error(err));
+    /* بصمة صور الشقة — بتتحسب بعد النشر عشان متأخرش النشر نفسه.
+       دي اللي بتخلي التطابق يكشف نفس الشقة لو اتعرضت تاني بصور مختلفة. */
+    if (newProperty.images?.length) {
+      imageHashes(newProperty.images, 3)
+        .then((hashes) => {
+          if (!hashes.length) return;
+          const withHash = { ...newProperty, imageHashes: hashes };
+          setProperties((prev) => prev.map((p) => (p.id === withHash.id ? withHash : p)));
+          return savePropertyToDb(withHash);
+        })
+        .catch(() => { /* البصمة مش ضرورية — التطابق بالمواصفات شغال من غيرها */ });
+    }
     /* بيانات المالك الحقيقي في المستند المحمي — مش على الشقة العامة.
        في وحدة البروكر: ده الرقم اللي البروكر بس بيستخدمه، وسارة مبتشوفوش
        غير لما يعدّي ٤٥ دقيقة من غير ما البروكر يأكّد. */
