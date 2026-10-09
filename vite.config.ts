@@ -6,6 +6,15 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    build: {
+      // مدخلان: الموقع الأساسي، و Manateq Radar بحزمته المستقلة.
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          radar: path.resolve(__dirname, 'radar.html'),
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
