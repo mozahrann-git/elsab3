@@ -215,6 +215,8 @@ export default function App() {
   // Database Connection & Quota State Indicator
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
+  /* الشقق المعروضة جاية من نسخة الجهاز مش من السيرفر — يعني العدد ممكن يكون قديم */
+  const [isPropertiesStale, setIsPropertiesStale] = useState<boolean>(false);
   /* سبب وقوف المزامنة — بيتعرض جوه غرفة العمليات لما يحصل بس */
   const [leadsSyncError, setLeadsSyncError] = useState<string>('');
   // نوع العرض: بيقرر الصفحة بتعرض ريسيل ولا مشاريع تحت الإنشاء
@@ -291,6 +293,7 @@ export default function App() {
           const fullyHydrated = hydrateAllProperties(activeLive, cached);
           setProperties(fullyHydrated);
           persistPropertiesCache(fullyHydrated);
+          setIsPropertiesStale(false);   // وصلنا للسيرفر — القايمة دي الحقيقة
         });
       } else {
         // Only if cloud database is completely empty on initial first startup
@@ -309,6 +312,9 @@ export default function App() {
       if (isQuota) {
         setIsQuotaExceeded(true);
       }
+      /* الشقق اللي هتتعرض دلوقتي محفوظة على الجهاز، مش من السيرفر.
+         لازم ده يبان — من غيره السيلز بتبص على عدد قديم وهي فاكراه الحقيقة. */
+      setIsPropertiesStale(true);
       // Offline / Quota exceeded fallback to local storage
       loadPersistentProperties().then(cached => {
         const deletedIds = getDeletedPropertyIds();
@@ -2140,6 +2146,22 @@ export default function App() {
       {/* 3. Main Catalog Section */}
       <main id="properties-grid" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex-1 w-full space-y-6">
         
+        {/* الشقق جاية من نسخة الجهاز — لازم يبان عشان محدش يصدّق عدد قديم */}
+        {isPropertiesStale && (
+          <div className="bg-[#FBEDEA] border border-[#E8B5AC] rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold text-[#9A2E1F] leading-6">
+              الشقق اللي قدامك محفوظة على جهازك من آخر مرة اتصلت — العدد ممكن يكون قديم.
+              بنحاول نوصل للسيرفر تاني لوحدنا.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-3.5 py-2 rounded-xl bg-[#C2412D] text-white text-xs font-bold cursor-pointer shrink-0"
+            >
+              حدّث دلوقتي
+            </button>
+          </div>
+        )}
+
         {/* Firestore Quota Notice Banner (if active) */}
         {isQuotaExceeded && !isQuotaBannerDismissed && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">

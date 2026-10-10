@@ -38,7 +38,9 @@ interface SalesAffiliateModalProps {
   isOpen: boolean;
   onClose: () => void;
   property: Property;
-  currentAgent: SalesAgent;
+  /* ممكن يبقى فاضي: الأدمن بيفتح الأدوات من غير حساب مستشار.
+     النوع كان مكتوب إجباري والواقع كان بيبعت فاضي — فالخطأ مكانش بيتمسك. */
+  currentAgent?: SalesAgent;
   onRecordAction?: (questCategory: string, points: number) => void;
   onOpenSalesLogin?: () => void;
   onAddLead?: (newLead: Lead) => void;
@@ -145,11 +147,27 @@ export const SalesAffiliateModal: React.FC<SalesAffiliateModalProps> = ({
     }
   };
 
+  /*
+    الأدمن بيفتح الأدوات من غير ما يكون داخل بحساب مستشار، فـ currentAgent
+    بيبقى فاضي — والشاشة كانت بتقرا agent.name على طول وتقع كلها
+    برسالة "Cannot read properties of undefined (reading 'name')".
+
+    دلوقتي بنستخدم `agent` في كل حتة. بيانات الشركة بتظهر مكان بيانات
+    المستشار، والأزرار اللي محتاجة مستشار حقيقي (طلب معاينة، إضافة عميل)
+    بتتقفل مع سبب مكتوب — بدل ما الشاشة كلها تطير.
+  */
+  const hasAgent = !!currentAgent?.id;
+  const agent = {
+    id: currentAgent?.id || '',
+    name: currentAgent?.name || 'السبع للعقارات',
+    phone: currentAgent?.phone || '01021242871',
+  };
+
   // Agent phone
-  const cleanAgentPhone = (currentAgent?.phone || '01021242871').replace(/\D/g, '');
+  const cleanAgentPhone = agent.phone.replace(/\D/g, '');
 
   // Dynamic Client Showcase Link
-  const fullShowcaseUrl = getPropertyWebsiteUrl(property, currentAgent);
+  const fullShowcaseUrl = getPropertyWebsiteUrl(property, agent as SalesAgent);
 
   // Location display helper
   const locationLabel = property.neighborhood || 'موقع استراتيجي راقي';
@@ -160,7 +178,7 @@ export const SalesAffiliateModal: React.FC<SalesAffiliateModalProps> = ({
   const elevatorText = property.hasElevator ? '• أسانسير شغال ومصان' : '';
 
   // WhatsApp Tracked Link
-  const trackedWhatsAppMessage = `مرحباً أ/ ${currentAgent.name}، أنا مهتم بالشقة كود [${property.code}] في ${locationLabel} (المصدر: ${customSource})`;
+  const trackedWhatsAppMessage = `مرحباً أ/ ${agent.name}، أنا مهتم بالشقة كود [${property.code}] في ${locationLabel} (المصدر: ${customSource})`;
   const shortWhatsAppLink = `wa.me/2${cleanAgentPhone}?text=${encodeURIComponent(`Ref#${property.code}-${customSource.slice(0, 12)}`)}`;
   const fullWhatsAppUrl = `https://wa.me/2${cleanAgentPhone}?text=${encodeURIComponent(trackedWhatsAppMessage)}`;
 
@@ -189,8 +207,8 @@ export const SalesAffiliateModal: React.FC<SalesAffiliateModalProps> = ({
 3. سعر متر تنافسي يوفر أعلى عائد استثماري وقيمة مالية.
 
 📲 **لتحديد موعد معاينة على الطبيعة ومراجعة الأوراق:**
-المستشار العقاري: ${currentAgent.name}
-📞 **اتصال هاتف أو واتساب:** ${currentAgent.phone}
+المستشار العقاري: ${agent.name}
+📞 **اتصال هاتف أو واتساب:** ${agent.phone}
 🌐 **ألبوم الصور الكامل ومواصفات الشقة على الرابط الرسمي:**
 ${fullShowcaseUrl}
 
@@ -206,13 +224,13 @@ ${fullShowcaseUrl}
 🔑 الاستلام: ${isOffPlan ? 'وفق جدول المشروع' : 'استلام فوري على المفتاح'}
 
 📲 **للتواصل والمعاينة الفورية:**
-المستشار العقاري: ${currentAgent.name} 📞 ${currentAgent.phone}
+المستشار العقاري: ${agent.name} 📞 ${agent.phone}
 🔗 **ألبوم الصور والمعاينة الرقمية الكاملة:**
 ${fullShowcaseUrl}`;
 
       case 'client_pitch':
         return `مساء الخير يا فندم،
-معاك ${currentAgent.name} مستشارك العقاري من شركة السبع للعقارات.
+معاك ${agent.name} مستشارك العقاري من شركة السبع للعقارات.
 
 بخصوص طلب حضرتك للبحث عن شقة مميزة بمواصفات ممتازة وموقع راقي، متاح حالياً وحدة استثنائية ومطابقة تماماً لطلبك:
 🏷️ **كود الوحدة:** #${property.code}
@@ -239,7 +257,7 @@ ${fullShowcaseUrl}
 
 الوحدة جاهزة للمعاينة الفورية ومناسبة لمن لديه كاش جاهز للتعاقد السريع!
 📲 **للتواصل المباشر وتنسيق المعاينة:**
-${currentAgent.name} 📞 ${currentAgent.phone}
+${agent.name} 📞 ${agent.phone}
 🔗 **رابط ألبوم الصور والبيانات الكاملة:**
 ${fullShowcaseUrl}`;
     }
@@ -259,7 +277,7 @@ ${fullShowcaseUrl}`;
   ];
 
   const currentTheme = DAILY_AD_THEMES.find((t) => t.dayIndex === selectedDayIndex) || DAILY_AD_THEMES[0];
-  const currentDailyAdText = currentTheme.generateText(property, currentAgent, customSource);
+  const currentDailyAdText = currentTheme.generateText(property, agent as SalesAgent, customSource);
 
   // Send WhatsApp to Sarah Hanafy
   const handleSendToSarahWhatsApp = () => {
@@ -267,10 +285,16 @@ ${fullShowcaseUrl}`;
       showToast('يرجى إدخال اسم العميل ورقم هاتفه أولاً');
       return;
     }
+    /* من غير مستشار، العميل كان هيتسجّل على حساب فاضي ويضيع.
+       أحسن نوقف هنا بسبب واضح. */
+    if (!hasAgent) {
+      showToast('افتح بحساب المستشار الأول — العميل لازم يتسجّل على حد بالاسم');
+      return;
+    }
 
     const message = generateSarahInspectionMessage(
       property,
-      currentAgent,
+      agent as SalesAgent,
       proposedTime,
       clientNotes,
       clientName,
@@ -296,7 +320,7 @@ ${fullShowcaseUrl}`;
         visitLocation: property.neighborhood,
         notes: [`طلب معاينة ${property.code} مع سارة حنفي: ${clientNotes}`, ...(picked.notes || [])],
         activity: [
-          { at: Date.now(), by: currentAgent.name, outcome: `طلب معاينة ${property.code}`, comment: proposedTime || '' },
+          { at: Date.now(), by: agent.name, outcome: `طلب معاينة ${property.code}`, comment: proposedTime || '' },
           ...(picked.activity || []),
         ].slice(0, 80),
         lastContactDate: new Date().toISOString(),
@@ -314,8 +338,8 @@ ${fullShowcaseUrl}`;
         budgetMax: property.price * 1.1,
         preferredNeighborhood: property.neighborhood,
         interestedPropertyCode: property.code,
-        assignedAgentId: currentAgent.id,
-        assignedAgentName: currentAgent.name,
+        assignedAgentId: agent.id,
+        assignedAgentName: agent.name,
         coordinatorName: 'سارة حنفي',
         status: 'visit_requested',
         visitScheduledAt: proposedTime,
@@ -341,9 +365,9 @@ ${fullShowcaseUrl}`;
         brokerId: property.brokerId || 'broker_ahmed',
         brokerName: 'أحمد فؤاد',
         leadId: linkedLeadId,
-        requestingAgentId: currentAgent.id,
-        requestingAgentPhone: currentAgent.phone,
-        requestingAgentName: currentAgent.name,
+        requestingAgentId: agent.id,
+        requestingAgentPhone: agent.phone,
+        requestingAgentName: agent.name,
         coordinatorName: 'سارة حنفي',
         clientName: clientName,
         clientPhone: clientPhone,
@@ -429,7 +453,9 @@ ${fullShowcaseUrl}`;
               </span>
             </div>
             <p className="text-[11px] sm:text-xs text-[#6B665C] truncate">
-              المستشار: <span className="font-bold text-[#141414]">{currentAgent.name}</span> ({currentAgent.phone})
+              {hasAgent
+                ? <>المستشار: <span className="font-bold text-[#141414]">{agent.name}</span> ({agent.phone})</>
+                : <span className="font-bold text-[#C2412D]">مش داخل بحساب مستشار — الرسايل هتطلع باسم الشركة، وطلب المعاينة مقفول</span>}
             </p>
           </div>
         </div>
@@ -739,7 +765,7 @@ ${fullShowcaseUrl}`;
                     {property.title}
                   </h4>
                   <p className="text-xs text-[#6B665C]">
-                    المستشار المباشر للعميل: <strong className="text-[#141414]">{currentAgent.name}</strong> ({currentAgent.phone})
+                    المستشار المباشر للعميل: <strong className="text-[#141414]">{agent.name}</strong> ({agent.phone})
                   </p>
                 </div>
               </div>

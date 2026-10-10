@@ -75,29 +75,39 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
     [leads, currentAgentId, seeAll],
   );
 
-  // أول متابعة فات ميعادها ولسه مقفلتش
-  const nextDue = useMemo(() => {
+  /* كل المتابعات اللي فات ميعادها — مش أول واحدة بس.
+     قبل كده كنا بناخد [0] وبس، فلما يكون في ١٠٠ متابعة مستحقة، كل ما
+     تقفل واحدة اللي بعدها تنطّ على طول — ١٠٠ بوب-أب و١٠٠ صفارة.
+     دلوقتي بنعرف العدد كله، فنقدر نقول "ده ١ من ١٠٠" ونقفلهم كلهم بضغطة. */
+  const dueList = useMemo(() => {
     const now = Date.now();
     return mine
       .filter((l) => typeof l.nextActionAt === 'number' && l.nextActionAt! <= now)
       .filter((l) => l.followUpStatus !== 'completed' && l.status !== 'closed' && l.status !== 'lost')
       .filter((l) => !seen.has(`${l.id}:${l.nextActionAt}`))
-      .sort((a, b) => (a.nextActionAt || 0) - (b.nextActionAt || 0))[0] || null;
+      .sort((a, b) => (a.nextActionAt || 0) - (b.nextActionAt || 0));
   }, [mine, tick, seen]);
+
+  const nextDue = dueList[0] || null;
 
   useEffect(() => {
     if (!nextDue || due) return;
+    const first = !due;
     setDue(nextDue);
-    beep();
+    // صفارة واحدة للدفعة كلها، مش صفارة مع كل اسم
+    if (first) beep();
 
-    // إشعار بره الصفحة — بيشتغل على اللاب أساساً
+    // إشعار بره الصفحة — واحد بس مهما كان العدد
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
-        const n = new Notification('متابعة مستحقة دلوقتي', {
-          body: `${nextDue.name} · ${nextDue.phone}${nextDue.followUpNote ? `\n${nextDue.followUpNote}` : ''}`,
-          tag: `followup-${nextDue.id}`,
-          requireInteraction: true,
-        });
+        const n = new Notification(
+          dueList.length > 1 ? `${dueList.length} متابعة مستحقة` : 'متابعة مستحقة دلوقتي',
+          {
+            body: `${nextDue.name} · ${nextDue.phone}${dueList.length > 1 ? ` و${dueList.length - 1} غيره` : ''}`,
+            tag: 'elsab3-followup',          // تاج ثابت = إشعار واحد بيتحدّث، مش كومة
+            requireInteraction: true,
+          },
+        );
         n.onclick = () => { window.focus(); n.close(); };
       } catch { /* بعض المتصفحات بترفض من غير Service Worker */ }
     }
@@ -107,6 +117,17 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
     setSeen((prev) => {
       const next = new Set<string>(prev);
       next.add(`${lead.id}:${lead.nextActionAt}`);
+      writeSeen(next);
+      return next;
+    });
+    setDue(null);
+  };
+
+  /** يقفل الدفعة كلها مرة واحدة — ده اللي بيمنع الـ١٠٠ ضغطة */
+  const dismissAll = () => {
+    setSeen((prev) => {
+      const next = new Set<string>(prev);
+      dueList.forEach((l) => next.add(`${l.id}:${l.nextActionAt}`));
       writeSeen(next);
       return next;
     });
@@ -157,7 +178,8 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
       {/* البوب-أب نفسه */}
       {due && createPortal(
         <div dir="rtl" className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <button aria-label="إغلاق" className="absolute inset-0 bg-black/60" onClick={() => dismiss(due)} />
+          {/* الضغط بره أو على X = اقفل الدفعة كلها. ده اللي الواحد قاصده لما يقفل. */}
+          <button aria-label="إغلاق" className="absolute inset-0 bg-black/60" onClick={dismissAll} />
           <section
             role="dialog"
             aria-modal="true"
@@ -170,11 +192,15 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
                   <Bell size={17} />
                 </span>
                 <div>
-                  <p className="font-bold text-base leading-tight">متابعة مستحقة دلوقتي</p>
-                  <p className="text-[11px] text-white/60">الميعاد اللي إنت حددته عدّى</p>
+                  <p className="font-bold text-base leading-tight">
+                    {dueList.length > 1 ? `${dueList.length} متابعة مستحقة` : 'متابعة مستحقة دلوقتي'}
+                  </p>
+                  <p className="text-[11px] text-white/60">
+                    {dueList.length > 1 ? 'ده أقدم واحد فيهم' : 'الميعاد اللي إنت حددته عدّى'}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => dismiss(due)} aria-label="إغلاق" className="p-2 cursor-pointer"><X size={18} /></button>
+              <button onClick={dismissAll} aria-label="إغلاق" className="p-2 cursor-pointer"><X size={18} /></button>
             </div>
 
             <div className="p-5 space-y-4">
@@ -213,12 +239,28 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
                 <CheckCircle2 size={16} /> سجّل النتيجة والأكشن الجاي
               </button>
 
-              <button
-                onClick={() => dismiss(due)}
-                className="w-full py-2.5 text-[#6B665C] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Clock size={13} /> مش دلوقتي
-              </button>
+              {/* واحد ولا الدفعة كلها — من غير التاني كنت بتدوس ١٠٠ مرة */}
+              <div className={dueList.length > 1 ? 'grid grid-cols-2 gap-2' : ''}>
+                <button
+                  onClick={() => dismiss(due)}
+                  className="w-full py-2.5 text-[#6B665C] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Clock size={13} /> مش دلوقتي
+                </button>
+                {dueList.length > 1 && (
+                  <button
+                    onClick={dismissAll}
+                    className="w-full py-2.5 rounded-2xl bg-[#ECE8DF] text-[#141414] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <X size={13} /> اقفلهم كلهم ({dueList.length})
+                  </button>
+                )}
+              </div>
+              {dueList.length > 1 && (
+                <p className="text-[10px] text-[#8C877D] text-center leading-5">
+                  القفل بيخفيهم من الشاشة دي لحد ما تعمل ريفريش — المتابعات نفسها بتفضل في مكانها.
+                </p>
+              )}
             </div>
           </section>
         </div>,

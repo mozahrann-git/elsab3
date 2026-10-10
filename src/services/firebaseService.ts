@@ -242,28 +242,58 @@ export async function fetchAllPropertiesFromDb(): Promise<Property[]> {
   }
 }
 
+/*
+  اشتراك الشقق — بيصلّح نفسه.
+
+  البق اللي كان واقف: لما الاتصال بيقع (نت فصل، أو الكوتة اليومية خلصت)،
+  الاشتراك كان بيموت نهائياً، والتطبيق بيرجع للنسخة المحفوظة على الجهاز
+  ويفضل عليها طول الجلسة. فالسيلز تمسح الإدارة ١٥٠ شقة وهي لسه شايفة ٣٠٦
+  — مش لأن جهازها قديم، لأن الاشتراك بتاعها مات من ساعات ومحدش عرف.
+
+  دلوقتي بيحاول تاني: ١٠ ثواني، وبتكبر لحد دقيقتين لو فضل واقع.
+  وأول ما يرجع، بيجيب القايمة الصح والمهلة بترجع لأولها.
+*/
 export function subscribeToProperties(
   onUpdate: (properties: Property[]) => void,
   onError?: (error: unknown, isQuota: boolean) => void
 ): () => void {
   const propertiesCol = collection(db, 'properties');
-  return onSnapshot(propertiesCol, (snapshot) => {
-    const properties: Property[] = [];
-    snapshot.forEach((docSnap) => {
-      properties.push(docSnap.data() as Property);
+  let stopped = false;
+  let unsub: null | (() => void) = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let wait = 10000;
+
+  const start = () => {
+    if (stopped) return;
+    if (unsub) { try { unsub(); } catch { /* */ } unsub = null; }
+    unsub = onSnapshot(propertiesCol, (snapshot) => {
+      wait = 10000;
+      const properties: Property[] = [];
+      snapshot.forEach((docSnap) => {
+        properties.push(docSnap.data() as Property);
+      });
+      onUpdate(properties);
+    }, (error) => {
+      const isQuota = isQuotaExceededError(error);
+      if (isQuota) {
+        console.warn('[Firebase] Free daily read quota limit reached on properties. Operating in cached mode.');
+      } else {
+        console.warn('[Firebase] Subscription notice on properties:', error);
+      }
+      if (onError) onError(error, isQuota);
+      if (stopped) return;
+      /* الكوتة بتتصفّر بالساعة، والنت بيرجع. فبنفضل نحاول — بس بالراحة. */
+      timer = setTimeout(start, wait);
+      wait = Math.min(wait * 2, 120000);
     });
-    onUpdate(properties);
-  }, (error) => {
-    const isQuota = isQuotaExceededError(error);
-    if (isQuota) {
-      console.warn('[Firebase] Free daily read quota limit reached on properties. Operating in cached mode.');
-    } else {
-      console.warn('[Firebase] Subscription notice on properties:', error);
-    }
-    if (onError) {
-      onError(error, isQuota);
-    }
-  });
+  };
+  start();
+
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+    if (unsub) unsub();
+  };
 }
 
 export async function savePropertyToDb(property: Property): Promise<void> {
