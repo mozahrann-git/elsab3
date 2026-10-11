@@ -114,6 +114,14 @@ export const AccountsManagerModal: React.FC<Props> = ({ isOpen, onClose, showToa
                     <span className="font-bold truncate">{a.name || '—'}</span>
                   </div>
                   <p className="text-xs font-mono text-[#4A463F] truncate" dir="ltr" style={{ textAlign: 'right' }}>{a.email}</p>
+                  {a.role === 'broker' && (() => {
+                    /* بروكر من غير brokerId = بيتشارك الهوية مع كل بروكر تاني فاضي */
+                    const bid = String(a.brokerId || '').trim();
+                    const dup = bid && list.filter((x) => x.role === 'broker' && String(x.brokerId || '').trim() === bid).length > 1;
+                    if (!bid) return <p className="text-[11px] font-bold text-[#C2412D]">⚠ من غير رقم بروكر — بيشوف وحدات بروكرز تانيين. افتح عدّل واحفظ.</p>;
+                    if (dup) return <p className="text-[11px] font-bold text-[#C2412D]">⚠ رقم البروكر <span className="font-mono">{bid}</span> متكرر مع حساب تاني.</p>;
+                    return <p className="text-[11px] text-[#6B665C]">رقم البروكر: <span className="font-mono">{bid}</span></p>;
+                  })()}
                   <p className="text-xs flex items-center gap-2">
                     <KeyRound size={12} className="text-[#8C877D]" />
                     <span className="font-mono" dir="ltr">{a.password ? (showPass[a.email] ? a.password : '••••••••') : 'مش محفوظ'}</span>
@@ -172,7 +180,31 @@ export const AccountsManagerModal: React.FC<Props> = ({ isOpen, onClose, showToa
               <label className="block text-xs font-bold space-y-1">نسبة العمولة % (اختياري)<input className={input} dir="ltr" value={(editing as any).commission || ''} onChange={(e) => setEditing({ ...editing, commission: e.target.value } as any)} placeholder="2.5" /></label>
             )}
             {editing.role === 'broker' && (
-              <label className="block text-xs font-bold space-y-1">رقم البروكر (brokerId)<input className={`${input} font-mono`} dir="ltr" value={editing.brokerId || ''} onChange={(e) => f('brokerId', e.target.value)} placeholder="broker_ahmed" /></label>
+              (() => {
+                /* ده مش حقل اختياري. ده هوية البروكر — لو اتساب فاضي،
+                   كل البروكرز بيبقوا نفس الشخص وكل واحد بيشوف وحدات التاني. */
+                const auto = String(editing.email || '').split('@')[0].trim();
+                const val = String(editing.brokerId || '').trim();
+                const clash = val && list.some((a) =>
+                  a.role === 'broker' && a.email !== editing.email && String(a.brokerId || '').trim() === val);
+                return (
+                  <label className="block text-xs font-bold space-y-1">
+                    رقم البروكر (brokerId) — إجباري
+                    <input className={`${input} font-mono`} dir="ltr" value={editing.brokerId || ''}
+                      onChange={(e) => f('brokerId', e.target.value.trim())} placeholder={auto || 'hussain'} />
+                    {clash ? (
+                      <span className="block text-[11px] font-bold text-[#C2412D]">الرقم ده مستخدم لبروكر تاني — لازم يبقى مختلف</span>
+                    ) : !val ? (
+                      <span className="block text-[11px] font-normal text-[#C2412D] leading-5">
+                        لو سبتها فاضية هنحطّ <b className="font-mono">{auto || '—'}</b> تلقائياً.
+                        ممنوع تفضل فاضية — ده اللي بيخلّي بروكر يشوف وحدات بروكر تاني.
+                      </span>
+                    ) : (
+                      <span className="block text-[11px] font-normal text-[#6B665C]">ده اللي بيربط وحداته بيه. متغيّروش بعد ما يتعمل.</span>
+                    )}
+                  </label>
+                );
+              })()
             )}
             <div className="flex gap-2 pt-1">
               <button onClick={submit} disabled={busy} className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#141414] text-white rounded-xl font-bold disabled:opacity-60"><Save size={16} />{busy ? 'جاري الحفظ...' : 'حفظ'}</button>

@@ -512,6 +512,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // New / Edit Apartment Form State (flexible images count + video URL)
   const [formData, setFormData] = useState({
+    /* كود الشقة بقى حقل زي أي حقل. قبل كده كان بيتولّد عشوائي
+       SEBA-APT-### ومفيش مكان تعدّله منه خالص. */
+    code: '',
     title: '',
     neighborhood: HADABA_WOSTA_NEIGHBORHOODS[0] as HadabaWostaNeighborhood,
     propertyType: 'apartment' as PropertyType,
@@ -766,6 +769,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const handleStartEdit = (prop: Property) => {
     setEditingPropertyId(prop.id);
     setFormData({
+      code: prop.code || '',
       title: prop.title,
       neighborhood: prop.neighborhood,
       propertyType: prop.propertyType,
@@ -798,6 +802,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       showToast('يرجى كتابة عنوان الشقة ومواصفاتها');
       return;
     }
+    /* الكود هو هوية الشقة في كل حتة — من غيره أو لو مكرر، بتتلخبط
+       المطابقة وطلبات المعاينة والمشاوير. */
+    const codeNow = formData.code.trim().toUpperCase();
+    if (!codeNow) {
+      showToast('اكتب كود الشقة الأول');
+      return;
+    }
+    if (properties.some((p) => p.id !== editingPropertyId && String(p.code || '').trim().toUpperCase() === codeNow)) {
+      showToast(`الكود ${codeNow} مستخدم في شقة تانية — غيّره`);
+      return;
+    }
 
     const cleanedImages = formData.images
       .map((img) => img.trim())
@@ -822,7 +837,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       const updated: Property = {
         ...existing,
         id: editingPropertyId,
-        code: existing?.code || `SEBA-APT-${Math.floor(100 + Math.random() * 900)}`,
+        code: formData.code.trim().toUpperCase() || existing?.code || '',
         title: formData.title,
         neighborhood: formData.neighborhood,
         propertyType: formData.propertyType,
@@ -852,7 +867,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       onUpdateProperty(updated);
       showToast('تم تحديث بيانات الشقة بنجاح');
     } else {
-      const newCode = `SEBA-APT-${Math.floor(100 + Math.random() * 900)}`;
+      const newCode = formData.code.trim().toUpperCase();
       const newProp: Property = {
         id: `prop-${Date.now()}`,
         code: newCode,
@@ -2005,6 +2020,26 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <h4 className="text-sm font-extrabold text-stone-900">المعلومات الأساسية والموقع</h4>
 
                 <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1">كود الشقة:</label>
+                    <input
+                      type="text"
+                      required
+                      dir="ltr"
+                      value={formData.code}
+                      onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase().replace(/\s+/g, '') })}
+                      placeholder="H1151"
+                      className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-stone-900 text-xs font-mono focus:outline-none focus:border-stone-900"
+                    />
+                    {(() => {
+                      const c = formData.code.trim().toUpperCase();
+                      const clash = c && properties.some((p) => p.id !== editingPropertyId && String(p.code || '').trim().toUpperCase() === c);
+                      return clash
+                        ? <p className="text-[11px] font-bold text-rose-600 mt-1">الكود ده مستخدم في شقة تانية</p>
+                        : <p className="text-[11px] text-stone-400 mt-1">ده الكود اللي الشقة هتتعرف بيه في كل مكان — الموقع، المطابقة، وطلبات المعاينة.</p>;
+                    })()}
+                  </div>
+
                   <div>
                     <label className="block text-stone-800 font-bold mb-1">عنوان الإعلان ومواصفاته التسويقية:</label>
                     <input

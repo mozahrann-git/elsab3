@@ -137,12 +137,15 @@ export const ClientShowcaseView: React.FC<ClientShowcaseViewProps> = ({
             <span>{copied ? 'تم نسخ الرابط ✓' : 'مشاركة'}</span>
           </button>
 
-          {onClose && (
+          {/* الصفحة دي بتتبعت لعميل على شقة بعينها — مش عايزينه يسيبها ويروح
+              يتفرّج على الموقع كله. الزر بيظهر بس لما يكون راجع لعرض
+              فيه أكتر من وحدة (backLabel بيتبعت ساعتها). */}
+          {onClose && backLabel && (
             <button
               onClick={onClose}
               className="px-4 py-1.5 bg-[#9E782F] hover:bg-[#856525] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
             >
-              {backLabel || 'الرجوع للرئيسية'}
+              {backLabel}
             </button>
           )}
         </div>

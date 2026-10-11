@@ -66,7 +66,9 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
     return list.map((c) => String(c || '').trim().toUpperCase()).filter(Boolean);
   }, [access?.propertyCodes]);
   const mine = useMemo(() => properties.filter((p) =>
-    isBroker ? (access.role === 'admin' || p.brokerId === access.brokerId) : codes.includes(String(p.code || '').toUpperCase())
+    isBroker
+      ? (!!access.brokerId && p.brokerId === access.brokerId)
+      : codes.includes(String(p.code || '').toUpperCase())
   ), [properties, codes, access, isBroker]);
 
   useEffect(() => {

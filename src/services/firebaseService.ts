@@ -1194,7 +1194,15 @@ export async function saveAccount(rec: AccountRecord, previousPassword?: string)
     role: rec.role,
     name: rec.name || '',
     password: password || previousPassword || '',
-    brokerId: rec.role === 'broker' ? (rec.brokerId || '') : '',
+    /* البق اللي كان بيخلي كل البروكرز شخص واحد:
+       لو الخانة اتسابت فاضية، كان بيتحفظ brokerId = '' لكل بروكر.
+       فحسين '' ومصطفى '' — والفلتر p.brokerId === access.brokerId بيطابقهم،
+       فمصطفى بيفتح بوابته ويلاقي وحدات حسين.
+       دلوقتي لو فاضية، بناخد اسم المستخدم من الإيميل — ودي فريدة بطبيعتها
+       لأن الإيميل نفسه هو مفتاح المستند. مستحيل يطلع فاضي تاني. */
+    brokerId: rec.role === 'broker'
+      ? (String(rec.brokerId || '').trim() || email.split('@')[0])
+      : '',
     propertyCodes: rec.role === 'owner' ? codes : [],
     phone: rec.phone || '',
     ...(rec.commission ? { commission: rec.commission } : {}),
