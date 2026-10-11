@@ -30,7 +30,11 @@ interface FollowUpNotificationsModalProps {
   onClose: () => void;
   leads: Lead[];
   agents: SalesAgent[];
-  currentAgent: SalesAgent;
+  currentAgent?: SalesAgent;
+  /* الـ id لوحده. الجرس بيعدّ بيه، فالشاشة لازم تعدّ بيه برضه —
+     من غير كده الجرس بيقول ٧٠ والشاشة بتقول صفر لأن سجل المستشار
+     مش موجود في sales_agents أصلاً. */
+  currentAgentId?: string | null;
   onUpdateLead: (updatedLead: Lead) => void;
   onSelectLead: (lead: Lead) => void;
   /* الإدارة بس اللي بتشوف تنبيهات الفريق كله. السيلز بيشوف عملاءه هو. */
@@ -43,10 +47,18 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
   leads,
   agents,
   currentAgent,
+  currentAgentId,
   onUpdateLead,
   onSelectLead,
   canSeeTeam = false
 }) => {
+  /* المصدر الوحيد للهوية هنا. السجل لو موجود، وإلا الـ id الخام. */
+  const myId = currentAgent?.id || currentAgentId || null;
+  /* الاسم كمان لازم يبقى آمن — من غير السجل كانت الشاشة بتقع
+     على currentAgent.name زي ما حصل في أدوات المستشار بالظبط. */
+  const myName = currentAgent?.name
+    || agents.find((a) => a.id === myId)?.name
+    || 'السبع للعقارات';
   const [filterType, setFilterType] = useState<'all' | 'urgent' | 'today' | 'upcoming'>('all');
   const [rawScope, setRawScope] = useState<'my_leads' | 'all_team'>('my_leads');
   /* حتى لو الحالة اتغيّرت بأي طريقة، السيلز بيفضل على عملاءه هو */
@@ -64,8 +76,8 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
   // Filter alerts by agent scope, urgency, and search
   /* تنبيهات الشخص الداخل — الأساس اللي كل العدادات بتتبني منه */
   const scoped = useMemo(
-    () => scopeAlerts(alerts, currentAgent?.id, filterScope === 'all_team'),
-    [alerts, currentAgent, filterScope],
+    () => scopeAlerts(alerts, myId, filterScope === 'all_team'),
+    [alerts, myId, filterScope],
   );
 
   const filteredAlerts = useMemo(() => {
@@ -106,7 +118,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
       nextActionAt: null,
       followUpScheduledAt: undefined,
       followUpNote: undefined,
-      activity: [{ at: Date.now(), by: currentAgent.name, outcome: 'تمت المتابعة', comment: alert.note || 'تواصل تليفوني' }, ...((lead.activity as any[]) || [])].slice(0, 80)
+      activity: [{ at: Date.now(), by: myName, outcome: 'تمت المتابعة', comment: alert.note || 'تواصل تليفوني' }, ...((lead.activity as any[]) || [])].slice(0, 80)
     } as Lead);
   };
 
@@ -133,7 +145,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
     onUpdateLead({
       ...lead,
       notes: [`[${timestamp}] ${outcome}`, ...(lead.notes || [])],
-      activity: [{ at: Date.now(), by: currentAgent.name, outcome, comment: lead.followUpNote || '', nextAt: newAt }, ...((lead.activity as any[]) || [])].slice(0, 80),
+      activity: [{ at: Date.now(), by: myName, outcome, comment: lead.followUpNote || '', nextAt: newAt }, ...((lead.activity as any[]) || [])].slice(0, 80),
       snoozeCount: (lead.snoozeCount || 0) + (postponed ? 1 : 0),
       nextActionAt: newAt,
       followUpScheduledAt: formatWhen(newAt),
@@ -148,7 +160,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
     if (!lead) return;
 
     const message = `أهلاً بحضرتك أستاذ ${lead.name}،
-معاك ${currentAgent.name} من شركة السبع للعقارات بالهضبة الوسطى.
+معاك ${myName} من شركة السبع للعقارات بالهضبة الوسطى.
 بناءً على تواصلنا السابق بخصوص ${lead.interestedPropertyCode ? `الشقة كود (${lead.interestedPropertyCode})` : 'طلبك بالهضبة الوسطى'}، 
 حبيت أتابع مع حضرتك هل حابب نحدد موعد معاينة ميدانية اليوم أو تحب أبعت لحضرتك ترشيحات إضافية؟
 

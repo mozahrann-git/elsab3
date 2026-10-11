@@ -2726,6 +2726,7 @@ export default function App() {
         leads={crmLeads}
         agents={salesAgents}
         currentAgent={currentAgent}
+        currentAgentId={currentSalesAgentId}
         onUpdateLead={handleUpdateLead}
         canSeeTeam={staffAccess?.role === 'admin' || staffAccess?.role === 'company_owner'}
         onSelectLead={(lead) => {

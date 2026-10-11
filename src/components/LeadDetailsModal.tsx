@@ -117,7 +117,12 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       status: 'visit_requested',
       visitScheduledAt: visitDate,
       visitLocation: visitLoc,
-      ...(visitAt ? { nextActionAt: visitAt } : {}),
+      /* البق: كانت `...(visitAt ? { nextActionAt: visitAt } : {})`.
+         يعني لو محددتش وقت بالظبط، الميعاد القديم المتأخر بيفضل مكانه
+         و followUpStatus بيفضل pending — فالعميل بيفضل في المتأخرات
+         للأبد مهما اتعمل عليه أكشن. ده اللي خلّى الـ٧٠ ماتنزلش.
+         دلوقتي: يا ميعاد جديد، يا الميعاد القديم يتشال. */
+      nextActionAt: visitAt || null,
       followUpStatus: 'pending',
       followUpNote: `معاينة تحت التنسيق${prop ? ` على ${prop.code}` : ''} — ${visitDate}`,
       activity: [{
