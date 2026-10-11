@@ -154,6 +154,7 @@ import {
   syncSalesAgentsToDb,
   subscribeToBrokers,
   seedBrokersToDb,
+  deleteBrokerFromDb,
   subscribeToStaffAuth,
   getStaffRole,
   savePropertyPrivateOwner,
@@ -912,9 +913,21 @@ export default function App() {
   });
 
   const handleUpdateBrokersList = (newList: BrokerProfile[]) => {
+    /* البق: المسح مكانش بيمسح.
+       seedBrokersToDb بتكتب اللي في القايمة بس (merge) ومبتشيلش حاجة.
+       فلما تمسح مكتب، بيختفي من الشاشة، وأول ما الاشتراك يجيب البيانات
+       من السيرفر بيرجع تاني — لأنه عمره ما اتمسح من قاعدة البيانات.
+       دلوقتي بنقارن بالقايمة القديمة ونمسح اللي اتشال فعلاً. */
+    const removed = brokersList
+      .map((b) => b.id)
+      .filter((id) => !newList.some((n) => n.id === id));
+
     setBrokersList(newList);
     safeLocalStorageSet('lion_brokers_list', JSON.stringify(newList));
     seedBrokersToDb(newList).catch(err => console.warn('[Firebase] Updating brokers:', err));
+    removed.forEach((id) => {
+      deleteBrokerFromDb(id).catch(err => console.warn('[Firebase] Deleting broker:', err));
+    });
   };
 
   const handleRequestViewing = (property: Property, preferredTime: string = 'النهارده أو بكرة بعد 5 مساءً') => {

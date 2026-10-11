@@ -64,6 +64,30 @@ export const PortalAuthGate: React.FC<Props> = ({ isOpen, role, onClose, childre
     onClose();
   };
 
+  /* الأدمن بيعدّي من البوابة بحسابه هو، وحسابه مالوش brokerId —
+     فكان بيلاقي بوابة بروكر فاضية باسم admin@elsaba.com وشكلها بايظ.
+     البوابة دي بتعرض وحدات بروكر واحد؛ الأدمن بيدخلها من زرار
+     "معاينة منصته" في شاشة الوسطاء، مش من هنا. */
+  if (access && role === 'broker' && !access.brokerId) {
+    return (
+      <div dir="rtl" className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4">
+        <div className="bg-[#F6F4EF] w-full max-w-md rounded-3xl p-6 space-y-4 text-center">
+          <p className="text-lg font-bold text-[#141414]">الحساب ده مش بروكر</p>
+          <p className="text-sm text-[#6B665C] leading-7">
+            إنت داخل بـ <b dir="ltr">{access.email || access.name}</b>، والحساب ده مالوش رقم بروكر —
+            فمفيش وحدات تتعرض هنا.
+            <br />
+            عشان تشوف بوابة بروكر معيّن، افتح شاشة <b>الوسطاء</b> ودوس
+            <b> «معاينة منصته»</b> جنب اسمه.
+          </p>
+          <button onClick={onClose} className="w-full py-3 rounded-2xl bg-[#141414] text-white font-bold text-sm cursor-pointer">
+            تمام
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (access) return <>{children(access, logout)}</>;
 
   const submit = async (e: React.FormEvent) => {
