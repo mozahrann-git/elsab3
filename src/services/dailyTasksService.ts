@@ -12,7 +12,7 @@
    مفيش عدّاد بيتحرك بزرار "تم" من غير دليل.               */
 
 import {
-  collection, doc, getDocs, query, where, onSnapshot,
+  collection, doc, getDoc, getDocs, query, where, onSnapshot,
   serverTimestamp, setDoc, deleteDoc, orderBy, limit as qLimit,
 } from 'firebase/firestore';
 import { db, ensureAuth } from './firebaseService';
@@ -296,6 +296,68 @@ export function subscribeTargets(cb: (t: SalesTargets) => void): () => void {
 
    والتوزيع بيتجنّب إنه يدّي المندوب نفس شققه بتاعة الدورة
    اللي فاتت، عشان كل شقة تاخد عين جديدة.                  */
+
+/* ---------- فحص الصلاحيات ----------
+   "Missing or insufficient permissions" مبتقولش فشل فين.
+   الفحص ده بيجرّب كل مجموعة لوحدها ويقول مين بالظبط المرفوض،
+   ومعاه هوية الجلسة — عشان نعرف المشكلة في القواعد ولا في
+   الحساب، من غير تخمين. */
+
+export interface PermCheck {
+  label: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface PermReport {
+  email: string;
+  provider: string;
+  anonymous: boolean;
+  staffDocFound: boolean;
+  role: string;
+  checks: PermCheck[];
+}
+
+export async function diagnosePermissions(): Promise<PermReport> {
+  const user = await ensureAuth();
+  const email = (user?.email || '').toLowerCase();
+  let provider = 'غير معروف';
+  try {
+    const t: any = await (user as any)?.getIdTokenResult?.();
+    provider = t?.signInProvider || 'غير معروف';
+  } catch { /* */ }
+
+  let staffDocFound = false;
+  let role = '';
+  try {
+    const snap = await getDoc(doc(db, 'staff_access', email));
+    staffDocFound = snap.exists();
+    role = String((snap.data() as any)?.role || '');
+  } catch (e: any) {
+    role = `ما قدرناش نقرا: ${e?.code || e?.message || ''}`;
+  }
+
+  const checks: PermCheck[] = [];
+  const run = async (label: string, fn: () => Promise<unknown>) => {
+    try { await fn(); checks.push({ label, ok: true }); }
+    catch (e: any) { checks.push({ label, ok: false, error: e?.code || e?.message || 'خطأ' }); }
+  };
+
+  await run('قراءة الإثباتات (work_proofs)', () => getDocs(query(collection(db, 'work_proofs'), qLimit(1))));
+  await run('قراءة التوزيع (agent_units)', () => getDocs(query(collection(db, 'agent_units'), qLimit(1))));
+  await run('قراءة الأهداف (settings)', () => getDoc(doc(db, 'settings', 'sales_targets')));
+  await run('كتابة الأهداف (settings)', () => setDoc(doc(db, 'settings', '_perm_check'), { at: Date.now() }, { merge: true }));
+  await run('كتابة التوزيع (agent_units)', () => setDoc(doc(db, 'agent_units', '_perm_check'), { at: Date.now() }, { merge: true }));
+
+  return {
+    email: email || '(مفيش إيميل)',
+    provider,
+    anonymous: !!user?.isAnonymous,
+    staffDocFound,
+    role,
+    checks,
+  };
+}
 
 /* ---------- التفاصيل ورا كل رقم ----------
    الإدارة لازم تقدر تدوس على أي عدّاد وتشوف الشغل اللي

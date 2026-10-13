@@ -6,7 +6,7 @@ import type {
 import { DEFAULT_SALES_TARGETS } from '../../types';
 import {
   buildScorecard, distributeUnits, saveAssignment, saveTargets, signedUnitIds, cairoDay,
-  detailsFor, DetailRow,
+  detailsFor, DetailRow, diagnosePermissions, PermReport,
 } from '../../services/dailyTasksService';
 import { thumbUrl } from '../../services/mediaStorage';
 
@@ -60,6 +60,7 @@ export const TasksOverview: React.FC<{
   const [openProofs, setOpenProofs] = useState<string | null>(null);
   /* الرقم اللي الإدارة دوست عليه — بنوريها الشغل اللي وراه */
   const [drill, setDrill] = useState<null | { agentName: string; label: string; rows: DetailRow[] }>(null);
+  const [perm, setPerm] = useState<PermReport | null>(null);
 
   const active = useMemo(
     () => agents.filter((a) => a.isActive !== false),
@@ -166,12 +167,23 @@ export const TasksOverview: React.FC<{
         <div className="bg-[#FBEDEA] border border-[#E8C4BC] rounded-xl px-3 py-3 space-y-1">
           <p className="text-xs font-black text-[#C2412D]">✗ ما نجحش: {err}</p>
           {/permission|insufficient/i.test(err) && (
-            <p className="text-[11px] text-[#C2412D] leading-relaxed">
-              فايربيز رافض الكتابة. ده معناه إن قواعد الأمان الجديدة لسه مانزلتش.
-              شغّل على جهازك: <b dir="ltr">firebase deploy --only firestore:rules</b>
-              {' '}وبعدين جرّب تاني. لو الرسالة فضلت، يبقى حسابك مش مسجّل كأدمن في
-              {' '}<b>staff_access</b> بنفس إيميل الدخول.
-            </p>
+            <>
+              <p className="text-[11px] text-[#C2412D] leading-relaxed">
+                فايربيز رافض الكتابة، بس الرسالة دي مبتقولش فشل فين بالظبط.
+                دوس على الفحص عشان نعرف.
+              </p>
+              <button
+                type="button" disabled={busy === 'perm'}
+                onClick={async () => {
+                  setBusy('perm'); setPerm(null);
+                  try { setPerm(await diagnosePermissions()); }
+                  finally { setBusy(''); }
+                }}
+                className="rounded-xl px-3 py-2 bg-[#141414] text-white font-bold text-xs disabled:opacity-50"
+              >
+                {busy === 'perm' ? 'بيفحص…' : 'افحص الصلاحيات'}
+              </button>
+            </>
           )}
         </div>
       )}
@@ -271,6 +283,57 @@ export const TasksOverview: React.FC<{
           </tbody>
         </table>
       </div>
+
+      {perm && (
+        <div className="bg-white rounded-2xl p-4 border border-[#ECE8DF] space-y-3 text-xs" dir="rtl">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-black text-stone-900">نتيجة الفحص</p>
+            <button type="button" onClick={() => setPerm(null)} className="p-1 rounded-full hover:bg-stone-100">
+              <X size={14} />
+            </button>
+          </div>
+
+          <div className="bg-[#FBF8F1] rounded-xl p-3 space-y-1 font-medium text-stone-700">
+            <p>الإيميل: <b dir="ltr">{perm.email}</b></p>
+            <p>طريقة الدخول: <b dir="ltr">{perm.provider}</b>
+              {perm.provider !== 'password' && (
+                <span className="text-[#C2412D] font-black"> ← لازم تكون password</span>
+              )}
+            </p>
+            <p>حسابك في staff_access: <b>{perm.staffDocFound ? 'موجود' : 'مش موجود'}</b>
+              {!perm.staffDocFound && (
+                <span className="text-[#C2412D] font-black"> ← دي المشكلة</span>
+              )}
+            </p>
+            <p>الدور المسجّل: <b>{perm.role || '(فاضي)'}</b>
+              {perm.staffDocFound && perm.role !== 'admin' && (
+                <span className="text-[#C2412D] font-black"> ← لازم admin</span>
+              )}
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            {perm.checks.map((c) => (
+              <div key={c.label} className="flex items-center justify-between gap-2 bg-[#FBF8F1] rounded-xl px-3 py-2">
+                <span className="font-bold text-stone-700">{c.label}</span>
+                <span className={`font-black shrink-0 ${c.ok ? 'text-[#1E7A45]' : 'text-[#C2412D]'}`}>
+                  {c.ok ? '✓ تمام' : `✗ ${c.error}`}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {perm.provider === 'password' && perm.role === 'admin'
+            && perm.checks.some((c) => !c.ok) && (
+            <p className="text-[11px] text-[#C2412D] font-bold leading-relaxed bg-[#FBEDEA] rounded-xl p-3">
+              حسابك أدمن سليم، ومع ذلك فيه مرفوض فوق — يعني القواعد المنزّلة على
+              فايربيز قديمة. شغّل <b dir="ltr">firebase deploy --only firestore:rules</b>
+              {' '}من نفس فولدر المشروع، واتأكد إن الأمر خلّص بـ<b dir="ltr">Deploy complete</b>
+              {' '}من غير أخطاء.
+            </p>
+          )}
+        </div>
+      )}
 
       {drill && (
         <div className="fixed inset-0 z-[120] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
