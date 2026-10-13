@@ -2736,7 +2736,10 @@ export default function App() {
         <FollowUpPopup
           leads={crmLeads}
           currentAgentId={currentAgent?.id}
-          seeAll={staffAccess.role === 'admin'}
+          /* الأدمن بياخد متابعاته هو بس — زي الجرس والتوست بالظبط.
+             ده كان فاضل مفتوح: الجرس والتوست اتظبطوا والبوب-أب لأ،
+             فالأدمن كان لسه بينطّ له ١٧٠ متابعة مش بتاعته. */
+          seeAll={false}
           onOpenLead={(lead) => {
             setIsSalesNotificationsOpen(false);
             setPendingLeadId(lead.id);

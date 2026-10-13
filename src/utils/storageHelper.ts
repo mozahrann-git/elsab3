@@ -7,32 +7,56 @@ const CACHE_KEY = 'lion_hadaba_properties_cache';
 export const LS_PROPERTIES_KEY = 'lion_hadaba_properties';
 const DELETED_IDS_KEY = 'lion_deleted_property_ids';
 
-/**
- * Get list of explicitly deleted property IDs
- */
-export function getDeletedPropertyIds(): string[] {
+/*
+  قايمة الشقق المحذوفة — إخفاء مؤقت، مش دفن دائم.
+
+  البق اللي كان بيخبّي شقق عن الأدمن لوحده:
+  القايمة دي محفوظة في localStorage على جهاز واحد، وكانت بتفضل للأبد،
+  وبيتفلتر بيها ٩ مواضع في التطبيق. فلو مسح شقة والمسح من السيرفر فشل
+  (نت، قواعد، كوتة)، الشقة بتفضل في قاعدة البيانات وبتختفي من عنده هو بس.
+  باقي الفريق والموقع شايفينها، وهو لأ — ومش قادر يمسحها تاني لأنه
+  أصلاً مش شايفها. وده اللي عمل الفرق بين ٣٣٢ و٢٩٧.
+
+  الحل: الإخفاء بيدوم دقيقتين بس — الوقت اللي السيرفر بياخده عشان
+  يبلّغ باقي الأجهزة. بعد كده بنثق في السيرفر: لو المسح نجح الشقة
+  مش هتيجي أصلاً، ولو فشل بترجع تظهر فيقدر يمسحها تاني.
+*/
+const DELETE_GRACE_MS = 2 * 60 * 1000;
+
+type DeletedEntry = { id: string; at: number };
+
+function readDeletedEntries(): DeletedEntry[] {
   try {
     const raw = safeLocalStorageGet(DELETED_IDS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    /* الصيغة القديمة كانت قايمة نصوص من غير وقت. بنعتبرها منتهية —
+       يعني الشقق اللي كانت مدفونة من زمان بترجع تبان على طول. */
+    return parsed
+      .filter((x) => x && typeof x === 'object' && typeof (x as any).id === 'string')
+      .map((x: any) => ({ id: x.id, at: Number(x.at) || 0 }));
   } catch {
-    // ignore
+    return [];
   }
-  return [];
 }
 
-/**
- * Records a deleted property ID so it is never revived
- */
+/** الشقق اللي لسه في فترة السماح بعد المسح */
+export function getDeletedPropertyIds(): string[] {
+  const now = Date.now();
+  return readDeletedEntries()
+    .filter((e) => now - e.at < DELETE_GRACE_MS)
+    .map((e) => e.id);
+}
+
+/** بيسجّل مسح شقة — الإخفاء مؤقت لحد ما السيرفر يلحق */
 export function recordDeletedPropertyId(id: string): void {
   try {
-    const current = getDeletedPropertyIds();
-    if (!current.includes(id)) {
-      const next = [...current, id];
-      safeLocalStorageSet(DELETED_IDS_KEY, JSON.stringify(next));
-    }
+    const now = Date.now();
+    const kept = readDeletedEntries().filter(
+      (e) => e.id !== id && now - e.at < DELETE_GRACE_MS,
+    );
+    safeLocalStorageSet(DELETED_IDS_KEY, JSON.stringify([...kept, { id, at: now }]));
   } catch {
     // ignore
   }
@@ -43,8 +67,8 @@ export function recordDeletedPropertyId(id: string): void {
  */
 export function removeDeletedPropertyId(id: string): void {
   try {
-    const current = getDeletedPropertyIds();
-    const next = current.filter(item => item !== id);
+    // لازم تكتب بنفس صيغة {id, at} — من غير كده بتفسد القايمة
+    const next = readDeletedEntries().filter((e) => e.id !== id);
     safeLocalStorageSet(DELETED_IDS_KEY, JSON.stringify(next));
   } catch {
     // ignore
