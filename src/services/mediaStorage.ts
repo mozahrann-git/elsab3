@@ -16,6 +16,18 @@ const safe = (s: string) => (s || 'general').replace(/[^\w-]/g, '_').slice(0, 40
 const optimize = (url: string, isImage: boolean) =>
   isImage ? url.replace('/upload/', '/upload/f_auto,q_auto,w_1600/') : url;
 
+/** صورة مصغّرة للقوايم الطويلة.
+ *  الكارت في اللوحة كان بيحمّل الصورة الأصلية (ممكن ٤ ميجا من الموبايل)
+ *  ويعرضها في مربع ٨٠ بكسل. ٣٣٢ شقة = مئات الميجات مرة واحدة،
+ *  وده اللي كان بيوقف كروم. دي نسخة بعرض ثابت صغير من كلاوديناري. */
+export function thumbUrl(url: string | undefined, w = 200): string {
+  if (!url || typeof url !== 'string') return '';
+  if (!url.includes('res.cloudinary.com') || !url.includes('/image/upload/')) return url;
+  /* بنشيل أي تحويل قديم متحطوط قبل كده عشان ماينفعش يتركبوا فوق بعض */
+  const clean = url.replace(/\/image\/upload\/(?:[a-z]{1,3}_[^/]+\/)+/, '/image/upload/');
+  return clean.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${w},c_fill/`);
+}
+
 /* بنستخدم XMLHttpRequest مش fetch عشان نعرف نطلّع نسبة الرفع للمستخدم،
    وعشان نمسك رسالة الخطأ الحقيقية اللي Cloudinary بيرجّعها بدل رسالة عامة. */
 function send(

@@ -3,7 +3,7 @@ import {
   Timer, TrendingDown, Flame, AlertTriangle, Users, Building2, Megaphone, Eye, Inbox,
 } from 'lucide-react';
 import {
-  AppEvent, subscribeEvents, byType, unitInterest, responseSpeed, sourcePerformance,
+  AppEvent, subscribeEvents, getCachedEvents, byType, unitInterest, responseSpeed, sourcePerformance,
   uniqueVisitors, median, dailySeries,
 } from '../../services/analyticsService';
 import { Lead, Property } from '../../types';
@@ -44,11 +44,15 @@ type Range = 7 | 30 | 90;
 
 export const DeepAnalytics: React.FC<Props> = ({ leads, properties }) => {
   const [days, setDays] = useState<Range>(7);
-  const [events, setEvents] = useState<AppEvent[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  /* بنبدأ من آخر نسخة محفوظة في الذاكرة لو موجودة، فالشاشة تفتح
+     بالأرقام على طول والتحديث بيوصل بعدها من غير شاشة تحميل */
+  const [events, setEvents] = useState<AppEvent[]>(() => getCachedEvents(7) || []);
+  const [loaded, setLoaded] = useState(() => !!getCachedEvents(7));
 
   useEffect(() => {
-    setLoaded(false);
+    const seed = getCachedEvents(days);
+    setLoaded(!!seed);
+    if (seed) setEvents(seed);
     return subscribeEvents(days, (l) => { setEvents(l); setLoaded(true); });
   }, [days]);
 

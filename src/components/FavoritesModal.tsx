@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { formatPrice, generateWhatsAppLink } from '../utils/helpers';
 import { LionLogo } from './LionLogo';
+import { thumbUrl } from '../services/mediaStorage';
 
 interface FavoritesModalProps {
   isOpen: boolean;
@@ -89,7 +90,7 @@ export const FavoritesModal: React.FC<FavoritesModalProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <div className="w-16 h-16 overflow-hidden bg-neutral-900 shrink-0 border border-white/10">
-                    <img src={prop.images[0]} alt="" className="w-full h-full object-cover" />
+                    <img src={thumbUrl(prop.images[0], 400)} alt="" className="w-full h-full object-cover" />
                   </div>
                   <div className="space-y-0.5 text-right">
                     <div className="flex items-center gap-1.5 text-[11px] text-neutral-400">

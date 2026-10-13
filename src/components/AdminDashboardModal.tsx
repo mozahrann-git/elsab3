@@ -91,6 +91,7 @@ import { DeepAnalytics } from './admin/DeepAnalytics';
 import { DemoDataCleanup } from './admin/DemoDataCleanup';
 import { QuestsManager } from './admin/QuestsManager';
 import { FloorRuleRow } from './admin/FloorRuleRow';
+import { thumbUrl } from '../services/mediaStorage';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -1649,7 +1650,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             </div>
                           ) : (
                             <img
-                              src={prop.images[0]}
+                              loading="lazy" decoding="async" src={thumbUrl(prop.images[0], 200)}
                               alt={prop.title}
                               className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl shrink-0"
                             />

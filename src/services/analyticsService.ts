@@ -91,16 +91,28 @@ export async function logEvent(
    ١٢٠٠ كفاية للرسوم والنِّسَب، والأحدث هو اللي بيتجاب. */
 const EVENTS_CAP = 1200;
 
+/* آخر نتيجة لكل مدة، محفوظة في الذاكرة طول ما التبويب مفتوح.
+   من غيرها: كل ما تقفل شاشة التحليلات وتفتحها تاني تبدأ فاضية
+   وتستنى الشبكة — وده اللي كان مبيّن إنها "بتحمّل من الأول". */
+const eventsCache = new Map<number, AppEvent[]>();
+
+export function getCachedEvents(days: number): AppEvent[] | undefined {
+  return eventsCache.get(days);
+}
+
 export function subscribeEvents(days: number, cb: (l: AppEvent[]) => void) {
   const since = Date.now() - days * 86400000;
+  const cached = eventsCache.get(days);
+  if (cached) cb(cached);
   return onSnapshot(
     query(collection(db, 'events'), where('at', '>=', since), orderBy('at', 'desc'), qLimit(EVENTS_CAP)),
     (snap) => {
       const l: AppEvent[] = [];
       snap.forEach((d) => l.push(d.data() as AppEvent));
+      eventsCache.set(days, l);
       cb(l);
     },
-    () => cb([]),
+    () => cb(eventsCache.get(days) || []),
   );
 }
 

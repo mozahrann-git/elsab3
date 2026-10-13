@@ -69,6 +69,7 @@ import { INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { DailyQuest } from '../types';
 import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb } from '../services/crmBoardService';
 import { subscribeAllUnitViewings } from '../services/portalService';
+import { thumbUrl } from '../services/mediaStorage';
 
 interface SalesCrmModalProps {
   isOpen: boolean;
@@ -1771,10 +1772,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     {/* Right Property Image Thumbnail in RTL */}
                     <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-stone-100 shrink-0 border border-[#ECE8DF]">
                       <img
-                        src={prop.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=400&q=80'}
+                        loading="lazy" decoding="async" src={thumbUrl(prop.images?.[0], 400) || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=400&q=80'}
                         alt={prop.title}
                         className="w-full h-full object-cover"
-                        loading="lazy"
                       />
                     </div>
                   </div>

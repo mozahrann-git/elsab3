@@ -16,6 +16,7 @@ import { ChangePasswordModal } from '../ChangePasswordModal';
 import { WhenPicker, WhenValue, formatWhen } from '../common/WhenPicker';
 import { waLink } from '../../utils/helpers';
 import { brokerEscalation, minsText, MAX_SLOTS, REVEAL_MS } from '../../services/brokerEscalation';
+import { thumbUrl } from '../../services/mediaStorage';
 
 /*
   بوابة المالك والبروكر (نفس الهيكل):
@@ -261,7 +262,7 @@ const Stat: React.FC<{ n: string; l: string; color?: string; light?: boolean }> 
   </div>
 );
 const Thumb: React.FC<{ p: Property }> = ({ p }) => p.images?.[0]
-  ? <img src={p.images[0]} alt="" className="w-20 h-20 rounded-xl object-cover shrink-0" />
+  ? <img loading="lazy" decoding="async" src={thumbUrl(p.images[0], 200)} alt="" className="w-20 h-20 rounded-xl object-cover shrink-0" />
   : <div className="w-20 h-20 rounded-xl shrink-0" style={{ background: 'repeating-linear-gradient(135deg,#E7E2D8 0 10px,#EFEBE3 10px 20px)' }} />;
 
 const OwnerViewing: React.FC<{ v: UnitViewing }> = ({ v }) => {
