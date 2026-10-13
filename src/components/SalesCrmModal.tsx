@@ -66,10 +66,11 @@ import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
 import { OfferBuilderModal } from './sales/OfferBuilderModal';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { INITIAL_DAILY_QUESTS } from '../data/crmData';
-import { DailyQuest } from '../types';
+import { DailyQuest, ViewingRequest, WorkProof, AgentUnitAssignment, SalesTargets } from '../types';
 import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb } from '../services/crmBoardService';
 import { subscribeAllUnitViewings } from '../services/portalService';
 import { thumbUrl } from '../services/mediaStorage';
+import DailyTasksPanel from './sales/DailyTasksPanel';
 
 interface SalesCrmModalProps {
   isOpen: boolean;
@@ -96,6 +97,11 @@ interface SalesCrmModalProps {
   canEdit?: boolean;
   currentAgentId?: string;
   onLogout?: () => void;
+  /* بيانات المهام اليومية */
+  viewingRequests?: ViewingRequest[];
+  workProofs?: WorkProof[];
+  assignments?: AgentUnitAssignment[];
+  salesTargets?: SalesTargets;
 }
 
 // All 9 Pipeline Stages matching operations room & mobile selector
@@ -140,10 +146,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   onDeleteLead,
   canEdit = true,
   currentAgentId,
-  onLogout
+  onLogout,
+  viewingRequests,
+  workProofs,
+  assignments,
+  salesTargets,
 }) => {
   // Navigation Tabs matching sidebar items (Properties tab removed)
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'quests' | 'leaderboard'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'quests' | 'leaderboard' | 'daily'>('pipeline');
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeMobileStageFilter, setActiveMobileStageFilter] = useState<string>('all');
@@ -813,6 +823,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {/* Mobile / Tablet Horizontal Navigation Tabs */}
         <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 no-scrollbar shrink-0 border-b border-[#ECE8DF]">
           {[
+            { id: 'daily', label: 'مهام النهارده' },
             { id: 'pipeline', label: 'مسار العملاء' },
             { id: 'followups', label: 'المتابعات' },
             { id: 'matching', label: 'المطابقة الذكية' },
@@ -1822,6 +1833,24 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {/* ========================================================= */}
         {/* TAB 4: QUESTS & XP */}
         {/* ========================================================= */}
+        {activeTab === 'daily' && (
+          currentAgentId ? (
+            <DailyTasksPanel
+              agent={{ id: currentAgentId, name: agents.find((a) => a.id === currentAgentId)?.name || 'مندوب' }}
+              leads={leads}
+              requests={viewingRequests || []}
+              properties={properties}
+              proofs={workProofs || []}
+              assignment={(assignments || []).find((x) => x.agentId === currentAgentId)}
+              targets={salesTargets}
+            />
+          ) : (
+            <p className="text-sm text-stone-400 font-medium p-6 text-center">
+              المهام اليومية بتظهر للمندوب بحسابه — ادخل بحساب المندوب عشان تشوف مهامه
+            </p>
+          )
+        )}
+
         {activeTab === 'quests' && (
           <div className="space-y-4 sm:space-y-5 max-w-3xl mx-auto flex-1 pt-1 w-full">
             <div className="bg-white border border-[#ECE8DF] p-5 sm:p-6 rounded-3xl shadow-2xs space-y-5">

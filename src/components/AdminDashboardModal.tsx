@@ -9,7 +9,7 @@ import {
   FooterConfig,
   NeighborhoodPriceMapData,
   ClosedDeal,
-  BrokerProfile, Lead } from '../types';
+  BrokerProfile, Lead, ViewingRequest, WorkProof, AgentUnitAssignment, SalesTargets } from '../types';
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { INITIAL_SALES_AGENTS, INITIAL_BADGES, INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { INITIAL_PRICE_MAP_DATA, INITIAL_CLOSED_DEALS } from '../data/marketPriceData';
@@ -76,6 +76,7 @@ import {
   DollarSign,
   Compass,
   ImageOff,
+  ListChecks,
 } from 'lucide-react';
 import { formatPrice, formatNumber, generateWhatsAppLink, generateCallLink, compressImage } from '../utils/helpers';
 import { uploadFile, uploadDataUrl } from '../services/mediaStorage';
@@ -92,6 +93,7 @@ import { DemoDataCleanup } from './admin/DemoDataCleanup';
 import { QuestsManager } from './admin/QuestsManager';
 import { FloorRuleRow } from './admin/FloorRuleRow';
 import { thumbUrl } from '../services/mediaStorage';
+import TasksOverview from './admin/TasksOverview';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -99,6 +101,12 @@ interface AdminDashboardModalProps {
   properties: Property[];
   /* للتحليلات العميقة */
   crmLeads?: Lead[];
+  /* متابعة المهام اليومية */
+  viewingRequests?: ViewingRequest[];
+  workProofs?: WorkProof[];
+  assignments?: AgentUnitAssignment[];
+  salesTargets?: SalesTargets;
+  onAssignmentsChanged?: () => void;
   /* تنضيف البيانات التجريبية */
   onCleanupDemo?: {
     deleteAgents: (ids: string[]) => Promise<void>;
@@ -161,6 +169,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onImportProperties,
   ownerSubmissions,
   crmLeads,
+  viewingRequests,
+  workProofs,
+  assignments,
+  salesTargets,
+  onAssignmentsChanged,
   onCleanupDemo,
   onApproveSubmission,
   onRejectSubmission,
@@ -199,7 +212,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   /* الطلب اللي بنراجعه دلوقتي — النشر مش بيحصل غير من جوّه المراجعة */
   const [reviewSub, setReviewSub] = useState<any>(null);
 
-  const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'projects' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings'>('manage');
+  const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'projects' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings' | 'tasks'>('manage');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterNeighborhood, setFilterNeighborhood] = useState<string>('all');
   const [filterFinishing, setFilterFinishing] = useState<string>('all');
@@ -1245,6 +1258,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </span>
               </button>
             )}
+
+            <button
+              onClick={() => setActiveTab('tasks')}
+              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                activeTab === 'tasks'
+                  ? 'bg-[#141414] text-white'
+                  : 'bg-[#F6F4EF] text-[#6B665C]'
+              }`}
+            >
+              <ListChecks size={13} />
+              <span>متابعة المهام</span>
+            </button>
 
             <button
               onClick={() => setActiveTab('market_pricing')}
@@ -2552,6 +2577,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {/* TAB 4: SALES TEAM MANAGEMENT                                     */}
           {/* ================================================================ */}
+          {activeTab === 'tasks' && (
+            <TasksOverview
+              agents={salesAgentsList}
+              leads={crmLeads || []}
+              requests={viewingRequests || []}
+              properties={properties}
+              proofs={workProofs || []}
+              assignments={assignments || []}
+              targets={salesTargets}
+              onAssignmentsSaved={onAssignmentsChanged}
+            />
+          )}
+
           {activeTab === 'sales_team' && (
             <div className="space-y-5">
               {/* الأرقام المكررة بين السيلز — فوق عشان متعديش */}

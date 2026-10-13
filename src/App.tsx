@@ -14,6 +14,7 @@ import { SalesFeedbackInbox } from './components/portal/SalesFeedbackInbox';
 import { OfferPublicPage } from './components/sales/OfferPublicPage';
 import { getTrackedLink, logLinkHit } from './services/salesToolsService';
 import { getStaffAccess, StaffAccess } from './services/firebaseService';
+import { subscribeWorkProofs, subscribeTargets, fetchAssignments } from './services/dailyTasksService';
 import { linkPropertyToOwner } from './services/portalService';
 import { imageHashes } from './services/imageFingerprint';
 import { 
@@ -31,7 +32,11 @@ import {
   NeighborhoodPriceMapData,
   ClosedDeal,
   ViewingRequest,
-  BrokerProfile
+  BrokerProfile,
+  WorkProof,
+  SalesTargets,
+  AgentUnitAssignment,
+  DEFAULT_SALES_TARGETS,
 } from './types';
 import { 
   ALL_HADABA_PROPERTIES,
@@ -384,6 +389,14 @@ export default function App() {
       if (isQuota) setIsQuotaExceeded(true);
     });
 
+    /* 4ب. إثباتات الشغل وأهداف المهام — للموظفين بس.
+       الإثباتات بتتجاب لآخر ٤٠ يوم بس عشان القراءات. */
+    const unsubProofs = !isStaffSession ? noop : subscribeWorkProofs((l) => setWorkProofs(l));
+    /* التوزيع بيتغيّر كل أسبوعين، فقراءة واحدة وقت الدخول كفاية —
+       مش محتاج اشتراك حي يفضل مفتوح ويستهلك. */
+    if (isStaffSession) fetchAssignments().then(setUnitAssignments).catch(() => {});
+    const unsubTargets = !isStaffSession ? noop : subscribeTargets((t) => setSalesTargets(t));
+
     // 5. Subscribe to Site Config (Banner, Logo & Footer)
     const unsubConfig = subscribeToSiteConfig((config) => {
       if (config.bannerUrl) {
@@ -421,6 +434,8 @@ export default function App() {
       unsubAgents();
       unsubLeads();
       unsubSubmissions();
+      unsubProofs();
+      unsubTargets();
       unsubConfig();
       unsubBrokers();
     };
@@ -433,6 +448,15 @@ export default function App() {
   }, [properties]);
 
   // 2. Owner Submissions State (persisted in LocalStorage)
+  /* إثباتات الشغل (سكرين شوت الإعلانات والفيديو) وأهداف المهام.
+     الاتنين بييجوا من الفايربيز للموظفين بس. */
+  const [workProofs, setWorkProofs] = useState<WorkProof[]>([]);
+  const [salesTargets, setSalesTargets] = useState<SalesTargets>(DEFAULT_SALES_TARGETS);
+  const [unitAssignments, setUnitAssignments] = useState<AgentUnitAssignment[]>([]);
+  /* طلبات المعاينة كانت بتتجاب وتتسرّب جوه الـeffect من غير ما تتخزّن.
+     عدّادات المهام محتاجاها، فبقت متخزّنة. */
+  const [allViewingRequests, setAllViewingRequests] = useState<ViewingRequest[]>([]);
+
   const [ownerSubmissions, setOwnerSubmissions] = useState<OwnerSubmission[]>(() => {
     try {
       const saved = localStorage.getItem('lion_owner_submissions');
@@ -1382,6 +1406,7 @@ export default function App() {
     // المزامنة دي شغل داخلي — الزائر العادي مالوش دعوة بيها
     if (!staffAccess && !isAdminLoggedIn && !isSalesLoggedIn) return;
     const unsub = subscribeToViewingRequests(null, (reqs) => {
+      setAllViewingRequests(reqs || []);
       if (!reqs?.length) return;
 
       /* الحفظ بيتجمّع هنا وبيتنفّذ بعد ما نخلص الحساب — مش جوه
@@ -2492,6 +2517,11 @@ export default function App() {
 
       {/* 7. Full Admin Dashboard (Add/Edit/Delete Properties with 5 photos, Review Owner Submissions, Track Clicks) */}
       <AdminDashboardModal
+        viewingRequests={allViewingRequests}
+        workProofs={workProofs}
+        assignments={unitAssignments}
+        salesTargets={salesTargets}
+        onAssignmentsChanged={() => { fetchAssignments().then(setUnitAssignments).catch(() => {}); }}
         onCleanupDemo={{
           deleteAgents: async (ids) => {
             for (const id of ids) await deleteSalesAgentFromDb(id);
@@ -2596,6 +2626,10 @@ export default function App() {
         onSendEmergencyAlert={handleSendEmergencyAlert}
         onSelectProperty={(prop) => setSelectedProperty(prop)}
         onOpenAffiliateModal={(prop) => setSalesToolkitProperty(prop)}
+        viewingRequests={allViewingRequests}
+        workProofs={workProofs}
+        assignments={unitAssignments}
+        salesTargets={salesTargets}
       />
 
       {/* Sales Agent Email Login Modal */}

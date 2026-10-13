@@ -241,6 +241,37 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* إثباتات الشغل: سكرين شوت الإعلان والفيديو.
+       المندوب بيكتب باسمه هو بس — مش بيقدر يسجّل إنجاز لحد تاني،
+       ولا يمسح إثبات اتسجّل. المسح للأدمن بس عشان الأرقام
+       ما تتظبطش بأثر رجعي. */
+    match /work_proofs/{id} {
+      allow read: if isStaff() || isOps() || isBoss() || isMkt();
+      allow create: if (isStaff() || isOps() || isBoss())
+                    && request.resource.data.agentId is string
+                    && request.resource.data.agentId.size() > 0
+                    && request.resource.data.proofUrl is string
+                    && request.resource.data.proofUrl.size() > 0;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* الإعدادات — منها أهداف المهام اليومية.
+       من غير القاعدة دي كانت هتترفض في صمت بسبب قاعدة المنع
+       العامة في آخر الملف، والأهداف تفضل على الافتراضي
+       من غير ما حد ياخد باله. */
+    match /settings/{id} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin() || isBoss();
+    }
+
+    /* توزيع الشقق على المناديب: الإدارة بتوزّع، والكل بيقرا
+       عشان كل مندوب يشوف شققه */
+    match /agent_units/{id} {
+      allow read: if isStaff() || isOps() || isBoss() || isMkt();
+      allow write: if isAdmin() || isOps();
+    }
+
     // سجل الأحداث: الكتابة مفتوحة (الزائر بيسجّل مشاهداته)، القراءة للإدارة بس
     match /events/{id} {
       allow create: if true;
