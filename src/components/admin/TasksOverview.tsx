@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Loader2, Settings2, Shuffle, ExternalLink } from 'lucide-react';
+import { Loader2, Settings2, Shuffle, ExternalLink, X } from 'lucide-react';
 import type {
   Lead, Property, SalesAgent, ViewingRequest, WorkProof, SalesTargets, AgentUnitAssignment,
 } from '../../types';
 import { DEFAULT_SALES_TARGETS } from '../../types';
 import {
   buildScorecard, distributeUnits, saveAssignment, saveTargets, signedUnitIds, cairoDay,
+  detailsFor, DetailRow,
 } from '../../services/dailyTasksService';
 import { thumbUrl } from '../../services/mediaStorage';
 
@@ -16,18 +17,21 @@ import { thumbUrl } from '../../services/mediaStorage';
    المندوب بالظبط (نفس الدالة بتحسبهم) — عشان ما يحصلش إن
    المندوب شايف رقم وأنت شايف رقم تاني.                     */
 
-const Cell: React.FC<{ done: number; target: number }> = ({ done, target }) => {
+const Cell: React.FC<{ done: number; target: number; onClick?: () => void }> = ({ done, target, onClick }) => {
   const full = done >= target;
   const near = !full && target > 0 && done / target >= 0.7;
   return (
     <td className="px-2 py-2 text-center">
-      <span className={`font-mono font-black text-xs px-2 py-1 rounded-lg inline-block ${
-        full ? 'bg-[#EEF5F0] text-[#1E7A45]'
-        : near ? 'bg-[#FBF1E4] text-[#A07A26]'
-        : 'bg-[#FBEDEA] text-[#C2412D]'
-      }`}>
+      <button
+        type="button" onClick={onClick} disabled={!onClick || done === 0}
+        className={`font-mono font-black text-xs px-2 py-1 rounded-lg inline-block transition-transform ${
+          full ? 'bg-[#EEF5F0] text-[#1E7A45]'
+          : near ? 'bg-[#FBF1E4] text-[#A07A26]'
+          : 'bg-[#FBEDEA] text-[#C2412D]'
+        } ${onClick && done > 0 ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
+      >
         {done}<span className="opacity-40">/{target}</span>
-      </span>
+      </button>
     </td>
   );
 };
@@ -52,7 +56,10 @@ export const TasksOverview: React.FC<{
   const [form, setForm] = useState<SalesTargets>(t);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
   const [openProofs, setOpenProofs] = useState<string | null>(null);
+  /* الرقم اللي الإدارة دوست عليه — بنوريها الشغل اللي وراه */
+  const [drill, setDrill] = useState<null | { agentName: string; label: string; rows: DetailRow[] }>(null);
 
   const active = useMemo(
     () => agents.filter((a) => a.isActive !== false),
@@ -69,9 +76,9 @@ export const TasksOverview: React.FC<{
   );
 
   const saveT = async () => {
-    setBusy('targets'); setMsg('');
+    setBusy('targets'); setMsg(''); setErr('');
     try { await saveTargets(form); onTargetsSaved?.(form); setEditing(false); setMsg('الأهداف اتحفظت'); }
-    catch (e: any) { setMsg(e?.message || 'الحفظ ما نجحش'); }
+    catch (e: any) { setErr(e?.message || 'الحفظ ما نجحش'); }
     finally { setBusy(''); }
   };
 
@@ -82,7 +89,7 @@ export const TasksOverview: React.FC<{
       + `التوزيع القديم هيتبدّل، والنظام هيتجنّب يدّي أي مندوب نفس شققه السابقة.\n\nتمام؟`,
     );
     if (!ok) return;
-    setBusy('dist'); setMsg('');
+    setBusy('dist'); setMsg(''); setErr('');
     try {
       const prev: Record<string, string[]> = {};
       assignments.forEach((a) => { prev[a.agentId] = a.propertyIds || []; });
@@ -105,7 +112,7 @@ export const TasksOverview: React.FC<{
         `اتوزّعت على ${active.length} مندوب · ${res.priority.size} شقة تحت المتوسط `
         + `اتكررت بينهم (متوسط التفاعل ${Math.round(res.average)})`,
       );
-    } catch (e: any) { setMsg(e?.message || 'التوزيع ما نجحش'); }
+    } catch (e: any) { setErr(e?.message || 'التوزيع ما نجحش'); }
     finally { setBusy(''); }
   };
 
@@ -118,9 +125,9 @@ export const TasksOverview: React.FC<{
       + 'النقط الجديدة بتتحسب من الشغل الحقيقي، فمش هتضيع حاجة اتعملت فعلاً.\n\nتمام؟',
     );
     if (!ok || !onResetXp) return;
-    setBusy('xp'); setMsg('');
+    setBusy('xp'); setMsg(''); setErr('');
     try { await onResetXp(); setMsg('النقط القديمة اتصفّرت — البداية من جديد'); }
-    catch (e: any) { setMsg(e?.message || 'التصفير ما نجحش'); }
+    catch (e: any) { setErr(e?.message || 'التصفير ما نجحش'); }
     finally { setBusy(''); }
   };
 
@@ -155,6 +162,19 @@ export const TasksOverview: React.FC<{
       </div>
 
       {msg && <p className="text-xs font-bold text-[#1E7A45] bg-[#EEF5F0] rounded-xl px-3 py-2">{msg}</p>}
+      {err && (
+        <div className="bg-[#FBEDEA] border border-[#E8C4BC] rounded-xl px-3 py-3 space-y-1">
+          <p className="text-xs font-black text-[#C2412D]">✗ ما نجحش: {err}</p>
+          {/permission|insufficient/i.test(err) && (
+            <p className="text-[11px] text-[#C2412D] leading-relaxed">
+              فايربيز رافض الكتابة. ده معناه إن قواعد الأمان الجديدة لسه مانزلتش.
+              شغّل على جهازك: <b dir="ltr">firebase deploy --only firestore:rules</b>
+              {' '}وبعدين جرّب تاني. لو الرسالة فضلت، يبقى حسابك مش مسجّل كأدمن في
+              {' '}<b>staff_access</b> بنفس إيميل الدخول.
+            </p>
+          )}
+        </div>
+      )}
 
       {editing && (
         <div className="bg-white rounded-2xl p-4 border border-[#ECE8DF] space-y-3">
@@ -228,7 +248,18 @@ export const TasksOverview: React.FC<{
                       <ExternalLink size={11} className="opacity-40" />
                     </button>
                   </td>
-                  {card.rows.map((r) => <Cell key={r.key} done={r.done} target={r.target} />)}
+                  {card.rows.map((r) => (
+                    <Cell
+                      key={r.key} done={r.done} target={r.target}
+                      onClick={() => setDrill({
+                        agentName: agent.name, label: r.label,
+                        rows: detailsFor({
+                          key: r.key, agentId: agent.id,
+                          leads, requests, proofs,
+                        }),
+                      })}
+                    />
+                  ))}
                   <td className="px-2 py-2 text-center">
                     <span className="font-mono font-black text-xs text-stone-600">
                       {signed.size}<span className="opacity-40">/{total}</span>
@@ -240,6 +271,43 @@ export const TasksOverview: React.FC<{
           </tbody>
         </table>
       </div>
+
+      {drill && (
+        <div className="fixed inset-0 z-[120] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
+          <div className="bg-[#FBF8F1] w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-[#ECE8DF]">
+              <div className="min-w-0">
+                <p className="font-black text-stone-900 truncate">{drill.label} · {drill.agentName}</p>
+                <p className="text-xs text-stone-400 font-medium">{drill.rows.length} سطر</p>
+              </div>
+              <button type="button" onClick={() => setDrill(null)} className="p-2 rounded-full hover:bg-stone-100 shrink-0">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {drill.rows.length === 0 ? (
+                <p className="text-xs text-stone-400 font-medium text-center py-8">مفيش حاجة اتسجّلت</p>
+              ) : drill.rows.map((r) => (
+                <div key={r.id} className="bg-white rounded-2xl p-3 border border-[#ECE8DF] flex items-center gap-3">
+                  {r.imageUrl && (
+                    <a href={r.linkUrl || r.imageUrl} target="_blank" rel="noreferrer" className="shrink-0">
+                      <img loading="lazy" src={thumbUrl(r.imageUrl, 120)} alt=""
+                        className="w-12 h-12 rounded-xl object-cover border border-[#ECE8DF]" />
+                    </a>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black text-stone-900 truncate">{r.title}</p>
+                    {r.sub && <p className="text-[11px] text-stone-400 font-medium truncate">{r.sub}</p>}
+                  </div>
+                  <span className="text-[10px] font-mono text-stone-400 shrink-0">
+                    {new Date(r.at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {openProofs && (
         <div className="bg-white rounded-2xl p-4 border border-[#ECE8DF] space-y-3">

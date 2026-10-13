@@ -297,6 +297,107 @@ export function subscribeTargets(cb: (t: SalesTargets) => void): () => void {
    والتوزيع بيتجنّب إنه يدّي المندوب نفس شققه بتاعة الدورة
    اللي فاتت، عشان كل شقة تاخد عين جديدة.                  */
 
+/* ---------- التفاصيل ورا كل رقم ----------
+   الإدارة لازم تقدر تدوس على أي عدّاد وتشوف الشغل اللي
+   وراه بالاسم والوقت. رقم من غير تفاصيل مش ممكن تتأكد منه. */
+
+export interface DetailRow {
+  id: string;
+  title: string;
+  sub?: string;
+  at: number;
+  imageUrl?: string;
+  linkUrl?: string;
+}
+
+export function callDetails(leads: Lead[], agentId: string, days: string[]): DetailRow[] {
+  const want = new Set(days);
+  const out: DetailRow[] = [];
+  leads.forEach((l) => {
+    if (l.assignedAgentId !== agentId) return;
+    const kind = l.leadKind === 'fresh' ? 'فريش'
+      : l.leadKind === 'old_campaign' ? 'كامبين قديمة' : 'متابعة';
+    (l.activity || []).forEach((a, i) => {
+      if (!a || typeof a.at !== 'number' || !want.has(cairoDay(a.at))) return;
+      out.push({
+        id: `${l.id}_${i}`,
+        title: l.name || l.phone || 'عميل',
+        sub: `${kind} · ${a.outcome || ''}${a.comment ? ' — ' + a.comment : ''}`,
+        at: a.at,
+      });
+    });
+  });
+  return out.sort((a, b) => b.at - a.at);
+}
+
+export function requestDetails(
+  requests: ViewingRequest[], agentId: string, days: string[], onlyCompleted = false,
+): DetailRow[] {
+  const want = new Set(days);
+  const out: DetailRow[] = [];
+  requests.forEach((r) => {
+    if (r.requestingAgentId !== agentId) return;
+    const at = onlyCompleted
+      ? (r.completedAtTimestamp || 0)
+      : (r.createdAtTimestamp || Date.parse(r.createdAt || '') || 0);
+    if (!at || !want.has(cairoDay(at))) return;
+    if (onlyCompleted && r.status !== 'completed') return;
+    out.push({
+      id: r.id,
+      title: `${r.propertyCode} · ${r.clientName || 'عميل'}`,
+      sub: `${r.requestKind === 'potential' ? 'مهتم جداً' : 'عادي'} · ${r.propertyNeighborhood || ''}`
+        + `${r.clientPhone ? ' · ' + r.clientPhone : ''}`,
+      at,
+      imageUrl: r.propertyImage,
+    });
+  });
+  return out.sort((a, b) => b.at - a.at);
+}
+
+export function proofDetails(
+  proofs: WorkProof[], agentId: string, days: string[], kinds: WorkProof['kind'][],
+): DetailRow[] {
+  const want = new Set(days);
+  const label: Record<string, string> = {
+    ad_resale: 'إعلان ريسيل', ad_offplan: 'إعلان تحت الإنشاء',
+    video: 'فيديو', bonus_listing: 'وحدة جديدة',
+  };
+  return proofs
+    .filter((p) => p.agentId === agentId && want.has(p.day) && kinds.includes(p.kind))
+    .map((p) => ({
+      id: p.id,
+      title: p.propertyCode ? `${p.propertyCode} · ${label[p.kind]}` : label[p.kind],
+      sub: new Date(p.at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      at: p.at,
+      imageUrl: p.proofUrl,
+      linkUrl: p.proofUrl,
+    }))
+    .sort((a, b) => b.at - a.at);
+}
+
+/** التفاصيل ورا عدّاد معيّن — نفس المفاتيح اللي في buildScorecard */
+export function detailsFor(args: {
+  key: string;
+  agentId: string;
+  leads: Lead[];
+  requests: ViewingRequest[];
+  proofs: WorkProof[];
+  now?: Date;
+}): DetailRow[] {
+  const now = args.now || new Date();
+  const today = [cairoDay(now)];
+  const week = weekDays(now);
+  switch (args.key) {
+    case 'calls': return callDetails(args.leads, args.agentId, today);
+    case 'requests': return requestDetails(args.requests, args.agentId, today);
+    case 'visits': return requestDetails(args.requests, args.agentId, week, true);
+    case 'ads_resale': return proofDetails(args.proofs, args.agentId, today, ['ad_resale']);
+    case 'ads_offplan': return proofDetails(args.proofs, args.agentId, today, ['ad_offplan']);
+    case 'videos': return proofDetails(args.proofs, args.agentId, week, ['video']);
+    default: return [];
+  }
+}
+
 /* ---------- النقط (XP) ----------
    النقط محسوبة من الشغل الحقيقي، مش مخزّنة ومش بتتزوّد بزرار.
    يعني مفيش مصدرين للحقيقة، ومفيش حد يقدر يزوّدها بالضغط.

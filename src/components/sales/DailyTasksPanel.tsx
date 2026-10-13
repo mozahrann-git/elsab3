@@ -190,6 +190,10 @@ export const DailyTasksPanel: React.FC<{
 }> = ({ agent, leads, requests, properties, proofs, assignment, targets, onRefresh }) => {
   const t = targets || DEFAULT_SALES_TARGETS;
   const [adFor, setAdFor] = useState<Property | null>(null);
+  /* اختيار شقة بالكود — عشان المندوب يسجّل إعلان على أي شقة
+     حتى لو الإدارة لسه ماوزّعتش الدورة. التسجيل مايستناش حد. */
+  const [picking, setPicking] = useState(false);
+  const [pickQuery, setPickQuery] = useState('');
   const [videoBusy, setVideoBusy] = useState(false);
   const videoRef = useRef<HTMLInputElement>(null);
   const [bonusBusy, setBonusBusy] = useState(false);
@@ -246,6 +250,20 @@ export const DailyTasksPanel: React.FC<{
   }, [proofs, agent.id]);
 
   const rows = card.rows;
+
+  /* نتايج البحث: المحتاجة دفع الأول، و٣٠ نتيجة بالكتير
+     عشان القايمة ما تتقلش على الموبايل */
+  const pickResults = useMemo(() => {
+    const q = pickQuery.trim().toLowerCase();
+    if (!q) return myUnits.slice(0, 30);
+    return properties
+      .filter((p) =>
+        (p.code || '').toLowerCase().includes(q)
+        || (p.title || '').toLowerCase().includes(q)
+        || (p.neighborhood || '').toLowerCase().includes(q))
+      .sort((a, b) => (weakIds.has(b.id) ? 1 : 0) - (weakIds.has(a.id) ? 1 : 0))
+      .slice(0, 30);
+  }, [pickQuery, properties, myUnits, weakIds]);
 
   const uploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -320,6 +338,63 @@ export const DailyTasksPanel: React.FC<{
           {videoBusy ? 'بيرفع…' : 'ارفع الفيديو'}
         </button>
       </div>
+
+      {/* سجّل إعلان على أي شقة — مش لازم تكون متوزّعة عليه */}
+      <button
+        type="button" onClick={() => { setPicking(true); setPickQuery(''); }}
+        className="w-full rounded-2xl py-3.5 bg-[#141414] text-white font-black flex items-center justify-center gap-2"
+      >
+        <Megaphone size={16} /> سجّل إعلان جديد
+      </button>
+
+      {picking && (
+        <div className="fixed inset-0 z-[115] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
+          <div className="bg-[#FBF8F1] w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-[#ECE8DF]">
+              <p className="font-black text-stone-900">اختار الشقة</p>
+              <button type="button" onClick={() => setPicking(false)} className="p-2 rounded-full hover:bg-stone-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4 pb-2">
+              <input
+                autoFocus value={pickQuery} onChange={(e) => setPickQuery(e.target.value)}
+                placeholder="اكتب الكود أو الحي أو جزء من العنوان"
+                className="w-full rounded-2xl border border-[#E4DFD4] px-4 py-3 text-sm font-bold"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+              {pickResults.length === 0 ? (
+                <p className="text-xs text-stone-400 font-medium text-center py-6">
+                  {pickQuery.trim() ? 'مفيش شقة بالكلام ده' : 'ابدأ تكتب الكود'}
+                </p>
+              ) : pickResults.map((p) => (
+                <button
+                  key={p.id} type="button"
+                  onClick={() => { setPicking(false); setAdFor(p); }}
+                  className="w-full bg-white rounded-2xl p-3 border border-[#ECE8DF] flex items-center gap-3 text-right"
+                >
+                  {(p.images || []).filter(Boolean).length > 0 ? (
+                    <img loading="lazy" src={thumbUrl(p.images[0], 120)} alt=""
+                      className="w-12 h-12 rounded-xl object-cover shrink-0" />
+                  ) : <div className="w-12 h-12 rounded-xl bg-stone-100 shrink-0" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono font-black bg-stone-100 px-2 py-0.5 rounded-full">{p.code}</span>
+                      {weakIds.has(p.id) && (
+                        <span className="text-[9px] font-black bg-[#FBF1E4] text-[#A07A26] px-2 py-0.5 rounded-full">
+                          محتاجة دفع
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-bold text-stone-800 truncate mt-0.5">{p.title}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* بونص — مش هدف يومي، بس بياخد عليه نقط */}
       <div className="bg-white rounded-2xl p-4 border border-dashed border-[#E8D3A6] flex items-center justify-between gap-3 flex-wrap">
