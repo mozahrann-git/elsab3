@@ -341,8 +341,18 @@ export default function App() {
       if (isQuota) setIsQuotaExceeded(true);
     });
 
+    /* بيانات الموظفين متتفتحش للزائر العادي.
+
+       قبل كده الاشتراكات دي كانت بتتعمل لأي حد يفتح الموقع — حتى الزائر
+       الجاي من فيسبوك. القواعد كانت بترفضه، بس الاشتراك بيتفتح ويتقفل
+       بخطأ، ومع إعادة المحاولة بقى استهلاك متكرر من غير فايدة.
+       authKey بيتغيّر مع كل دخول وخروج، فالـeffect بيتعاد والاشتراكات
+       بتتفتح أول ما الموظف يدخل. */
+    const isStaffSession = authKey !== 'guest' && authKey !== 'init';
+    const noop = () => {};
+
     // 3. Subscribe to CRM Leads
-    const unsubLeads = subscribeToCrmLeads((liveLeads) => {
+    const unsubLeads = !isStaffSession ? noop : subscribeToCrmLeads((liveLeads) => {
       if (liveLeads && liveLeads.length > 0) {
         setCrmLeads(liveLeads);
         safeLocalStorageSet('lion_crm_leads', JSON.stringify(liveLeads));
@@ -365,7 +375,7 @@ export default function App() {
     });
 
     // 4. Subscribe to Owner Submissions
-    const unsubSubmissions = subscribeToOwnerSubmissions((liveSubs) => {
+    const unsubSubmissions = !isStaffSession ? noop : subscribeToOwnerSubmissions((liveSubs) => {
       if (liveSubs && liveSubs.length > 0) {
         setOwnerSubmissions(liveSubs);
         safeLocalStorageSet('lion_owner_submissions', JSON.stringify(liveSubs));
@@ -1369,6 +1379,8 @@ export default function App() {
      البروكر بيأكد المعاد → الكارت ينط لـ"معاينة مؤكدة" والسيلز يتنبّه.
      المعاينة تتم → الكارت ينط لـ"تمت المعاينة" والفيدباك يبقى مستني تأكيد السيلز. */
   useEffect(() => {
+    // المزامنة دي شغل داخلي — الزائر العادي مالوش دعوة بيها
+    if (!staffAccess && !isAdminLoggedIn && !isSalesLoggedIn) return;
     const unsub = subscribeToViewingRequests(null, (reqs) => {
       if (!reqs?.length) return;
 
@@ -1422,8 +1434,9 @@ export default function App() {
       });
     });
     return () => { try { unsub?.(); } catch { /* */ } };
+    // لازم يتعاد لما الموظف يدخل — من غير كده الاشتراك مش هيشتغل أبداً
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [staffAccess, isAdminLoggedIn, isSalesLoggedIn]);
 
   const handleAddLead = (newLead: Lead) => {
     logEvent('lead_created', {

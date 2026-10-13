@@ -86,10 +86,15 @@ export async function logEvent(
 /* ---------- القراءة ---------- */
 
 /** آخر N يوم من الأحداث — ده اللي كل التقارير بتشتغل عليه */
+/* سقف القراءة. كان ٥٠٠٠ مستند مع كل فتحة لشاشة الإحصائيات — يعني
+   عشر فتحات = ٥٠ ألف قراءة = الكوتة اليومية كلها من شاشة واحدة.
+   ١٢٠٠ كفاية للرسوم والنِّسَب، والأحدث هو اللي بيتجاب. */
+const EVENTS_CAP = 1200;
+
 export function subscribeEvents(days: number, cb: (l: AppEvent[]) => void) {
   const since = Date.now() - days * 86400000;
   return onSnapshot(
-    query(collection(db, 'events'), where('at', '>=', since), orderBy('at', 'desc'), qLimit(5000)),
+    query(collection(db, 'events'), where('at', '>=', since), orderBy('at', 'desc'), qLimit(EVENTS_CAP)),
     (snap) => {
       const l: AppEvent[] = [];
       snap.forEach((d) => l.push(d.data() as AppEvent));
@@ -102,7 +107,7 @@ export function subscribeEvents(days: number, cb: (l: AppEvent[]) => void) {
 export async function fetchEvents(days: number): Promise<AppEvent[]> {
   try {
     const since = Date.now() - days * 86400000;
-    const snap = await getDocs(query(collection(db, 'events'), where('at', '>=', since), orderBy('at', 'desc'), qLimit(5000)));
+    const snap = await getDocs(query(collection(db, 'events'), where('at', '>=', since), orderBy('at', 'desc'), qLimit(EVENTS_CAP)));
     const l: AppEvent[] = [];
     snap.forEach((d) => l.push(d.data() as AppEvent));
     return l;

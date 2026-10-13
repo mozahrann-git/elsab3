@@ -118,6 +118,8 @@ function listen<T>(q: any, cb: (list: T[]) => void, sortKey: keyof T = 'createdA
     }, (err: any) => {
       console.warn('[Portal] listen error:', err?.code || err, '— هنحاول تاني بعد', wait / 1000, 'ث');
       if (stopped) return;
+      // خطأ صلاحية = مش هينجح أبداً، فمفيش فايدة من إعادة المحاولة
+      if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') return;
       timer = setTimeout(start, wait);
       wait = Math.min(wait * 2, 60000);
     });

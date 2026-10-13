@@ -15,6 +15,8 @@ import {
   runTransaction,
   deleteField,
   increment,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   serverTimestamp
 } from 'firebase/firestore';
 import { 
@@ -67,12 +69,39 @@ export async function ensureAuth(): Promise<FirebaseUser | null> {
 ensureAuth().catch(() => {});
 
 // Initialize Firestore with robust connection settings and specific databaseId if configured
+/*
+  الكاش المحلي — أكبر توفير في قراءات Firestore.
+
+  من غيره: كل مرة أي حد يفتح الموقع، التطبيق بيعيد تحميل كل المستندات
+  من السيرفر من الصفر. ٣٣٢ شقة × كل فتحة × كل زائر. وده اللي وصّلنا
+  لـ٤٤ ألف قراءة في اليوم من ٥٠ ألف.
+
+  معاه: المستندات بتتخزن على الجهاز، والفتحة الجاية Firestore بيجيب
+  اللي اتغيّر بس. الفتحة التانية بتنزل من ٣٣٢ قراءة لقراءات معدودة.
+
+  persistentMultipleTabManager: عشان لو فتح أكتر من تاب، الكاش يتشارك
+  بينهم بدل ما كل تاب يعمل نسخته.
+  لو المتصفح رفض (الوضع الخاص مثلاً) بنرجع للإعدادات العادية — الموقع
+  بيشتغل عادي، بس من غير التوفير.
+*/
 export const db = (() => {
+  const baseSettings = {
+    experimentalForceLongPolling: true,
+    ignoreUndefinedProperties: true,
+  };
   try {
-    const firestoreSettings = {
-      experimentalForceLongPolling: true,
-      ignoreUndefinedProperties: true
+    const cached = {
+      ...baseSettings,
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     };
+    return firebaseConfig.firestoreDatabaseId
+      ? initializeFirestore(app, cached, firebaseConfig.firestoreDatabaseId)
+      : initializeFirestore(app, cached);
+  } catch {
+    // المتصفح مش سامح بالتخزين — بنكمّل من غير كاش
+  }
+  try {
+    const firestoreSettings = baseSettings;
     if (firebaseConfig.firestoreDatabaseId) {
       return initializeFirestore(app, firestoreSettings, firebaseConfig.firestoreDatabaseId);
     }
@@ -254,6 +283,59 @@ export async function fetchAllPropertiesFromDb(): Promise<Property[]> {
   دلوقتي بيحاول تاني: ١٠ ثواني، وبتكبر لحد دقيقتين لو فضل واقع.
   وأول ما يرجع، بيجيب القايمة الصح والمهلة بترجع لأولها.
 */
+/*
+  ===========================================================================
+  غلاف واحد لكل الاشتراكات.
+
+  بيحل مشكلتين مع بعض:
+  1) لما الاتصال يقع (نت، كوتة)، onSnapshot بيموت نهائياً والشاشة بتفضل
+     على بيانات قديمة من غير ما حد يعرف. بنعيد الاتصال بمهلة بتكبر.
+  2) خطأ الصلاحية (زائر مش مسجّل بيحاول يقرا بيانات الموظفين) عمره ما
+     هينجح. إعادة المحاولة عليه استهلاك قراءات من غير أي فايدة —
+     فبنوقف فوراً.
+  ===========================================================================
+*/
+function liveListen(
+  target: any,
+  onNext: (snap: any) => void,
+  onFail?: (error: unknown, isQuota: boolean) => void,
+  label = '',
+): () => void {
+  let stopped = false;
+  let unsub: null | (() => void) = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let wait = 10000;
+
+  const start = () => {
+    if (stopped) return;
+    if (unsub) { try { unsub(); } catch { /* */ } unsub = null; }
+    unsub = onSnapshot(target, (snap: any) => {
+      wait = 10000;
+      onNext(snap);
+    }, (error: any) => {
+      const isQuota = isQuotaExceededError(error);
+      if (onFail) onFail(error, isQuota);
+      if (stopped) return;
+      const code = error?.code;
+      if (code === 'permission-denied' || code === 'unauthenticated') {
+        console.warn(`[Firebase] ${label}: مفيش صلاحية — مش هنعيد المحاولة`);
+        return;
+      }
+      console.warn(`[Firebase] ${label} ${isQuota ? 'الكوتة خلصت' : 'الاشتراك وقع'}:`, code || error,
+        '— هنحاول تاني بعد', wait / 1000, 'ث');
+      timer = setTimeout(start, wait);
+      wait = Math.min(wait * 2, 120000);
+    });
+  };
+  start();
+
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+    if (unsub) unsub();
+  };
+}
+
 export function subscribeToProperties(
   onUpdate: (properties: Property[]) => void,
   onError?: (error: unknown, isQuota: boolean) => void
@@ -283,6 +365,8 @@ export function subscribeToProperties(
       }
       if (onError) onError(error, isQuota);
       if (stopped) return;
+      // خطأ صلاحية مش هينجح أبداً — إعادة المحاولة عليه استهلاك خالص
+      if (error?.code === 'permission-denied' || error?.code === 'unauthenticated') return;
       /* الكوتة بتتصفّر بالساعة، والنت بيرجع. فبنفضل نحاول — بس بالراحة. */
       timer = setTimeout(start, wait);
       wait = Math.min(wait * 2, 120000);
@@ -458,23 +542,15 @@ export function subscribeToSalesAgents(
   onError?: (error: unknown, isQuota: boolean) => void
 ): () => void {
   const agentsCol = collection(db, 'sales_agents');
-  return onSnapshot(agentsCol, (snapshot) => {
+  return liveListen(agentsCol, (snapshot: any) => {
     const agents: SalesAgent[] = [];
-    snapshot.forEach((docSnap) => {
+    snapshot.forEach((docSnap: any) => {
       const data = docSnap.data();
       delete (data as any).password;
       agents.push(data as SalesAgent);
     });
     onUpdate(agents);
-  }, (error) => {
-    const isQuota = isQuotaExceededError(error);
-    if (isQuota) {
-      console.warn('[Firebase] Free daily quota limit reached on sales_agents.');
-    } else {
-      console.warn('[Firebase] Subscription notice on sales_agents:', error);
-    }
-    if (onError) onError(error, isQuota);
-  });
+  }, onError, '');
 }
 
 export async function saveSalesAgentToDb(agent: SalesAgent): Promise<void> {
@@ -589,21 +665,13 @@ export function subscribeToCrmLeads(
   onError?: (error: unknown, isQuota: boolean) => void
 ): () => void {
   const leadsCol = collection(db, 'crm_leads');
-  return onSnapshot(leadsCol, (snapshot) => {
+  return liveListen(leadsCol, (snapshot: any) => {
     const leads: Lead[] = [];
-    snapshot.forEach((docSnap) => {
+    snapshot.forEach((docSnap: any) => {
       leads.push(docSnap.data() as Lead);
     });
     onUpdate(leads);
-  }, (error) => {
-    const isQuota = isQuotaExceededError(error);
-    if (isQuota) {
-      console.warn('[Firebase] Free daily quota limit reached on crm_leads.');
-    } else {
-      console.warn('[Firebase] Subscription notice on crm_leads:', error);
-    }
-    if (onError) onError(error, isQuota);
-  });
+  }, onError, '');
 }
 
 export async function saveLeadToDb(lead: Lead): Promise<void> {
@@ -731,17 +799,13 @@ export function subscribeToClosedDeals(
   onError?: (error: unknown, isQuota: boolean) => void
 ): () => void {
   const col = collection(db, 'closed_deals');
-  return onSnapshot(col, (snapshot) => {
+  return liveListen(col, (snapshot: any) => {
     const deals: ClosedDeal[] = [];
-    snapshot.forEach((docSnap) => deals.push(docSnap.data() as ClosedDeal));
+    snapshot.forEach((docSnap: any) => deals.push(docSnap.data() as ClosedDeal));
     // الأحدث الأول
     deals.sort((a, b) => String(b.closedDate || '').localeCompare(String(a.closedDate || '')));
     onUpdate(deals);
-  }, (error) => {
-    const isQuota = isQuotaExceededError(error);
-    console.warn('[Firebase] Subscription notice on closed_deals:', error);
-    if (onError) onError(error, isQuota);
-  });
+  }, onError, '');
 }
 
 export async function saveClosedDealToDb(deal: ClosedDeal): Promise<void> {
@@ -780,14 +844,11 @@ export function subscribeToSiteConfig(
   onError?: (error: unknown, isQuota: boolean) => void
 ): () => void {
   const configDoc = doc(db, 'site_config', 'global');
-  return onSnapshot(configDoc, (snap) => {
+  return liveListen(configDoc, (snap: any) => {
     if (snap.exists()) {
       onUpdate(snap.data() as SiteConfig);
     }
-  }, (error) => {
-    const isQuota = isQuotaExceededError(error);
-    if (onError) onError(error, isQuota);
-  });
+  }, onError, '');
 }
 
 export async function saveSiteBannerToDb(bannerUrl: string): Promise<void> {
@@ -847,16 +908,13 @@ export function subscribeToOwnerSubmissions(
   onError?: (error: unknown, isQuota: boolean) => void
 ): () => void {
   const col = collection(db, 'owner_submissions');
-  return onSnapshot(col, (snapshot) => {
+  return liveListen(col, (snapshot: any) => {
     const submissions: OwnerSubmission[] = [];
-    snapshot.forEach((docSnap) => {
+    snapshot.forEach((docSnap: any) => {
       submissions.push(docSnap.data() as OwnerSubmission);
     });
     onUpdate(submissions);
-  }, (error) => {
-    const isQuota = isQuotaExceededError(error);
-    if (onError) onError(error, isQuota);
-  });
+  }, onError, '');
 }
 
 /** مسح طلب مالك نهائياً من السحابة */
@@ -935,9 +993,9 @@ export function subscribeToViewingRequests(
   onError?: (error: unknown, isQuota: boolean) => void
 ): () => void {
   const col = collection(db, 'viewing_requests');
-  return onSnapshot(col, (snapshot) => {
+  return liveListen(col, (snapshot: any) => {
     const list: ViewingRequest[] = [];
-    snapshot.forEach((docSnap) => {
+    snapshot.forEach((docSnap: any) => {
       const data = docSnap.data() as ViewingRequest;
       // If brokerId is provided, filter for that broker
       if (!brokerId || data.brokerId === brokerId) {
@@ -947,10 +1005,7 @@ export function subscribeToViewingRequests(
     // Sort newest first
     list.sort((a, b) => (b.createdAtTimestamp || 0) - (a.createdAtTimestamp || 0));
     onUpdate(list);
-  }, (error) => {
-    const isQuota = isQuotaExceededError(error);
-    if (onError) onError(error, isQuota);
-  });
+  }, onError, '');
 }
 
 export async function saveViewingFeedbackToDb(feedback: ViewingFeedback): Promise<void> {
@@ -978,16 +1033,13 @@ export function subscribeToViewingFeedbacks(
   onError?: (error: unknown, isQuota: boolean) => void
 ): () => void {
   const col = collection(db, 'viewing_feedbacks');
-  return onSnapshot(col, (snapshot) => {
+  return liveListen(col, (snapshot: any) => {
     const list: ViewingFeedback[] = [];
-    snapshot.forEach((docSnap) => {
+    snapshot.forEach((docSnap: any) => {
       list.push(docSnap.data() as ViewingFeedback);
     });
     onUpdate(list);
-  }, (error) => {
-    const isQuota = isQuotaExceededError(error);
-    if (onError) onError(error, isQuota);
-  });
+  }, onError, '');
 }
 
 export async function saveBrokerProfileToDb(profile: BrokerProfile): Promise<void> {
@@ -1011,16 +1063,13 @@ export function subscribeToBrokers(
   onError?: (error: unknown, isQuota: boolean) => void
 ): () => void {
   const col = collection(db, 'brokers');
-  return onSnapshot(col, (snapshot) => {
+  return liveListen(col, (snapshot: any) => {
     const list: BrokerProfile[] = [];
-    snapshot.forEach((docSnap) => {
+    snapshot.forEach((docSnap: any) => {
       list.push(docSnap.data() as BrokerProfile);
     });
     onUpdate(list);
-  }, (error) => {
-    const isQuota = isQuotaExceededError(error);
-    if (onError) onError(error, isQuota);
-  });
+  }, onError, '');
 }
 
 export async function seedBrokersToDb(brokers: BrokerProfile[]): Promise<void> {
@@ -1050,15 +1099,13 @@ export function subscribeToBrokerProfile(
   onUpdate: (profile: BrokerProfile | null) => void
 ): () => void {
   const docRef = doc(db, 'brokers', brokerId);
-  return onSnapshot(docRef, (docSnap) => {
+  return liveListen(docRef, (docSnap: any) => {
     if (docSnap.exists()) {
       onUpdate(docSnap.data() as BrokerProfile);
     } else {
       onUpdate(null);
     }
-  }, (err) => {
-    console.warn('[Firebase] Notice listening to broker profile:', err);
-  });
+  }, undefined, '');
 }
 
 export async function savePropertyPrivateOwner(
@@ -1160,12 +1207,12 @@ function secondaryAuth() {
 }
 
 export function subscribeToAccounts(onUpdate: (list: AccountRecord[]) => void, onError?: (e: unknown) => void): () => void {
-  return onSnapshot(collection(db, 'staff_access'), (snap) => {
+  return liveListen(collection(db, 'staff_access'), (snap: any) => {
     const list: AccountRecord[] = [];
-    snap.forEach((d) => list.push({ email: d.id, ...(d.data() as any) }));
+    snap.forEach((d: any) => list.push({ email: d.id, ...(d.data() as any) }));
     list.sort((a, b) => (a.role || '').localeCompare(b.role || '') || a.email.localeCompare(b.email));
     onUpdate(list);
-  }, (e) => onError?.(e));
+  }, onError, '');
 }
 
 /** مسح حساب من الصلاحيات. ملاحظة: بيمنعه من الدخول، وحساب Firebase Auth نفسه بيتشال من Console. */

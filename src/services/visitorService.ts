@@ -2,7 +2,7 @@
   تتبّع الزوار الحقيقي: كل جهاز له معرّف ثابت، وكل زيارة بتتسجل في قاعدة البيانات
   ومعاها المصدر (أنهي إعلان/لينك)، فنعرف كام زائر مختلف فعلاً مش كام فتحة.
 */
-import { collection, doc, setDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, onSnapshot, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db, cleanFirestoreData } from './firebaseService';
 
 const KEY = 'lion_visitor_id';
@@ -38,8 +38,13 @@ export async function markVisit(propertyId: string, data: Partial<UnitVisit>) {
   await setDoc(doc(db, 'unit_visits', id), cleanFirestoreData(data), { merge: true }).catch(() => {});
 }
 
+/* المجموعة دي بتكبر كل يوم (مستند لكل زائر لكل وحدة يومياً). كانت
+   بتتجاب كاملة في بوابة البروكر والمالك — يعني بعد شهرين بتبقى آلاف
+   القراءات مع كل فتحة. بناخد الأحدث بس، وده كفاية للإحصائيات. */
+const VISITS_CAP = 400;
+
 export function subscribeVisits(cb: (l: UnitVisit[]) => void) {
-  return onSnapshot(collection(db, 'unit_visits'), (snap) => {
+  return onSnapshot(query(collection(db, 'unit_visits'), orderBy('at', 'desc'), limit(VISITS_CAP)), (snap) => {
     const l: UnitVisit[] = []; snap.forEach((d) => l.push(d.data() as UnitVisit));
     l.sort((a, b) => b.at - a.at); cb(l);
   }, () => cb([]));
