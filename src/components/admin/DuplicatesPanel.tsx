@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Copy, Trash2, ChevronDown, ShieldCheck } from 'lucide-react';
 import { Property } from '../../types';
+import { bestHashDistance } from '../../services/imageFingerprint';
 
 /*
   كشف الشقق المكررة.
@@ -21,7 +22,7 @@ const f = (n?: number) => (typeof n === 'number' && isFinite(n) ? Math.round(n).
 
 interface Group {
   key: string;
-  kind: 'code' | 'specs';
+  kind: 'code' | 'image' | 'specs';
   items: Property[];
 }
 
@@ -35,23 +36,33 @@ function keepFirst(items: Property[]): Property[] {
   });
 }
 
+/*
+  البق اللي كان هيخسّر شقق حقيقية:
+  المجموعة كانت بتتعمل على "الحي + المساحة + السعر" وبس. في المقطم،
+  ١٣٥م² بـ٢.٥ مليون في الحي الأول ده وصف عشرات الشقق المختلفة —
+  مش دليل تكرار. وأكواد زي H1527 و H1528 و H1529 متتابعة، يعني غالباً
+  شقق مختلفة في نفس العمارة. المسح كان هيضيّع ٤ من كل ٥.
+
+  دلوقتي فيه تلات درجات، والمسح بالجملة على الأكيد منهم بس:
+   code  — نفس الكود بالظبط            → تكرار أكيد
+   image — نفس الصورة (رابط أو بصمة)   → دليل قوي
+   specs — كل المواصفات متطابقة         → شك، للمراجعة باليد بس
+*/
+function sameImage(a: Property, b: Property): boolean {
+  const ai = (a.images || []).filter(Boolean);
+  const bi = new Set((b.images || []).filter(Boolean));
+  if (ai.some((u) => bi.has(u))) return true;
+  const ah = (a as any).imageHashes as string[] | undefined;
+  const bh = (b as any).imageHashes as string[] | undefined;
+  if (!ah?.length || !bh?.length) return false;
+  return bestHashDistance(ah, bh) <= 5;
+}
+
 export function findDuplicates(properties: Property[]): Group[] {
   const byCode = new Map<string, Property[]>();
-  const bySpecs = new Map<string, Property[]>();
-
   properties.forEach((p) => {
     const code = (p.code || '').trim().toUpperCase();
-    if (code) {
-      byCode.set(code, [...(byCode.get(code) || []), p]);
-    }
-    const specs = [
-      (p.neighborhood || '').trim(),
-      Number(p.area) || 0,
-      Number(p.price) || 0,
-    ].join('|');
-    if ((Number(p.area) || 0) > 0 && (Number(p.price) || 0) > 0) {
-      bySpecs.set(specs, [...(bySpecs.get(specs) || []), p]);
-    }
+    if (code) byCode.set(code, [...(byCode.get(code) || []), p]);
   });
 
   const out: Group[] = [];
@@ -63,14 +74,40 @@ export function findDuplicates(properties: Property[]): Group[] {
     out.push({ key, kind: 'code', items: keepFirst(items) });
   });
 
+  /* نفس الصورة — ده دليل حقيقي، مش صدفة مواصفات */
+  const withImgs = properties.filter(
+    (p) => !seenIds.has(p.id) && ((p.images || []).length > 0 || ((p as any).imageHashes || []).length > 0),
+  );
+  const usedImg = new Set<string>();
+  withImgs.forEach((p) => {
+    if (usedImg.has(p.id)) return;
+    const group = withImgs.filter((q) => q.id === p.id || (!usedImg.has(q.id) && sameImage(p, q)));
+    if (group.length < 2) return;
+    group.forEach((q) => { usedImg.add(q.id); seenIds.add(q.id); });
+    out.push({ key: `img-${p.id}`, kind: 'image', items: keepFirst(group) });
+  });
+
+  /* المواصفات: بنشدّد عليها جداً — الحي والمساحة والسعر والدور والغرف
+     والحمامات كلهم مع بعض. وحتى كده بتفضل "للمراجعة" مش للمسح. */
+  const bySpecs = new Map<string, Property[]>();
+  properties.forEach((p) => {
+    if (seenIds.has(p.id)) return;
+    const area = Number(p.area) || 0;
+    const price = Number(p.price) || 0;
+    if (!area || !price) return;
+    const key = [
+      (p.neighborhood || '').trim(), area, price,
+      String(p.floor || '').trim(), Number(p.bedrooms) || 0, Number(p.bathrooms) || 0,
+    ].join('|');
+    bySpecs.set(key, [...(bySpecs.get(key) || []), p]);
+  });
   bySpecs.forEach((items, key) => {
     if (items.length < 2) return;
-    // لو كلهم مكشوفين بالكود خلاص، مانكررش المجموعة
-    if (items.every((p) => seenIds.has(p.id))) return;
     out.push({ key, kind: 'specs', items: keepFirst(items) });
   });
 
-  return out.sort((a, b) => b.items.length - a.items.length);
+  const rank = { code: 0, image: 1, specs: 2 } as const;
+  return out.sort((a, b) => rank[a.kind] - rank[b.kind] || b.items.length - a.items.length);
 }
 
 interface Props {
@@ -79,7 +116,7 @@ interface Props {
 }
 
 /** النسخ الزيادة اللي المفروض تتمسح — الأقدم في كل مجموعة بيفضل */
-export function extraCopies(groups: Group[], kind?: 'code' | 'specs'): Property[] {
+export function extraCopies(groups: Group[], kind?: 'code' | 'image'): Property[] {
   const seen = new Set<string>();
   const out: Property[] = [];
   groups.filter((g) => !kind || g.kind === kind).forEach((g) => {
@@ -104,7 +141,14 @@ export const DuplicatesPanel: React.FC<Props> = ({ properties, onDeleteProperty 
   const [busy, setBusy] = useState<{ done: number; total: number } | null>(null);
 
   const codeOnly = useMemo(() => extraCopies(groups, 'code'), [groups]);
-  const allExtra = useMemo(() => extraCopies(groups), [groups]);
+  /* "الكل" = الأكيد بس: نفس الكود أو نفس الصورة.
+     مجموعات المواصفات مش داخلة في أي مسح بالجملة — دي للمراجعة باليد،
+     لأن تطابق المواصفات مش دليل على إن الشقتين واحدة. */
+  const allExtra = useMemo(
+    () => [...extraCopies(groups, 'code'), ...extraCopies(groups, 'image')],
+    [groups],
+  );
+  const specsGroups = useMemo(() => groups.filter((g) => g.kind === 'specs'), [groups]);
 
   const runDelete = async (list: Property[], label: string) => {
     if (!list.length) return;
@@ -155,6 +199,8 @@ export const DuplicatesPanel: React.FC<Props> = ({ properties, onDeleteProperty 
         <div className="p-3 space-y-3 max-h-[60vh] overflow-y-auto">
           <p className="text-[11px] text-[#6B665C] leading-relaxed bg-[#FAF9F5] border border-[#ECE8DF] rounded-xl px-3 py-2">
             الأخضر = الأقدم، بيفضل. الباقي نسخ زيادة.
+            <br />
+            <b>نفس الكود</b> أو <b>نفس الصورة</b> = تكرار أكيد. <b>مواصفات متطابقة</b> = شك بس، مش بيتمسح بالجملة.
           </p>
 
           {/* ---- المسح بالجملة ---- */}
@@ -188,7 +234,7 @@ export const DuplicatesPanel: React.FC<Props> = ({ properties, onDeleteProperty 
               {allExtra.length > codeOnly.length && (
                 <>
                   <button
-                    onClick={() => (armed === 'all' ? runDelete(allExtra, 'أكواد مكررة + شقق متشابهة في المواصفات') : setArmed('all'))}
+                    onClick={() => (armed === 'all' ? runDelete(allExtra, 'أكواد مكررة + شقق بنفس الصورة') : setArmed('all'))}
                     className={`w-full px-3 py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer border ${
                       armed === 'all'
                         ? 'bg-[#C2412D] text-white border-[#C2412D]'
@@ -200,9 +246,9 @@ export const DuplicatesPanel: React.FC<Props> = ({ properties, onDeleteProperty 
                       ? `متأكد؟ دوس تاني عشان تمسح ${allExtra.length} شقة`
                       : `امسح الكل (${allExtra.length} شقة)`}
                   </button>
-                  <p className="text-[10px] text-[#C2412D] leading-5 px-1">
-                    "امسح الكل" جواه كمان المجموعات اللي اتكشفت بالمواصفات (نفس الحي والمساحة والسعر) —
-                    دي ممكن تكون شقتين حقيقيين في عمارة واحدة. لو مش متأكد، امسح الأكواد المكررة بس.
+                  <p className="text-[10px] text-[#6B665C] leading-5 px-1">
+                    "امسح الكل" = الأكواد المكررة + الشقق اللي بنفس الصورة. الاتنين دليل حقيقي.
+                    مجموعات المواصفات مش داخلة في أي مسح بالجملة.
                   </p>
                 </>
               )}
@@ -219,12 +265,17 @@ export const DuplicatesPanel: React.FC<Props> = ({ properties, onDeleteProperty 
             <div key={`${g.kind}-${g.key}`} className="border border-[#ECE8DF] rounded-xl overflow-hidden">
               <div className="bg-[#F6F4EF] px-3 py-2">
                 <p className="text-[11px] font-extrabold text-[#141414]">
-                  {g.kind === 'code' ? `كود مكرر: ${g.key}` : 'نفس الحي والمساحة والسعر'}
+                  {g.kind === 'code' ? `كود مكرر: ${g.key}`
+                    : g.kind === 'image' ? 'نفس الصورة'
+                    : 'مواصفات متطابقة — للمراجعة بس'}
                   <span className="text-[#8C877D] font-bold"> · {g.items.length} نسخ</span>
                 </p>
                 {g.kind === 'specs' && (
-                  <p className="text-[10px] text-[#8C877D]">
-                    {g.items[0].neighborhood} · {g.items[0].area} م² · {f(g.items[0].price)} ج.م — راجعها قبل المسح، ممكن تكون شقتين فعلاً
+                  <p className="text-[10px] text-[#8C877D] leading-5">
+                    {g.items[0].neighborhood} · {g.items[0].area} م² · {f(g.items[0].price)} ج.م · {g.items[0].floor || '—'} · {g.items[0].bedrooms} غرف
+                    <br />
+                    <b className="text-[#6E5418]">دي مش دليل تكرار.</b> شقتين في نفس العمارة بنفس المساحة والسعر حاجة عادية —
+                    خصوصاً لو الأكواد متتابعة. افتحها وشوف بنفسك قبل أي مسح.
                   </p>
                 )}
               </div>

@@ -944,13 +944,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   /* عدادات بتبان جنب الفلتر عشان تعرف الحجم من غير ما تفلتر */
   const mediaGaps = useMemo(() => {
-    let noPhotos = 0, noVideo = 0;
+    // noMedia مكانش بيتحسب خالص — عشان كده الخيار التالت كان من غير رقم
+    let noPhotos = 0, noVideo = 0, noMedia = 0;
     properties.forEach((p) => {
       const photos = (p.images || []).filter((u) => typeof u === 'string' && u.trim()).length;
+      const hasVideo = !!(p.videoUrl && String(p.videoUrl).trim());
       if (photos === 0) noPhotos += 1;
-      if (!(p.videoUrl && String(p.videoUrl).trim())) noVideo += 1;
+      if (!hasVideo) noVideo += 1;
+      if (photos === 0 && !hasVideo) noMedia += 1;
     });
-    return { noPhotos, noVideo };
+    return { noPhotos, noVideo, noMedia };
   }, [properties]);
 
   const pendingSubmissions = useMemo(() => {
@@ -1578,7 +1581,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     <option value="all">كل الشقق</option>
                     <option value="no_photos">من غير صور ({mediaGaps.noPhotos})</option>
                     <option value="no_video">من غير فيديو ({mediaGaps.noVideo})</option>
-                    <option value="no_media">من غير صور ولا فيديو</option>
+                    <option value="no_media">من غير صور ولا فيديو ({mediaGaps.noMedia})</option>
                   </select>
 
                   <button
