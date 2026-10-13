@@ -1433,15 +1433,13 @@ export default function App() {
             code: req.propertyCode, propertyId: req.propertyId,
           });
 
-          /* المعاينة اللي تمت بتزوّد نقط السيلز بتاعها لوحدها —
-             مش مستنية إنه يدوس "تسجيل نشاط" بإيده */
+          /* النقط بقت محسوبة من الشغل الحقيقي في dailyTasksService،
+             مش مخزّنة على حساب المندوب. اللي فاضل هنا عدّاد
+             المعاينات التراكمي بس. */
           if (res.movedTo === 'visit_done') {
             setSalesAgents((agents) => agents.map((a) => {
               if (a.id !== lead.assignedAgentId) return a;
-              const withToday = { ...a, activeQuests: buildAgentQuests(questTemplatesRef.current, a) };
-              const bumped = bumpByCategory(withToday, 'site_visit');
-              if (bumped === withToday) return a;
-              const updated = { ...bumped, visitsCompletedCount: (a.visitsCompletedCount || 0) + 1 };
+              const updated = { ...a, visitsCompletedCount: (a.visitsCompletedCount || 0) + 1 };
               saveSalesAgentToDb(updated).catch(() => {});
               return updated;
             }));
@@ -1502,13 +1500,9 @@ export default function App() {
     setEmergencyAlerts((prev) => [newAlert, ...prev]);
   };
 
-  const handleRecordAgentAction = (category: string, points: number) => {
-    if (!currentAgent) return;
-    handleUpdateAgent({
-      ...currentAgent,
-      xp: currentAgent.xp + points
-    });
-  };
+  /* النقط مابقتش بتتزوّد بالإيد. بتتحسب من الشغل اللي اتسجّل
+     فعلاً (مكالمات، ريكويستات، إثباتات)، فمفيش حاجة تتكتب هنا. */
+  const handleRecordAgentAction = (_category: string, _points: number) => {};
 
   // Card Layout Mode: 'grid' (صورة علوية) or 'horizontal' (صورة جانبية)
   const [cardLayout, setCardLayout] = useState<'grid' | 'horizontal'>('grid');
@@ -2522,6 +2516,16 @@ export default function App() {
         assignments={unitAssignments}
         salesTargets={salesTargets}
         onAssignmentsChanged={() => { fetchAssignments().then(setUnitAssignments).catch(() => {}); }}
+        onResetXp={async () => {
+          /* النقط القديمة كانت بتتزوّد بزرار، فمالهاش معنى.
+             بنصفّر الرقم المخزّن والمهام القديمة — النقط
+             الجديدة محسوبة من الشغل ومش بتتخزّن أصلاً. */
+          const cleared = salesAgents.map((a) => ({
+            ...a, xp: 0, level: 1, currentStreak: 0, activeQuests: [],
+          }));
+          for (const a of cleared) await saveSalesAgentToDb(a);
+          setSalesAgents(cleared);
+        }}
         onCleanupDemo={{
           deleteAgents: async (ids) => {
             for (const id of ids) await deleteSalesAgentFromDb(id);

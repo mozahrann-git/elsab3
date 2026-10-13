@@ -42,9 +42,10 @@ export const TasksOverview: React.FC<{
   targets?: SalesTargets;
   onTargetsSaved?: (t: SalesTargets) => void;
   onAssignmentsSaved?: () => void;
+  onResetXp?: () => Promise<void>;
 }> = ({
   agents, leads, requests, properties, proofs, assignments,
-  targets, onTargetsSaved, onAssignmentsSaved,
+  targets, onTargetsSaved, onAssignmentsSaved, onResetXp,
 }) => {
   const t = targets || DEFAULT_SALES_TARGETS;
   const [editing, setEditing] = useState(false);
@@ -108,6 +109,21 @@ export const TasksOverview: React.FC<{
     finally { setBusy(''); }
   };
 
+  /* النقط القديمة كانت بتتزوّد بالإيد، فمالهاش معنى دلوقتي.
+     بنصفّرها مرة واحدة ونبدأ من جديد — النقط الجديدة بتتحسب
+     من الشغل الحقيقي ومش بتتخزّن أصلاً. */
+  const resetXp = async () => {
+    const ok = window.confirm(
+      'هتتمسح نقط الـ XP القديمة والمهام القديمة لكل المناديب، وده مش بيترجع.\n\n'
+      + 'النقط الجديدة بتتحسب من الشغل الحقيقي، فمش هتضيع حاجة اتعملت فعلاً.\n\nتمام؟',
+    );
+    if (!ok || !onResetXp) return;
+    setBusy('xp'); setMsg('');
+    try { await onResetXp(); setMsg('النقط القديمة اتصفّرت — البداية من جديد'); }
+    catch (e: any) { setMsg(e?.message || 'التصفير ما نجحش'); }
+    finally { setBusy(''); }
+  };
+
   const keys = cards[0]?.card.rows.map((r) => ({ key: r.key, label: r.label })) || [];
 
   return (
@@ -129,6 +145,12 @@ export const TasksOverview: React.FC<{
             {busy === 'dist' ? <Loader2 size={14} className="animate-spin" /> : <Shuffle size={14} />}
             وزّع الشقق
           </button>
+          {onResetXp && (
+            <button type="button" onClick={resetXp} disabled={busy === 'xp'}
+              className="rounded-xl px-3 py-2 bg-white border border-[#E8C4BC] text-[#C2412D] font-bold text-xs disabled:opacity-50">
+              {busy === 'xp' ? 'بيصفّر…' : 'صفّر النقط القديمة'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -152,6 +174,12 @@ export const TasksOverview: React.FC<{
               ['cycleDays', 'أيام الدورة'],
               ['workDaysPerWeek', 'أيام الشغل في الأسبوع'],
               ['weeksPerMonth', 'أسابيع الشهر'],
+              ['xpCall', 'نقط المكالمة'],
+              ['xpRequest', 'نقط الريكويست'],
+              ['xpAd', 'نقط الإعلان'],
+              ['xpVideo', 'نقط الفيديو'],
+              ['xpVisit', 'نقط المعاينة'],
+              ['xpBonusListing', 'نقط الوحدة الجديدة (بونص)'],
             ] as [keyof SalesTargets, string][]).map(([k, label]) => (
               <label key={String(k)} className="block">
                 <span className="text-[11px] font-bold text-stone-500 block mb-1">{label}</span>

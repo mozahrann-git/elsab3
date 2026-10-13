@@ -71,6 +71,7 @@ import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb 
 import { subscribeAllUnitViewings } from '../services/portalService';
 import { thumbUrl } from '../services/mediaStorage';
 import DailyTasksPanel from './sales/DailyTasksPanel';
+import { computeXp } from '../services/dailyTasksService';
 
 interface SalesCrmModalProps {
   isOpen: boolean;
@@ -153,7 +154,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   salesTargets,
 }) => {
   // Navigation Tabs matching sidebar items (Properties tab removed)
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'quests' | 'leaderboard' | 'daily'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'leaderboard' | 'daily'>('pipeline');
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeMobileStageFilter, setActiveMobileStageFilter] = useState<string>('all');
@@ -405,6 +406,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   }));
   /* الإدارة لما تدوس على حد في قايمة الفريق، المفروض تشوف نقطه هو ومهامه هو */
   const shownAgent = (viewAgentId !== 'all' ? agents.find((a) => a.id === viewAgentId) : null) || currentAgent;
+
+  /* النقط محسوبة من الشغل الحقيقي لحظة بلحظة، مش رقم مخزّن
+     على حساب المندوب. مفيش مصدرين للحقيقة، ومحدش يقدر
+     يزوّدها بزرار. */
+  const liveXp = useMemo(() => {
+    if (!shownAgent?.id) return 0;
+    return computeXp({
+      agentId: shownAgent.id, leads, requests: viewingRequests || [],
+      proofs: workProofs || [], targets: salesTargets,
+    }).total;
+  }, [shownAgent?.id, leads, viewingRequests, workProofs, salesTargets]);
   const viewingSomeoneElse = !!shownAgent && shownAgent.id !== currentAgent?.id;
   const agentQuests: DailyQuest[] = shownAgent ? buildAgentQuests(questTemplates, shownAgent) : [];
   const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م', showMatching: true };
@@ -588,7 +600,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
               {/* بتتبع اللي إنت شايفه. الإدارة من غير اختيار = مفيش نقط، مش نقط حد تاني */}
               <span className="px-2 py-0.5 bg-[#FAF4E5]/10 border border-[#E9DFCA]/20 text-[#FAF4E5] text-[10px] font-mono font-bold rounded-lg">
-                {shownAgent ? `${(shownAgent.xp || 0).toLocaleString('en-US')} XP` : 'إدارة'}
+                {shownAgent ? `${liveXp.toLocaleString('en-US')} XP` : 'إدارة'}
               </span>
             </div>
           </div>
@@ -668,23 +680,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               <div className="flex items-center gap-2.5">
                 <Target size={16} />
                 <span>المحتوى والإعلانات</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab('quests');
-                setIsMobileMenuOpen(false);
-              }}
-              className={`w-full p-2.5 rounded-xl text-right flex items-center justify-between text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'quests'
-                  ? 'bg-[#A07A26] text-white shadow-xs'
-                  : 'text-stone-300 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Sparkles size={16} />
-                <span>تحديات اليوم والـ XP</span>
               </div>
             </button>
 
@@ -827,7 +822,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             { id: 'pipeline', label: 'مسار العملاء' },
             { id: 'followups', label: 'المتابعات' },
             { id: 'matching', label: 'المطابقة الذكية' },
-            { id: 'quests', label: 'المهام والـ XP' },
             { id: 'content', label: 'المحتوى والإعلانات' },
             { id: 'leaderboard', label: 'المتصدرين' }
           ].map((tab) => (
@@ -1851,133 +1845,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           )
         )}
 
-        {activeTab === 'quests' && (
-          <div className="space-y-4 sm:space-y-5 max-w-3xl mx-auto flex-1 pt-1 w-full">
-            <div className="bg-white border border-[#ECE8DF] p-5 sm:p-6 rounded-3xl shadow-2xs space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#ECE8DF] pb-4">
-                <div>
-                  <h3 className="font-readex font-bold text-base sm:text-lg text-[#141414]">
-                    {viewAgentId !== 'all' && shownAgent ? `مهام ${shownAgent.name} ونقطه` : 'تحديات اليوم ونقاط الخبرة XP'}
-                  </h3>
-                  <p className="text-xs text-[#6B665C]">
-                    {viewAgentId !== 'all' && shownAgent
-                      ? `${(shownAgent.xp || 0).toLocaleString('en-US')} نقطة · بتتفرّج بس، التسجيل بيتعمل من حسابه`
-                      : 'أنجز المهام اليومية لرفع مستواك وفتح جوائز وعمولات إضافية'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSpinModalOpen(true)}
-                  className="self-start sm:self-auto px-4 py-2.5 bg-[#A07A26] hover:bg-[#8B681D] text-white font-readex font-bold text-xs rounded-xl shadow-2xs cursor-pointer flex items-center gap-1.5 transition-all"
-                >
-                  <Sparkles size={14} />
-                  <span>عجلة الحظ للمبيعات</span>
-                </button>
-              </div>
 
-              {!shownAgent ? (
-                <p className="text-xs bg-[#FFF8E6] border border-[#EBD9A6] text-[#7A5E12] rounded-xl px-4 py-3 leading-relaxed">
-                  إنت داخل كإدارة، والمهام والنقط بتبقى لكل سيلز لوحده.
-                  ارجع لـ<b> مسار المتابعات اليومية </b>ودوس على أي حد من الفريق عشان تشوف مهامه ونقطه وإنجازه.
-                </p>
-              ) : (
-                /* شغل النهارده بالتفصيل — المكالمات والإعلانات */
-                <DayLogSummary logs={dayLogs.filter((l) => l.agentId === shownAgent.id)} />
-              )}
-
-              {/* Quest Items List */}
-              <div className="space-y-3.5">
-                {isAdmin && editBoard !== 'quests' && (
-                  <button onClick={() => setEditBoard('quests')} className="text-xs font-bold text-[#A07A26] cursor-pointer">✎ تعديل تحديات اليوم</button>
-                )}
-                {isAdmin && editBoard === 'quests' && (
-                  <QuestEditor
-                    templates={questTemplates}
-                    onDone={() => setEditBoard(null)}
-                    showToast={showToast}
-                  />
-                )}
-                {agentQuests.map((quest) => {
-                  const isDone = quest.isCompleted || quest.currentCount >= quest.targetCount;
-                  const progressPct = Math.min(100, Math.round((quest.currentCount / quest.targetCount) * 100));
-
-                  return (
-                    <div 
-                      key={quest.id} 
-                      className={`p-4 rounded-2xl border transition-all ${
-                        isDone
-                          ? 'bg-[#FAF4E5]/60 border-[#E9DFCA]'
-                          : 'bg-[#F6F4EF] border-[#ECE8DF]'
-                      }`}
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-xs sm:text-sm text-[#141414]">
-                              {quest.title}
-                            </h4>
-                            <span className="px-2 py-0.5 bg-[#FAF4E5] border border-[#E9DFCA] text-[#A07A26] text-[11px] font-bold rounded-lg">
-                              +{quest.xpReward} XP
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-[#6B665C]">
-                            {quest.description}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
-                          <span className="font-mono text-xs font-bold text-[#141414] dir-ltr">
-                            {quest.currentCount} / {quest.targetCount}
-                          </span>
-
-                          {isDone ? (
-                            <span className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-xl flex items-center gap-1">
-                              <Check size={13} />
-                              <span>مكتملة ✓</span>
-                            </span>
-                          ) : viewingSomeoneElse ? (
-                            /* بتتفرّج على حد تاني — ما ينفعش تسجّل نشاط باسمه */
-                            <span className="px-3 py-1.5 bg-[#F6F4EF] border border-[#E4DFD4] text-[#6B665C] text-[11px] font-bold rounded-xl">
-                              لسه
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                /* المكالمة والإعلان محتاجين تفاصيل، وأي تحدي
-                                   الإدارة طلبت عليه إثبات محتاج دليل — مش مجرد +1 */
-                                if (quest.category === 'calls' || quest.category === 'facebook_share'
-                                    || ((quest as any).proof && (quest as any).proof !== 'none')) setLogQuest(quest);
-                                else handleIncrementQuest(quest.id);
-                              }}
-                              className="px-3.5 py-1.5 bg-[#141414] hover:bg-black text-white text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 flex items-center gap-1 shadow-2xs"
-                            >
-                              <Plus size={13} />
-                              <span>
-                                {quest.category === 'calls' ? 'سجّل مكالمة'
-                                  : quest.category === 'facebook_share' ? 'سجّل إعلان'
-                                  : ((quest as any).proof && (quest as any).proof !== 'none') ? 'سجّل بالإثبات'
-                                  : 'تسجيل نشاط (+1)'}
-                              </span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="w-full h-1.5 bg-[#ECE8DF] rounded-full overflow-hidden mt-3">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            isDone ? 'bg-emerald-600' : 'bg-[#A07A26]'
-                          }`}
-                          style={{ width: `${progressPct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ========================================================= */}
         {/* TAB 5: LEADERBOARD */}

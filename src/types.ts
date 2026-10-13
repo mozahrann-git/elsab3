@@ -777,6 +777,14 @@ export interface SalesTargets {
   cycleDays: number;           // ١٢ يوم شغل = أسبوعين
   workDaysPerWeek: number;     // ٦
   weeksPerMonth: number;       // ٤
+  /* نقط لكل حاجة تتعمل فعلاً — مش لما يكمّل الهدف.
+     اللي عمل ٤٥ مكالمة من ٥٠ عمل شغل حقيقي ويستاهل عليه. */
+  xpCall: number;
+  xpRequest: number;
+  xpAd: number;
+  xpVideo: number;
+  xpVisit: number;
+  xpBonusListing: number;      // جاب وحدة جديدة برقم مالكها
 }
 
 export const DEFAULT_SALES_TARGETS: SalesTargets = {
@@ -789,6 +797,8 @@ export const DEFAULT_SALES_TARGETS: SalesTargets = {
   visitsWeekly: 5, videosWeekly: 2,
   unitsPerAgent: 70, cycleDays: 12,
   workDaysPerWeek: 6, weeksPerMonth: 4,
+  xpCall: 5, xpRequest: 50, xpAd: 20, xpVideo: 150,
+  xpVisit: 300, xpBonusListing: 200,
 };
 
 /** إثبات شغل اتعمل بره النظام — لازم صورة، مفيش علامة من غير دليل */
@@ -796,7 +806,9 @@ export interface WorkProof {
   id: string;
   agentId: string;
   agentName: string;
-  kind: 'ad_resale' | 'ad_offplan' | 'video';
+  /* bonus_listing = وحدة جديدة جابها المندوب برقم مالكها.
+     مش هدف يومي — بونص، بس بياخد عليه نقط. */
+  kind: 'ad_resale' | 'ad_offplan' | 'video' | 'bonus_listing';
   propertyId?: string;
   propertyCode?: string;
   proofUrl: string;            // سكرين شوت الإعلان أو لينك الفيديو

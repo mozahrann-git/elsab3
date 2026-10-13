@@ -107,6 +107,7 @@ interface AdminDashboardModalProps {
   assignments?: AgentUnitAssignment[];
   salesTargets?: SalesTargets;
   onAssignmentsChanged?: () => void;
+  onResetXp?: () => Promise<void>;
   /* تنضيف البيانات التجريبية */
   onCleanupDemo?: {
     deleteAgents: (ids: string[]) => Promise<void>;
@@ -174,6 +175,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   assignments,
   salesTargets,
   onAssignmentsChanged,
+  onResetXp,
   onCleanupDemo,
   onApproveSubmission,
   onRejectSubmission,
@@ -2587,6 +2589,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               assignments={assignments || []}
               targets={salesTargets}
               onAssignmentsSaved={onAssignmentsChanged}
+              onResetXp={onResetXp}
             />
           )}
 

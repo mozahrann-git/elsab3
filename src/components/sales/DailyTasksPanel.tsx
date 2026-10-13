@@ -5,7 +5,8 @@ import {
 import type { Lead, Property, SalesAgent, ViewingRequest, WorkProof, SalesTargets, AgentUnitAssignment } from '../../types';
 import { DEFAULT_SALES_TARGETS } from '../../types';
 import {
-  buildScorecard, cairoDay, saveWorkProof, signedUnitIds, splitByPerformance, interestScore, TaskRow,
+  buildScorecard, cairoDay, saveWorkProof, signedUnitIds, splitByPerformance,
+  interestScore, computeXp, weekDays, TaskRow,
 } from '../../services/dailyTasksService';
 import { uploadFile, thumbUrl } from '../../services/mediaStorage';
 import { formatPrice } from '../../utils/helpers';
@@ -191,6 +192,19 @@ export const DailyTasksPanel: React.FC<{
   const [adFor, setAdFor] = useState<Property | null>(null);
   const [videoBusy, setVideoBusy] = useState(false);
   const videoRef = useRef<HTMLInputElement>(null);
+  const [bonusBusy, setBonusBusy] = useState(false);
+  const bonusRef = useRef<HTMLInputElement>(null);
+
+  /* النقط محسوبة من نفس الشغل اللي في العدّادات — مش رقم
+     مخزّن لوحده. النهارده والشهر عشان يشوف حركته. */
+  const xpToday = useMemo(
+    () => computeXp({ agentId: agent.id, leads, requests, proofs, targets: t, days: [cairoDay()] }),
+    [agent.id, leads, requests, proofs, t],
+  );
+  const xpMonth = useMemo(
+    () => computeXp({ agentId: agent.id, leads, requests, proofs, targets: t }),
+    [agent.id, leads, requests, proofs, t],
+  );
 
   const card = useMemo(
     () => buildScorecard({ agentId: agent.id, leads, requests, proofs, targets: t }),
@@ -245,6 +259,18 @@ export const DailyTasksPanel: React.FC<{
     finally { setVideoBusy(false); }
   };
 
+  const uploadBonus = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setBonusBusy(true);
+    try {
+      const url = await uploadFile(f, 'bonus_listings', `${agent.id}_${Date.now()}`);
+      await saveWorkProof({ agentId: agent.id, agentName: agent.name, kind: 'bonus_listing', proofUrl: url });
+      onRefresh?.();
+    } catch { /* الرسالة بتظهر من الزرار */ }
+    finally { setBonusBusy(false); }
+  };
+
   return (
     <div className="space-y-5" dir="rtl">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -252,6 +278,22 @@ export const DailyTasksPanel: React.FC<{
           <h2 className="text-lg font-black text-stone-900">مهام النهارده</h2>
           <p className="text-xs text-stone-400 font-medium">
             {cairoDay()}
+          </p>
+        </div>
+      </div>
+
+      {/* النقط — بتتحرّك مع كل حاجة بتتعمل فعلاً */}
+      <div className="bg-[#141414] rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-[11px] text-white/50 font-bold">نقط النهارده</p>
+          <p className="text-2xl font-black text-[#D9B864] font-mono">
+            {xpToday.total.toLocaleString('en-US')}
+          </p>
+        </div>
+        <div className="text-left">
+          <p className="text-[11px] text-white/50 font-bold">آخر ٣٠ يوم</p>
+          <p className="text-lg font-black text-white font-mono">
+            {xpMonth.total.toLocaleString('en-US')}
           </p>
         </div>
       </div>
@@ -276,6 +318,29 @@ export const DailyTasksPanel: React.FC<{
         >
           {videoBusy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
           {videoBusy ? 'بيرفع…' : 'ارفع الفيديو'}
+        </button>
+      </div>
+
+      {/* بونص — مش هدف يومي، بس بياخد عليه نقط */}
+      <div className="bg-white rounded-2xl p-4 border border-dashed border-[#E8D3A6] flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-black text-sm text-stone-900">وحدة جديدة برقم المالك</span>
+            <span className="text-[9px] font-black bg-[#FBF1E4] text-[#A07A26] px-2 py-0.5 rounded-full">
+              بونص +{t.xpBonusListing} نقطة
+            </span>
+          </div>
+          <p className="text-[11px] text-stone-400 font-medium mt-0.5">
+            مش هدف يومي · ارفع صورة أو سكرين فيه كود الوحدة
+          </p>
+        </div>
+        <input ref={bonusRef} type="file" accept="image/*" onChange={uploadBonus} className="hidden" />
+        <button
+          type="button" disabled={bonusBusy} onClick={() => bonusRef.current?.click()}
+          className="rounded-xl px-4 py-2 bg-white border border-[#E4DFD4] font-bold text-xs flex items-center gap-2 disabled:opacity-50"
+        >
+          {bonusBusy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+          {bonusBusy ? 'بيرفع…' : 'سجّل وحدة'}
         </button>
       </div>
 

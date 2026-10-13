@@ -162,7 +162,7 @@ export function signedUnitIds(proofs: WorkProof[], agentId: string, since: numbe
   const s = new Set<string>();
   proofs.forEach((p) => {
     if (p.agentId !== agentId) return;
-    if (p.kind === 'video') return;
+    if (p.kind !== 'ad_resale' && p.kind !== 'ad_offplan') return;
     if (p.at < since) return;
     if (p.propertyId) s.add(p.propertyId);
   });
@@ -296,6 +296,57 @@ export function subscribeTargets(cb: (t: SalesTargets) => void): () => void {
 
    والتوزيع بيتجنّب إنه يدّي المندوب نفس شققه بتاعة الدورة
    اللي فاتت، عشان كل شقة تاخد عين جديدة.                  */
+
+/* ---------- النقط (XP) ----------
+   النقط محسوبة من الشغل الحقيقي، مش مخزّنة ومش بتتزوّد بزرار.
+   يعني مفيش مصدرين للحقيقة، ومفيش حد يقدر يزوّدها بالضغط.
+   بتتحسب على آخر ٤٠ يوم — نفس المدة اللي بنجيب فيها الإثباتات. */
+
+export interface XpBreakdown {
+  total: number;
+  calls: number;
+  requests: number;
+  ads: number;
+  videos: number;
+  visits: number;
+  bonus: number;
+}
+
+export function computeXp(args: {
+  agentId: string;
+  leads: Lead[];
+  requests: ViewingRequest[];
+  proofs: WorkProof[];
+  targets?: SalesTargets;
+  days?: string[];
+  now?: Date;
+}): XpBreakdown {
+  const t = args.targets || DEFAULT_SALES_TARGETS;
+  const days = args.days || monthDays(args.now || new Date());
+  const c = countCalls(args.leads, args.agentId, days);
+  const r = countRequests(args.requests, args.agentId, days);
+  const p = countProofs(args.proofs, args.agentId, days);
+  const v = countVisits(args.requests, args.agentId, days);
+  const want = new Set(days);
+  let bonusListings = 0;
+  args.proofs.forEach((x) => {
+    if (x.agentId !== args.agentId) return;
+    if (x.kind !== 'bonus_listing') return;
+    if (!want.has(x.day)) return;
+    bonusListings += 1;
+  });
+
+  const calls = c.total * t.xpCall;
+  const requests = r.total * t.xpRequest;
+  const ads = (p.adResale + p.adOffplan) * t.xpAd;
+  const videos = p.video * t.xpVideo;
+  const visits = v * t.xpVisit;
+  const bonus = bonusListings * t.xpBonusListing;
+  return {
+    total: calls + requests + ads + videos + visits + bonus,
+    calls, requests, ads, videos, visits, bonus,
+  };
+}
 
 /* ---------- الشقق الضعيفة ----------
    الشقة اللي تفاعلها أقل من المتوسط هي اللي محتاجة دفع.
