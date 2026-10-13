@@ -1467,6 +1467,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <span>{editingPropertyId ? 'تعديل' : 'إضافة'}</span>
             </button>
 
+            {/* شريط الموبايل: نفس قاعدة السايد بار — السيلز
+                المصرّح له يشوف الشقق والإضافة وبس */}
+            {!propertiesOnly && (<>
             <button
               onClick={() => setActiveTab('submissions')}
               className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
@@ -1531,6 +1534,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <Lock size={13} />
               <span>الإعدادات</span>
             </button>
+            </>)}
           </div>
 
           {/* NOTIFICATION TOAST */}
