@@ -2108,6 +2108,7 @@ export default function App() {
         onSelectResale={() => {
           setFilter({ ...filter, category: 'resale' });
         }}
+        canOpenAdmin={canManageProperties}
         onOpenAdmin={() => {
           if (canManageProperties) {
             setIsAdminDashboardOpen(true);
@@ -2674,13 +2675,11 @@ export default function App() {
           onOpenLeadHandled={() => setPendingLeadId(null)}
           customLogoUrl={customLogoUrl}
           bannerPhotoUrl={bannerPhotoUrl}
-          onOpenAdmin={() => {
-            if (canManageProperties) {
-              setIsAdminDashboardOpen(true);
-            } else {
-              setIsAdminLoginOpen(true);
-            }
-          }}
+          /* زرار لوحة الإدارة في أدوات السيلز كان بيظهر لأي حد
+             فاتح الأدوات — يعني كل السيلز. البروب نفسه بيتبعت
+             بس لو الحساب فعلاً مصرّح له، فالزرار مابقاش موجود
+             أصلاً عند اللي مالوش صلاحية. */
+          onOpenAdmin={canManageProperties ? () => setIsAdminDashboardOpen(true) : undefined}
           onOpenCrm={() => setIsCrmOpen(true)}
           onOpenSalesLogin={() => {
             setSalesToolkitProperty(null);

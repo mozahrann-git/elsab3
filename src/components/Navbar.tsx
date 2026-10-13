@@ -46,6 +46,9 @@ interface NavbarProps {
   myPortalLabel?: string;
   onOpenClosedDeals?: () => void;
   onOpenAdmin: () => void;
+  /* مين يشوف مدخل لوحة الإدارة: الأدمن، أو حساب سيلز الأدمن
+     داله صلاحية تعديل الشقق. مش أي حد داخل. */
+  canOpenAdmin?: boolean;
   onOpenCrm: () => void;
   isAdminLoggedIn: boolean;
   pendingSubmissionsCount?: number;
@@ -84,6 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   myPortalLabel,
   onOpenClosedDeals,
   onOpenAdmin,
+  canOpenAdmin,
   onOpenCrm,
   isAdminLoggedIn,
   isSalesLoggedIn,
@@ -304,7 +308,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <span>{myPortalLabel}</span><Building2 size={14} className="text-[#A07A26]" />
                         </button>
                       )}
-                      {isAdminLoggedIn && (
+                      {(canOpenAdmin ?? isAdminLoggedIn) && (
                         <button onClick={() => { setUserDropdownOpen(false); onOpenAdmin(); }}
                           className="w-full text-right px-3 py-2.5 text-xs font-bold hover:bg-[#F6F4EF] rounded-xl flex items-center justify-between">
                           <span>لوحة الإدارة المركزية</span><Shield size={14} className="text-[#A07A26]" />
@@ -560,7 +564,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </button>
                     )}
 
-                    {isAdminLoggedIn && (
+                    {(canOpenAdmin ?? isAdminLoggedIn) && (
                       <button
                         onClick={() => { setMobileMenuOpen(false); onOpenAdmin(); }}
                         className="w-full rounded-xl bg-white/10 px-3.5 py-2.5 text-right flex items-center gap-3 text-white"
