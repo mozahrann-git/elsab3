@@ -318,36 +318,66 @@ export interface PermReport {
   checks: PermCheck[];
 }
 
+/* أي وعد بمهلة — الفحص لازم يرد مهما حصل */
+function cap<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((res, rej) => {
+    const t = setTimeout(() => rej(new Error('TIMEOUT')), ms);
+    p.then((v) => { clearTimeout(t); res(v); }, (e) => { clearTimeout(t); rej(e); });
+  });
+}
+
 export async function diagnosePermissions(): Promise<PermReport> {
-  const user = await ensureAuth();
+  let user: any = null;
+  try { user = await cap(ensureAuth(), 8000); } catch { /* نكمّل من غيره */ }
   const email = (user?.email || '').toLowerCase();
   let provider = 'غير معروف';
   try {
-    const t: any = await (user as any)?.getIdTokenResult?.();
-    provider = t?.signInProvider || 'غير معروف';
-  } catch { /* */ }
+    const call = (user as any)?.getIdTokenResult?.();
+    if (call) {
+      const t: any = await cap(call, 8000);
+      provider = t?.signInProvider || 'غير معروف';
+    } else {
+      provider = 'مفيش جلسة';
+    }
+  } catch (e: any) {
+    provider = e?.message === 'TIMEOUT' ? 'ماردّش — مفيش وصول للسيرفر' : 'غير معروف';
+  }
 
   let staffDocFound = false;
   let role = '';
   try {
-    const snap = await getDoc(doc(db, 'staff_access', email));
+    const snap = await cap(getDoc(doc(db, 'staff_access', email)), 8000);
     staffDocFound = snap.exists();
     role = String((snap.data() as any)?.role || '');
   } catch (e: any) {
-    role = `ما قدرناش نقرا: ${e?.code || e?.message || ''}`;
+    role = e?.message === 'TIMEOUT'
+      ? 'ماردّش — مفيش وصول للسيرفر'
+      : `ما قدرناش نقرا: ${e?.code || e?.message || ''}`;
   }
 
-  const checks: PermCheck[] = [];
-  const run = async (label: string, fn: () => Promise<unknown>) => {
-    try { await fn(); checks.push({ label, ok: true }); }
-    catch (e: any) { checks.push({ label, ok: false, error: e?.code || e?.message || 'خطأ' }); }
+  /* الفحوصات بتمشي مع بعض مش ورا بعض، وكل واحد له مهلة.
+     من غير المهلة الفحص بيتعلّق للأبد: الكتابة في فايرستور
+     بترجع وعد مبيتحلّش غير لما السيرفر يرد، فلو الاتصال واقف
+     بتفضل في الطابور بدل ما ترفض — وده اللي كان بيخلّي الزرار
+     يفضل "بيفحص…" من غير ما يرد. */
+  const run = async (label: string, fn: () => Promise<unknown>): Promise<PermCheck> => {
+    try { await cap(fn(), 6000); return { label, ok: true }; }
+    catch (e: any) {
+      const msg = e?.message === 'TIMEOUT'
+        ? 'ماردّش خلال ٦ ثواني — مفيش وصول للسيرفر'
+        : (e?.code || e?.message || 'خطأ');
+      return { label, ok: false, error: msg };
+    }
   };
 
-  await run('قراءة الإثباتات (work_proofs)', () => getDocs(query(collection(db, 'work_proofs'), qLimit(1))));
-  await run('قراءة التوزيع (agent_units)', () => getDocs(query(collection(db, 'agent_units'), qLimit(1))));
-  await run('قراءة الأهداف (settings)', () => getDoc(doc(db, 'settings', 'sales_targets')));
-  await run('كتابة الأهداف (settings)', () => setDoc(doc(db, 'settings', '_perm_check'), { at: Date.now() }, { merge: true }));
-  await run('كتابة التوزيع (agent_units)', () => setDoc(doc(db, 'agent_units', '_perm_check'), { at: Date.now() }, { merge: true }));
+  const checks: PermCheck[] = await Promise.all([
+    run('قراءة الإثباتات (work_proofs)', () => getDocs(query(collection(db, 'work_proofs'), qLimit(1)))),
+    run('قراءة التوزيع (agent_units)', () => getDocs(query(collection(db, 'agent_units'), qLimit(1)))),
+    run('قراءة الأهداف (settings)', () => getDoc(doc(db, 'settings', 'sales_targets'))),
+    run('كتابة الأهداف (settings)', () => setDoc(doc(db, 'settings', '_perm_check'), { at: Date.now() }, { merge: true })),
+    run('كتابة التوزيع (agent_units)', () => setDoc(doc(db, 'agent_units', '_perm_check'), { at: Date.now() }, { merge: true })),
+    run('كتابة شقة (properties)', () => setDoc(doc(db, 'properties', '_perm_check'), { at: Date.now() }, { merge: true })),
+  ]);
 
   return {
     email: email || '(مفيش إيميل)',
