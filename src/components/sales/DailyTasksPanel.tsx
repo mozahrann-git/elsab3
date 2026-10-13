@@ -5,7 +5,7 @@ import {
 import type { Lead, Property, SalesAgent, ViewingRequest, WorkProof, SalesTargets, AgentUnitAssignment } from '../../types';
 import { DEFAULT_SALES_TARGETS } from '../../types';
 import {
-  buildScorecard, cairoDay, saveWorkProof, deleteWorkProof, signedUnitIds, TaskRow,
+  buildScorecard, cairoDay, saveWorkProof, signedUnitIds, splitByPerformance, interestScore, TaskRow,
 } from '../../services/dailyTasksService';
 import { uploadFile, thumbUrl } from '../../services/mediaStorage';
 import { formatPrice } from '../../utils/helpers';
@@ -17,8 +17,6 @@ import { formatPrice } from '../../utils/helpers';
    العدّاد اليدوي (الإعلان والفيديو) مبيتحركش غير بصورة.
    مفيش زرار "تم" فاضي في الشاشة دي.                        */
 
-type Period = 'daily' | 'weekly' | 'monthly';
-
 const Bar: React.FC<{ row: TaskRow }> = ({ row }) => {
   const pct = row.target > 0 ? Math.min(100, Math.round((row.done / row.target) * 100)) : 0;
   const full = row.done >= row.target;
@@ -29,6 +27,11 @@ const Bar: React.FC<{ row: TaskRow }> = ({ row }) => {
           {full ? <CheckCircle2 size={16} className="text-[#1E7A45] shrink-0" />
                 : <Circle size={16} className="text-stone-300 shrink-0" />}
           <span className="font-black text-sm text-stone-900 truncate">{row.label}</span>
+          {row.period === 'week' && (
+            <span className="text-[9px] font-bold bg-stone-100 text-stone-500 px-2 py-0.5 rounded-full shrink-0">
+              الأسبوع
+            </span>
+          )}
           {!row.auto && (
             <span className="text-[9px] font-bold bg-[#FBF1E4] text-[#A07A26] px-2 py-0.5 rounded-full shrink-0">
               بإثبات
@@ -185,7 +188,6 @@ export const DailyTasksPanel: React.FC<{
   onRefresh?: () => void;
 }> = ({ agent, leads, requests, properties, proofs, assignment, targets, onRefresh }) => {
   const t = targets || DEFAULT_SALES_TARGETS;
-  const [period, setPeriod] = useState<Period>('daily');
   const [adFor, setAdFor] = useState<Property | null>(null);
   const [videoBusy, setVideoBusy] = useState(false);
   const videoRef = useRef<HTMLInputElement>(null);
@@ -195,10 +197,24 @@ export const DailyTasksPanel: React.FC<{
     [agent.id, leads, requests, proofs, t],
   );
 
+  /* الشقق اللي تفاعلها تحت متوسط الموقع كله — دي اللي محتاجة
+     شغل، فبتتعرض الأول ومعلّم عليها. المتوسط بيتحسب على كل
+     شقق الموقع مش على شققه هو، عشان المقياس يبقى واحد. */
+  const weakIds = useMemo(
+    () => new Set(splitByPerformance(properties).weak.map((p) => p.id)),
+    [properties],
+  );
+
   const myUnits = useMemo(() => {
     const ids = new Set(assignment?.propertyIds || []);
-    return properties.filter((p) => ids.has(p.id));
-  }, [properties, assignment]);
+    const mine = properties.filter((p) => ids.has(p.id));
+    /* المحتاجة دفع الأول، والأضعف فيهم في أول القايمة */
+    return mine.sort((a, b) => {
+      const wa = weakIds.has(a.id) ? 0 : 1;
+      const wb = weakIds.has(b.id) ? 0 : 1;
+      return wa - wb || interestScore(a) - interestScore(b);
+    });
+  }, [properties, assignment, weakIds]);
 
   const signed = useMemo(
     () => signedUnitIds(proofs, agent.id, assignment?.cycleStart || 0),
@@ -215,7 +231,7 @@ export const DailyTasksPanel: React.FC<{
     return m;
   }, [proofs, agent.id]);
 
-  const rows = card[period];
+  const rows = card.rows;
 
   const uploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -235,18 +251,8 @@ export const DailyTasksPanel: React.FC<{
         <div>
           <h2 className="text-lg font-black text-stone-900">مهام النهارده</h2>
           <p className="text-xs text-stone-400 font-medium">
-            {cairoDay()} · الأسبوع {t.workDaysPerWeek} أيام · الشهر {t.weeksPerMonth} أسابيع
+            {cairoDay()}
           </p>
-        </div>
-        <div className="flex bg-stone-100 rounded-2xl p-1 gap-1">
-          {([['daily', 'يومي'], ['weekly', 'أسبوعي'], ['monthly', 'شهري']] as [Period, string][]).map(([k, l]) => (
-            <button
-              key={k} type="button" onClick={() => setPeriod(k)}
-              className={`px-4 py-1.5 rounded-xl text-xs font-black transition-colors ${
-                period === k ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'
-              }`}
-            >{l}</button>
-          ))}
         </div>
       </div>
 
@@ -283,7 +289,7 @@ export const DailyTasksPanel: React.FC<{
             </span>
           </h3>
           <p className="text-[11px] text-stone-400 font-medium">
-            الشقة بتتوقّع لما تتعلن ويترفع سكرينها
+            اللي عليها "محتاجة دفع" تفاعلها تحت المتوسط — ابدأ بيها
           </p>
         </div>
 
@@ -314,10 +320,15 @@ export const DailyTasksPanel: React.FC<{
                   )}
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[11px] font-mono font-black bg-stone-100 px-2 py-0.5 rounded-full">
                         {p.code}
                       </span>
+                      {weakIds.has(p.id) && (
+                        <span className="text-[9px] font-black bg-[#FBF1E4] text-[#A07A26] px-2 py-0.5 rounded-full">
+                          محتاجة دفع
+                        </span>
+                      )}
                       {done && <CheckCircle2 size={14} className="text-[#1E7A45]" />}
                     </div>
                     <p className="text-xs font-bold text-stone-800 truncate mt-0.5">{p.title}</p>

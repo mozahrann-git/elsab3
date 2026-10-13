@@ -16,8 +16,6 @@ import { thumbUrl } from '../../services/mediaStorage';
    المندوب بالظبط (نفس الدالة بتحسبهم) — عشان ما يحصلش إن
    المندوب شايف رقم وأنت شايف رقم تاني.                     */
 
-type Period = 'daily' | 'weekly' | 'monthly';
-
 const Cell: React.FC<{ done: number; target: number }> = ({ done, target }) => {
   const full = done >= target;
   const near = !full && target > 0 && done / target >= 0.7;
@@ -49,7 +47,6 @@ export const TasksOverview: React.FC<{
   targets, onTargetsSaved, onAssignmentsSaved,
 }) => {
   const t = targets || DEFAULT_SALES_TARGETS;
-  const [period, setPeriod] = useState<Period>('daily');
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<SalesTargets>(t);
   const [busy, setBusy] = useState('');
@@ -88,10 +85,11 @@ export const TasksOverview: React.FC<{
     try {
       const prev: Record<string, string[]> = {};
       assignments.forEach((a) => { prev[a.agentId] = a.propertyIds || []; });
-      const map = distributeUnits({
+      const res = distributeUnits({
         properties, agentIds: active.map((a) => a.id),
         perAgent: t.unitsPerAgent, previous: prev,
       });
+      const map = res.map;
       const start = Date.now();
       const end = start + t.cycleDays * 86400000;
       for (const a of active) {
@@ -102,12 +100,15 @@ export const TasksOverview: React.FC<{
         });
       }
       onAssignmentsSaved?.();
-      setMsg(`اتوزّعت على ${active.length} مندوب`);
+      setMsg(
+        `اتوزّعت على ${active.length} مندوب · ${res.priority.size} شقة تحت المتوسط `
+        + `اتكررت بينهم (متوسط التفاعل ${Math.round(res.average)})`,
+      );
     } catch (e: any) { setMsg(e?.message || 'التوزيع ما نجحش'); }
     finally { setBusy(''); }
   };
 
-  const keys = cards[0]?.card[period].map((r) => ({ key: r.key, label: r.label })) || [];
+  const keys = cards[0]?.card.rows.map((r) => ({ key: r.key, label: r.label })) || [];
 
   return (
     <div className="space-y-5" dir="rtl">
@@ -119,14 +120,6 @@ export const TasksOverview: React.FC<{
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex bg-stone-100 rounded-2xl p-1 gap-1">
-            {([['daily', 'يومي'], ['weekly', 'أسبوعي'], ['monthly', 'شهري']] as [Period, string][]).map(([k, l]) => (
-              <button key={k} type="button" onClick={() => setPeriod(k)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-black ${
-                  period === k ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'
-                }`}>{l}</button>
-            ))}
-          </div>
           <button type="button" onClick={() => { setForm(t); setEditing((v) => !v); }}
             className="rounded-xl px-3 py-2 bg-white border border-[#E4DFD4] font-bold text-xs flex items-center gap-1.5">
             <Settings2 size={14} /> الأهداف
@@ -207,7 +200,7 @@ export const TasksOverview: React.FC<{
                       <ExternalLink size={11} className="opacity-40" />
                     </button>
                   </td>
-                  {card[period].map((r) => <Cell key={r.key} done={r.done} target={r.target} />)}
+                  {card.rows.map((r) => <Cell key={r.key} done={r.done} target={r.target} />)}
                   <td className="px-2 py-2 text-center">
                     <span className="font-mono font-black text-xs text-stone-600">
                       {signed.size}<span className="opacity-40">/{total}</span>

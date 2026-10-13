@@ -177,16 +177,20 @@ export interface TaskRow {
   done: number;
   target: number;
   auto: boolean;               // النظام حسبها لوحده؟
+  period?: 'day' | 'week';     // 'week' = الهدف أسبوعي بطبيعته
   hint?: string;
 }
 
 export interface AgentScorecard {
   agentId: string;
-  daily: TaskRow[];
-  weekly: TaskRow[];
-  monthly: TaskRow[];
+  rows: TaskRow[];
 }
 
+/* شاشة واحدة بس — مفيش تبويب أسبوعي ولا شهري.
+   المندوب بيشوف شغل النهارده وبس. المعاينة والفيديو
+   طبيعتهم أسبوعية (٥ و٢ في الأسبوع)، فبيتعرضوا بتقدّمهم
+   في الأسبوع ومكتوب عليهم كده صراحة — مش مقسّمين على ٦
+   عشان يطلعوا كسر مالهوش معنى. */
 export function buildScorecard(args: {
   agentId: string;
   leads: Lead[];
@@ -199,52 +203,28 @@ export function buildScorecard(args: {
   const now = args.now || new Date();
   const today = [cairoDay(now)];
   const week = weekDays(now);
-  const month = monthDays(now);
 
-  const wd = t.workDaysPerWeek;
-  const wm = t.weeksPerMonth;
-  const adsDaily = t.adsResaleDaily + t.adsOffplanDaily;
-
-  const cD = countCalls(args.leads, args.agentId, today);
-  const cW = countCalls(args.leads, args.agentId, week);
-  const cM = countCalls(args.leads, args.agentId, month);
-
-  const rD = countRequests(args.requests, args.agentId, today);
-  const rW = countRequests(args.requests, args.agentId, week);
-  const rM = countRequests(args.requests, args.agentId, month);
-
-  const pD = countProofs(args.proofs, args.agentId, today);
-  const pW = countProofs(args.proofs, args.agentId, week);
-  const pM = countProofs(args.proofs, args.agentId, month);
-
-  const vW = countVisits(args.requests, args.agentId, week);
-  const vM = countVisits(args.requests, args.agentId, month);
+  const c = countCalls(args.leads, args.agentId, today);
+  const r = countRequests(args.requests, args.agentId, today);
+  const p = countProofs(args.proofs, args.agentId, today);
+  const pw = countProofs(args.proofs, args.agentId, week);
+  const vw = countVisits(args.requests, args.agentId, week);
 
   return {
     agentId: args.agentId,
-    daily: [
-      { key: 'calls', label: 'مكالمات', done: cD.total, target: t.callsDaily, auto: true,
-        hint: `فريش ${cD.fresh} · متابعة ${cD.follow} · كامبين قديمة ${cD.old_campaign}` },
-      { key: 'requests', label: 'ريكويستات', done: rD.total, target: t.requestsDaily, auto: true,
-        hint: `مهتم جداً ${rD.potential}/${t.requestsPotential} · عادي ${rD.normal}/${t.requestsNormal}` },
-      { key: 'ads_resale', label: 'إعلانات ريسيل', done: pD.adResale, target: t.adsResaleDaily, auto: false,
+    rows: [
+      { key: 'calls', label: 'مكالمات', done: c.total, target: t.callsDaily, auto: true,
+        hint: `فريش ${c.fresh} · متابعة ${c.follow} · كامبين قديمة ${c.old_campaign}` },
+      { key: 'requests', label: 'ريكويستات', done: r.total, target: t.requestsDaily, auto: true,
+        hint: `مهتم جداً ${r.potential}/${t.requestsPotential} · عادي ${r.normal}/${t.requestsNormal}` },
+      { key: 'ads_resale', label: 'إعلانات ريسيل', done: p.adResale, target: t.adsResaleDaily, auto: false,
         hint: 'محتاج سكرين شوت' },
-      { key: 'ads_offplan', label: 'إعلانات تحت الإنشاء', done: pD.adOffplan, target: t.adsOffplanDaily, auto: false,
+      { key: 'ads_offplan', label: 'إعلانات تحت الإنشاء', done: p.adOffplan, target: t.adsOffplanDaily, auto: false,
         hint: 'محتاج سكرين شوت' },
-    ],
-    weekly: [
-      { key: 'calls', label: 'مكالمات', done: cW.total, target: t.callsDaily * wd, auto: true },
-      { key: 'requests', label: 'ريكويستات', done: rW.total, target: t.requestsDaily * wd, auto: true },
-      { key: 'visits', label: 'معاينات تمت', done: vW, target: t.visitsWeekly, auto: true },
-      { key: 'videos', label: 'فيديو من الموقع', done: pW.video, target: t.videosWeekly, auto: false },
-      { key: 'ads', label: 'إعلانات', done: pW.adResale + pW.adOffplan, target: adsDaily * wd, auto: false },
-    ],
-    monthly: [
-      { key: 'calls', label: 'مكالمات', done: cM.total, target: t.callsDaily * wd * wm, auto: true },
-      { key: 'requests', label: 'ريكويستات', done: rM.total, target: t.requestsDaily * wd * wm, auto: true },
-      { key: 'visits', label: 'معاينات تمت', done: vM, target: t.visitsWeekly * wm, auto: true },
-      { key: 'videos', label: 'فيديو من الموقع', done: pM.video, target: t.videosWeekly * wm, auto: false },
-      { key: 'ads', label: 'إعلانات', done: pM.adResale + pM.adOffplan, target: adsDaily * wd * wm, auto: false },
+      { key: 'visits', label: 'معاينات تمت', done: vw, target: t.visitsWeekly, auto: true,
+        period: 'week', hint: 'الهدف ده للأسبوع كله' },
+      { key: 'videos', label: 'فيديو من الموقع', done: pw.video, target: t.videosWeekly, auto: false,
+        period: 'week', hint: 'الهدف ده للأسبوع كله' },
     ],
   };
 }
@@ -317,46 +297,101 @@ export function subscribeTargets(cb: (t: SalesTargets) => void): () => void {
    والتوزيع بيتجنّب إنه يدّي المندوب نفس شققه بتاعة الدورة
    اللي فاتت، عشان كل شقة تاخد عين جديدة.                  */
 
+/* ---------- الشقق الضعيفة ----------
+   الشقة اللي تفاعلها أقل من المتوسط هي اللي محتاجة دفع.
+   الشقة اللي ماشية لوحدها مش محتاجة ٣ مناديب يشتغلوا عليها.
+   التفاعل = مشاهدات + (واتساب واتصال × ٣)، لأن اللي بيضغط
+   واتساب أقرب للشراء بكتير من اللي بيتفرج.                */
+
+export function interestScore(p: Property): number {
+  const c = p.clicks || ({} as any);
+  return (c.views || 0) + ((c.whatsapp || 0) + (c.call || 0)) * 3;
+}
+
+export interface UnitSplit {
+  weak: Property[];        // أقل من المتوسط — دي الأولوية وبتتكرر
+  strong: Property[];      // فوق المتوسط — مندوب واحد يكفيها
+  average: number;
+}
+
+export function splitByPerformance(properties: Property[]): UnitSplit {
+  if (!properties.length) return { weak: [], strong: [], average: 0 };
+  const scores = properties.map(interestScore);
+  const average = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const weak: Property[] = [];
+  const strong: Property[] = [];
+  properties.forEach((p, i) => { (scores[i] < average ? weak : strong).push(p); });
+  /* الأضعف الأول جوه الضعاف — دي اللي محدش شافها خالص */
+  weak.sort((a, b) => interestScore(a) - interestScore(b));
+  strong.sort((a, b) => interestScore(a) - interestScore(b));
+  return { weak, strong, average };
+}
+
+/* ---------- توزيع الشقق ----------
+   مش تقسيم عشوائي للأكواد. الترتيب:
+
+   ١) الشقق الضعيفة (أقل من المتوسط) بتتوزّع الأول، وبتتكرر
+      بين أكتر من مندوب لحد ما الخانات تخلص — دي الشقق اللي
+      محتاجة شغل، ودي اللي بتظهر في مساعد الإعلان والفيديو.
+   ٢) الشقق القوية بتتوزّع بعدهم، مندوب واحد لكل واحدة.
+   ٣) مفيش مندوب بياخد نفس شققه بتاعة الدورة اللي فاتت.      */
+
+export interface DistributionResult {
+  map: Record<string, string[]>;
+  priority: Set<string>;     // الشقق الضعيفة — الأولوية
+  average: number;
+}
+
 export function distributeUnits(args: {
   properties: Property[];
   agentIds: string[];
   perAgent: number;
   previous?: Record<string, string[]>;
-}): Record<string, string[]> {
+}): DistributionResult {
   const { properties, agentIds, perAgent } = args;
   const prev = args.previous || {};
-  const out: Record<string, string[]> = {};
-  agentIds.forEach((a) => { out[a] = []; });
-  if (!agentIds.length || !properties.length) return out;
+  const map: Record<string, string[]> = {};
+  agentIds.forEach((a) => { map[a] = []; });
+  const { weak, strong, average } = splitByPerformance(properties);
+  const priority = new Set(weak.map((p) => p.id));
+  if (!agentIds.length || !properties.length) return { map, priority, average };
 
-  /* الشقق الأقل حركة الأول — اللي محدش بص عليها تاخد أولوية */
-  const pool = [...properties].sort(
-    (a, b) => ((a.clicks?.views || 0) - (b.clicks?.views || 0)),
-  );
-
-  /* عدد المرات اللي الشقة اتوزّعت فيها، عشان التكرار يبقى
-     متساوي بدل ما شقة تروح لخمسة وشقة لواحد */
   const used = new Map<string, number>();
-  pool.forEach((p) => used.set(p.id, 0));
+  properties.forEach((p) => used.set(p.id, 0));
 
-  for (let round = 0; round < perAgent; round++) {
-    agentIds.forEach((agentId) => {
+  /* الضعيفة الأول وبتتكرر، وبعدها القوية مرة واحدة لكل شقة */
+  const take = (pool: Property[], maxCopies: number) => {
+    for (const agentId of agentIds) {
+      if (map[agentId].length >= perAgent) continue;
       const had = new Set(prev[agentId] || []);
-      const mine = new Set(out[agentId]);
+      const mine = new Set(map[agentId]);
       let best: Property | null = null;
       let bestScore = Infinity;
       for (const p of pool) {
-        if (mine.has(p.id)) continue;
         const u = used.get(p.id) || 0;
-        /* الأقل توزيعاً الأول، ومعاها عقوبة لو كانت معاه الدورة اللي فاتت */
+        if (u >= maxCopies) continue;
+        if (mine.has(p.id)) continue;
         const score = u * 10 + (had.has(p.id) ? 5 : 0);
         if (score < bestScore) { bestScore = score; best = p; if (score === 0) break; }
       }
       if (best) {
-        out[agentId].push(best.id);
+        map[agentId].push(best.id);
         used.set(best.id, (used.get(best.id) || 0) + 1);
       }
-    });
+    }
+  };
+
+  /* بنلف لحد ما كل مندوب ياخد نصيبه. الضعيفة بتاخد نسخ
+     أكتر، والقوية نسخة واحدة بس. */
+  const maxWeakCopies = Math.max(1, Math.ceil((agentIds.length * perAgent) / Math.max(1, weak.length)));
+  for (let pass = 0; pass < perAgent; pass++) {
+    const before = agentIds.reduce((n, a) => n + map[a].length, 0);
+    take(weak, maxWeakCopies);
+    if (agentIds.every((a) => map[a].length >= perAgent)) break;
+    take(strong, 1);
+    const after = agentIds.reduce((n, a) => n + map[a].length, 0);
+    if (after === before) break;   // خلصت الشقق
   }
-  return out;
+
+  return { map, priority, average };
 }
