@@ -159,6 +159,9 @@ export interface StaffAccess {
   name?: string;
   brokerId?: string;          // للبروكر: ID ملفه في brokers
   propertyCodes?: string[];   // للمالك: أكواد وحداته
+  /* سيلز معيّن ليه حق تعديل الشقق وإضافة الصور والفيديو
+     زي الأدمن. الأدمن هو اللي بيدّيها من شاشة الحسابات. */
+  canEditProperties?: boolean;
 }
 
 export async function getStaffAccess(email?: string | null): Promise<StaffAccess | null> {
@@ -173,7 +176,10 @@ export async function getStaffAccess(email?: string | null): Promise<StaffAccess
       : typeof d.propertyCodes === 'string'
         ? d.propertyCodes.split(',').map((c: string) => c.trim()).filter(Boolean)
         : [];
-    return { email: key, role: d.role ?? null, name: d.name, brokerId: d.brokerId, propertyCodes: codes };
+    return {
+      email: key, role: d.role ?? null, name: d.name, brokerId: d.brokerId,
+      propertyCodes: codes, canEditProperties: d.canEditProperties === true,
+    };
   } catch (err) {
     console.warn('[Auth] access lookup failed:', err);
     return null;
@@ -1190,6 +1196,8 @@ export interface AccountRecord {
   propertyCodes?: string[] | string;
   phone?: string;
   commission?: string;         // نسبة العمولة المتفق عليها مع المالك
+  /* سيلز ليه حق تعديل الشقق وإضافة الصور والفيديو زي الأدمن */
+  canEditProperties?: boolean;
   updatedAt?: string;
 }
 
@@ -1273,6 +1281,9 @@ export async function saveAccount(rec: AccountRecord, previousPassword?: string)
       ? (String(rec.brokerId || '').trim() || email.split('@')[0])
       : '',
     propertyCodes: rec.role === 'owner' ? codes : [],
+    /* حق تعديل الشقق — للسيلز بس. أي دور تاني بيترجع false
+       عشان ما تفضلش شغالة لو الحساب اتحوّل لدور تاني. */
+    canEditProperties: rec.role === 'sales' ? rec.canEditProperties === true : false,
     phone: rec.phone || '',
     ...(rec.commission ? { commission: rec.commission } : {}),
     updatedAt: new Date().toISOString(),

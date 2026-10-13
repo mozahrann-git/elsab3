@@ -132,6 +132,9 @@ export const AccountsManagerModal: React.FC<Props> = ({ isOpen, onClose, showToa
                     )}
                   </p>
                   {a.role === 'owner' && <p className="text-[11px] text-[#6B665C]">الوحدات: {codes || '—'}</p>}
+                  {a.role === 'sales' && (a as any).canEditProperties === true && (
+                    <p className="text-[11px] font-bold text-[#A07A26]">✎ يقدر يعدّل الشقق والصور</p>
+                  )}
                   {a.role === 'broker' && <p className="text-[11px] text-[#6B665C]">رقم البروكر: {a.brokerId || '—'}{(a as any).commission ? ` · عمولة ${(a as any).commission}%` : ''}</p>}
                 </div>
                 <div className="flex gap-2">
@@ -175,6 +178,23 @@ export const AccountsManagerModal: React.FC<Props> = ({ isOpen, onClose, showToa
             <label className="block text-xs font-bold space-y-1">الموبايل<input className={input} dir="ltr" value={editing.phone || ''} onChange={(e) => f('phone', e.target.value)} /></label>
             {editing.role === 'owner' && (
               <label className="block text-xs font-bold space-y-1">أكواد وحداته (افصل بفاصلة)<input className={`${input} font-mono`} dir="ltr" value={(editing.propertyCodes as string) || ''} onChange={(e) => f('propertyCodes', e.target.value)} placeholder="H1128, H1622" /></label>
+            )}
+            {editing.role === 'sales' && (
+              <label className="flex items-start gap-3 bg-[#FBF1E4] border border-[#E8D3A6] rounded-2xl p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={(editing as any).canEditProperties === true}
+                  onChange={(e) => setEditing({ ...editing, canEditProperties: e.target.checked } as any)}
+                  className="mt-0.5 w-4 h-4 shrink-0 accent-[#A07A26]"
+                />
+                <span className="text-xs font-bold text-[#141414]">
+                  يقدر يعدّل الشقق ويضيف صور وفيديو
+                  <span className="block text-[11px] font-medium text-[#6B665C] mt-0.5">
+                    هيفتح له لوحة الشقق زي الأدمن — بس الشقق بس، من غير الحسابات
+                    ولا الإعدادات ولا حذف شقق.
+                  </span>
+                </span>
+              </label>
             )}
             {(editing.role === 'broker' || editing.role === 'owner') && (
               <label className="block text-xs font-bold space-y-1">نسبة العمولة % (اختياري)<input className={input} dir="ltr" value={(editing as any).commission || ''} onChange={(e) => setEditing({ ...editing, commission: e.target.value } as any)} placeholder="2.5" /></label>

@@ -108,6 +108,9 @@ interface AdminDashboardModalProps {
   salesTargets?: SalesTargets;
   onAssignmentsChanged?: () => void;
   onResetXp?: () => Promise<void>;
+  /* true = الحساب ده يقدر يعدّل الشقق بس، من غير الحسابات
+     ولا الإعدادات ولا حذف شقق */
+  propertiesOnly?: boolean;
   /* تنضيف البيانات التجريبية */
   onCleanupDemo?: {
     deleteAgents: (ids: string[]) => Promise<void>;
@@ -176,6 +179,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   salesTargets,
   onAssignmentsChanged,
   onResetXp,
+  propertiesOnly = false,
   onCleanupDemo,
   onApproveSubmission,
   onRejectSubmission,
@@ -214,6 +218,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   /* الطلب اللي بنراجعه دلوقتي — النشر مش بيحصل غير من جوّه المراجعة */
   const [reviewSub, setReviewSub] = useState<any>(null);
 
+  /* حارس: حتى لو التبويب اتغيّر بأي طريقة تانية، الحساب
+     المحدود مايشوفش غير الشقق والإضافة. */
   const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'projects' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings' | 'tasks'>('manage');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterNeighborhood, setFilterNeighborhood] = useState<string>('all');
@@ -329,6 +335,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setSalesAgentsList(externalSalesAgents);
     }
   }, [externalSalesAgents]);
+
+  useEffect(() => {
+    if (propertiesOnly && activeTab !== 'manage' && activeTab !== 'add') {
+      setActiveTab('manage');
+    }
+  }, [propertiesOnly, activeTab]);
 
   const syncAgents = (updated: SalesAgent[]) => {
     setSalesAgentsList(updated);
@@ -1169,6 +1181,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               )}
             </button>
 
+            {/* الأقسام دي للأدمن بس. حساب السيلز اللي ليه حق
+                تعديل الشقق بيشوف الشقق والإضافة وبس. */}
+            {!propertiesOnly && (<>
             <button
               onClick={() => setActiveTab('projects')}
               className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
@@ -1323,6 +1338,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <span>الإعدادات والشعار</span>
               </div>
             </button>
+            </>)}
           </div>
 
           {/* Bottom Actions in Sidebar */}
@@ -1733,17 +1749,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               <span>تعديل</span>
                             </button>
 
-                            <button
-                              onClick={() => {
-                                onDeleteProperty(prop.id);
-                                showToast(`تم حذف الشقة (${prop.code}) بنجاح`);
-                              }}
-                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
-                              title="حذف الشقة"
-                            >
-                              <Trash2 size={13} />
-                              <span>حذف</span>
-                            </button>
+                            {/* الحذف للأدمن بس — القواعد كمان بترفضه
+                                من غيره، فده مش مجرد إخفاء */}
+                            {!propertiesOnly && (
+                              <button
+                                onClick={() => {
+                                  onDeleteProperty(prop.id);
+                                  showToast(`تم حذف الشقة (${prop.code}) بنجاح`);
+                                }}
+                                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                title="حذف الشقة"
+                              >
+                                <Trash2 size={13} />
+                                <span>حذف</span>
+                              </button>
+                            )}
                           </div>
                         </div>
 

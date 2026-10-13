@@ -17,6 +17,11 @@ service cloud.firestore {
     function isBoss()     { return roleIs('company_owner'); }   // أونر الشركة: عرض بس
     function isMkt()      { return roleIs('marketing'); }
     function isOwner()    { return roleIs('owner'); }
+    /* صلاحية تعديل الشقق: الأدمن والمنسقة دايماً، وأي حساب
+       سيلز الأدمن داله الصلاحية صراحة من شاشة الحسابات.
+       قبل كده كان أي سيلز يقدر يعدّل أي شقة — دي كانت واسعة. */
+    function canEditProps() { return isAdmin() || isCoord()
+                              || (roleIs('sales') && acc().canEditProperties == true); }
     function myBrokerId() { return acc().brokerId; }
     function myCodes()    { return acc().propertyCodes; }
     function onlyKeys(k)  { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(k); }
@@ -39,10 +44,15 @@ service cloud.firestore {
     // ---------- الشقق ----------
     match /properties/{propertyId} {
       allow read: if true;
-      allow create, update: if isStaff() || isCoord();
+      allow create, update: if canEditProps();
       allow delete: if isAdmin();
       // البروكر بيحدّث صور وحدته بس
       allow update: if isBroker() && resource.data.brokerId == myBrokerId() && onlyKeys(['images']);
+      /* عدّاد المشاهدات والواتساب والاتصال: الزائر العادي بيحرّكه،
+         وده كان مرفوض خالص لأن القاعدة فوق بتطلب موظف — فالأرقام
+         كانت بتفضل صفر والإحصائيات غلط. مسموح بالعدّاد بس،
+         ولا حاجة تانية في الشقة تتغيّر. */
+      allow update: if onlyKeys(['clicks']);
       match /private/{docId} {
         allow read, write: if isStaff() || isCoord();
         // البروكر يسجّل رقم المالك (ميقدرش يقراه تاني)

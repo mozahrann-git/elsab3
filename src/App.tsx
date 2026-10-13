@@ -509,6 +509,10 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  /* مين يقدر يعدّل الشقق: الأدمن، أو حساب سيلز الأدمن داله
+     الصلاحية صراحة من شاشة الحسابات. */
+  const canManageProperties = isAdminLoggedIn || staffAccess?.canEditProperties === true;
+
   const handleAdminLogin = (status: boolean) => {
     setIsAdminLoggedIn(status);
     if (status) {
@@ -688,7 +692,7 @@ export default function App() {
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
   const handleDirectEditProperty = (prop: Property) => {
-    if (!isAdminLoggedIn) {
+    if (!canManageProperties) {
       setIsAdminLoginOpen(true);
       return;
     }
@@ -1344,7 +1348,7 @@ export default function App() {
     const s = loadUiSession();
     if (!s) return;
     if (s.portal && staffAccess) { setActivePortal(s.portal); return; }
-    if (s.screen === 'admin' && isAdminLoggedIn) setIsAdminDashboardOpen(true);
+    if (s.screen === 'admin' && canManageProperties) setIsAdminDashboardOpen(true);
     else if (s.screen === 'crm' && (isAdminLoggedIn || isSalesLoggedIn)) setIsCrmOpen(true);
     else if (s.screen === 'sales_notifications' && (isAdminLoggedIn || isSalesLoggedIn)) setIsSalesNotificationsOpen(true);
   }, [isAdminLoggedIn, isSalesLoggedIn, staffAccess]);
@@ -2105,7 +2109,7 @@ export default function App() {
           setFilter({ ...filter, category: 'resale' });
         }}
         onOpenAdmin={() => {
-          if (isAdminLoggedIn) {
+          if (canManageProperties) {
             setIsAdminDashboardOpen(true);
           } else {
             setIsAdminLoginOpen(true);
@@ -2301,7 +2305,7 @@ export default function App() {
               </button>
               <button
                 onClick={() => {
-                  if (isAdminLoggedIn) {
+                  if (canManageProperties) {
                     setIsAdminDashboardOpen(true);
                   } else {
                     setIsAdminLoginOpen(true);
@@ -2418,7 +2422,7 @@ export default function App() {
         }}
         onOpenResaleSubmit={() => setIsResaleSubmitOpen(true)}
         onOpenAdminLogin={() => {
-          if (isAdminLoggedIn) {
+          if (canManageProperties) {
             setIsAdminDashboardOpen(true);
           } else {
             setIsAdminLoginOpen(true);
@@ -2544,6 +2548,8 @@ export default function App() {
         }}
         crmLeads={crmLeads}
         isOpen={isAdminDashboardOpen}
+        /* الحساب اللي ليه حق تعديل الشقق بس — مش أدمن كامل */
+        propertiesOnly={!isAdminLoggedIn}
         onClose={() => setIsAdminDashboardOpen(false)}
         properties={properties}
         onAddProperty={handleAddProperty}
@@ -2669,7 +2675,7 @@ export default function App() {
           customLogoUrl={customLogoUrl}
           bannerPhotoUrl={bannerPhotoUrl}
           onOpenAdmin={() => {
-            if (isAdminLoggedIn) {
+            if (canManageProperties) {
               setIsAdminDashboardOpen(true);
             } else {
               setIsAdminLoginOpen(true);
