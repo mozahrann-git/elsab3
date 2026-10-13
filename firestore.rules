@@ -227,6 +227,20 @@ service cloud.firestore {
       allow get: if true;                      // الـ id نفسه هو لينك الفيدباك
       allow list, create, update, delete: if isOps();
     }
+    /* زيارات الوحدات: المجموعة دي مكانش ليها قاعدة خالص، فالقاعدة الأخيرة
+       في الملف (allow read, write: if false) كانت بترفض كل كتابة وقراءة
+       فيها من أول يوم. ولا زيارة واحدة اتسجّلت — وعشان كده بوابة البروكر
+       والمالك بيقولوا "صفر زائر" دايماً.
+       الكتابة مفتوحة زي events (الزائر مش مسجّل دخول)، والقراءة للموظفين
+       وللبروكر على وحداته وللمالك على أكواده. */
+    match /unit_visits/{id} {
+      allow create, update: if true;
+      allow read: if isStaff() || isOps() || isBoss() || isMkt()
+                  || (isBroker() && request.auth != null)
+                  || (isOwner() && request.auth != null);
+      allow delete: if isAdmin();
+    }
+
     // سجل الأحداث: الكتابة مفتوحة (الزائر بيسجّل مشاهداته)، القراءة للإدارة بس
     match /events/{id} {
       allow create: if true;

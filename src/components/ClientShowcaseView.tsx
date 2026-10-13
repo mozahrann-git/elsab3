@@ -26,6 +26,9 @@ import { PropertyVideoPlayer } from './PropertyVideoPlayer';
 import { FloorNotice } from './FloorNotice';
 import { ShareBar } from './ShareBar';
 import { propertyText } from '../utils/shareKit';
+import { bumpPropertyClick } from '../services/firebaseService';
+import { logVisit, markVisit } from '../services/visitorService';
+import { logEvent } from '../services/analyticsService';
 
 interface ClientShowcaseViewProps {
   property: Property;
@@ -103,7 +106,30 @@ export const ClientShowcaseView: React.FC<ClientShowcaseViewProps> = ({
   const contactPhone = agent?.phone || '01021242871';
   const contactName = agent?.name || 'السبع للعقارات - مستشار الهضبة الوسطى';
 
+  /* الصفحة دي هي اللي السيلز بتبعتها للعميل — ومكانش فيها أي تتبّع خالص.
+     فكل واحد فتح لينك وسأل على واتساب، النظام مكانش مسجّل عنه أي حاجة:
+     لا زيارة ولا نقرة. عشان كده الشاشة بتقول "نقرات الواتساب ٠" والرسايل
+     الحقيقية واصلة. */
+  useEffect(() => {
+    if (!property?.id) return;
+    bumpPropertyClick(property.id, 'views').catch(() => {});
+    logVisit(property.id, property.code, { source: agent?.id ? `agent:${agent.id}` : 'link', agentId: agent?.id })
+      .catch(() => {});
+    logEvent('unit_view', {
+      propertyId: property.id, code: property.code,
+      neighborhood: property.neighborhood, value: property.price,
+      ...(agent?.id ? { agentId: agent.id } : {}),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [property?.id]);
+
   const handleWhatsApp = () => {
+    bumpPropertyClick(property.id, 'whatsapp').catch(() => {});
+    markVisit(property.id, { requested: true }).catch(() => {});
+    logEvent('unit_whatsapp', {
+      propertyId: property.id, code: property.code, value: property.price,
+      ...(agent?.id ? { agentId: agent.id } : {}),
+    });
     const url = generateWhatsAppLink(
       contactPhone,
       property.code,

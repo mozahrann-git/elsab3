@@ -14,6 +14,7 @@ import {
   updateDoc,
   runTransaction,
   deleteField,
+  increment,
   serverTimestamp
 } from 'firebase/firestore';
 import { 
@@ -1072,6 +1073,27 @@ export async function savePropertyPrivateOwner(
   } catch (error) {
     console.warn('[Firebase] Notice saving private owner details:', error);
   }
+}
+
+/*
+  عدّاد النقرات — زيادة ذرية على السيرفر.
+
+  البق اللي كان بيضيّع الأرقام: كل نقرة كانت بتنادي savePropertyToDb
+  وتكتب مستند الشقة كله من ذاكرة المتصفح. يعني زائرين يفتحوا نفس الشقة
+  في نفس الوقت: الاتنين قرأوا views=5، الاتنين كتبوا 6 — فمشاهدة ضاعت.
+  ومع عشرات الزوار، معظم الزيادات بتضيع. عشان كده "إجمالي المشاهدات 1".
+
+  increment() بتتحسب على السيرفر نفسه، فمستحيل زيادتين يمسحوا بعض.
+  وبنكتب الحقل ده بس — مش المستند كله بصوره.
+*/
+export async function bumpPropertyClick(
+  propertyId: string,
+  type: 'whatsapp' | 'call' | 'views' | 'favorites',
+): Promise<void> {
+  await ensureAuth();
+  await updateDoc(doc(db, 'properties', propertyId), {
+    [`clicks.${type}`]: increment(1),
+  });
 }
 
 /** بصمات صور الشقة — بتستخدم في كشف الشقة المعروضة مرتين */

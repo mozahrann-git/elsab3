@@ -78,6 +78,7 @@ import { FollowUpPopup } from './components/FollowUpPopup';
 import { FieldCheckInPage } from './components/portal/FieldCheckInPage';
 import { saveUiSession, loadUiSession } from './utils/uiSession';
 import { logEvent } from './services/analyticsService';
+import { logVisit, markVisit } from './services/visitorService';
 import { floorStatusOf } from './services/floorRules';
 import { passes, passesBedrooms } from './utils/multiFilter';
 import { syncLeadWithViewing, findLeadFor } from './services/viewingSync';
@@ -154,6 +155,7 @@ import {
   syncSalesAgentsToDb,
   subscribeToBrokers,
   seedBrokersToDb,
+  bumpPropertyClick,
   deleteBrokerFromDb,
   subscribeToStaffAuth,
   getStaffRole,
@@ -1540,7 +1542,17 @@ export default function App() {
         const clicks = { ...(prop.clicks || { whatsapp: 0, call: 0, views: 0, favorites: 0 }) };
         clicks[type] = (clicks[type] || 0) + 1;
         const updated = { ...prop, clicks };
-        savePropertyToDb(updated).catch(() => { /* العدّاد مايعطّلش الشغل */ });
+        /* الزيادة بتتحسب على السيرفر — مش بنكتب المستند كله من الذاكرة.
+           قبل كده نقرتين في نفس الوقت كانوا بيمسحوا بعض، فمعظم
+           المشاهدات كانت بتضيع والعدّاد يفضل تحت الواقع بكتير. */
+        bumpPropertyClick(propertyId, type).catch(() => { /* العدّاد مايعطّلش الشغل */ });
+        /* وزيارة فعلية في unit_visits — دي اللي بوابة البروكر والمالك
+           بتقرا منها "زائر مختلف". كانت فاضية لأن محدش بينادي logVisit. */
+        if (type === 'views') {
+          logVisit(prop.id, prop.code, { source: 'site' }).catch(() => {});
+        } else if (type === 'whatsapp' || type === 'call') {
+          markVisit(prop.id, { requested: true }).catch(() => {});
+        }
         return updated;
       })
     );
