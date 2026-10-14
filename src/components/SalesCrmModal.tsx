@@ -192,6 +192,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   };
 
   const [newLeadForm, setNewLeadForm] = useState(() => loadDraft('new_lead', EMPTY_LEAD_FORM));
+  /* الفورم بقى اسم ورقم وبس. الباقي بيتسأل في مكالمة
+     الاكتشاف اللي بتفتح بعد الحفظ على طول. */
+  const [showExtra, setShowExtra] = useState(false);
 
   useEffect(() => {
     const hasAnything = newLeadForm.name.trim() || newLeadForm.phone.trim() || newLeadForm.notes.trim();
@@ -1987,6 +1990,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 />
               </div>
 
+              {/* التفاصيل دي بتتسأل في مكالمة الاكتشاف اللي بتفتح
+                  بعد الحفظ على طول. مكانتش لازم هنا — الفورم كان
+                  طويل والسيلز والعميل على التليفون. */}
+              <button
+                type="button" onClick={() => setShowExtra((v) => !v)}
+                className="w-full text-[11px] font-bold text-[#A07A26] py-1.5"
+              >
+                {showExtra ? 'اخفي التفاصيل الزيادة' : '+ تفاصيل زيادة (اختياري)'}
+              </button>
+
+              {showExtra && (<>
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="text-[#141414] block mb-1 font-bold">الحي المطلوب:</label>
@@ -2049,6 +2063,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   placeholder="تفاصيل طلب العميل وموعد الاتصال..."
                 />
               </div>
+              </>)}
 
               <div className="pt-3 flex items-center justify-end gap-2">
                 <button

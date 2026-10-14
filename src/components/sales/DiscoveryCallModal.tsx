@@ -5,6 +5,7 @@ import { Lead, Property } from '../../types';
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../../data/properties';
 import { BudgetRange } from '../common/WhenPicker';
 import { DiscoveryQuestion, SalesForms, DEFAULT_FORMS, subscribeSalesForms } from '../../services/salesToolsService';
+import { installmentHint, estimatePlan, affordableFromPlan } from '../../services/clientRequests';
 
 /*
   مكالمة الاكتشاف: السيلز بيدوس الإجابات وهو بيتكلم، فملف العميل بيتملى لوحده،
@@ -31,6 +32,15 @@ export const DiscoveryCallModal: React.FC<Props> = ({ isOpen, lead, properties, 
   const answered = useMemo(() => forms.discovery.filter((q) => (q.id === 'budget' ? true : Array.isArray(a[q.id]) ? a[q.id].length > 0 : !!a[q.id])).length, [a, forms]);
   const missingRequired = forms.discovery.filter((q) => q.required && q.id !== 'budget' && !(Array.isArray(a[q.id]) ? a[q.id].length : a[q.id]));
   const canBuild = answered >= forms.minAnswers && missingRequired.length === 0;
+
+  /* أرقام التقسيط التقريبية من الشقق الموجودة — مش من دماغنا */
+  const hint = useMemo(() => installmentHint(properties), [properties]);
+  const suggested = useMemo(() => estimatePlan(maxB || 3000000, hint), [maxB, hint]);
+  const canAfford = useMemo(
+    () => affordableFromPlan(Number(String(a.downCash || '').replace(/\D/g, '')) || 0,
+                             Number(String(a.monthly || '').replace(/\D/g, '')) || 0, hint),
+    [a.downCash, a.monthly, hint],
+  );
 
   if (!isOpen) return null;
 
@@ -113,6 +123,45 @@ export const DiscoveryCallModal: React.FC<Props> = ({ isOpen, lead, properties, 
                     {opts.map((o) => (
                       <button key={o} type="button" onClick={() => pick(q, o)} className={chip(Array.isArray(val) ? val.includes(o) : val === o)}>{o}</button>
                     ))}
+                  </div>
+                )}
+
+                {/* لما يختار تقسيط، المقدم والقسط بيفتحوا هنا على طول
+                    بأرقام تقريبية من شقق التقسيط الموجودة فعلاً —
+                    بدل ما السيلز يخمّن أو يسأل بعدين */}
+                {q.id === 'payment' && String(val || '').includes('تقسيط') && (
+                  <div className="space-y-2 pt-2 border-t border-[#F0ECE4]">
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block">
+                        <span className="text-[11px] font-bold text-[#6B665C] block mb-1">المقدم اللي معاه</span>
+                        <input
+                          inputMode="numeric" value={a.downCash || ''}
+                          onChange={(e) => setA({ ...a, downCash: e.target.value })}
+                          placeholder={String(suggested.down)}
+                          className="w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-2.5 text-sm font-mono font-bold"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[11px] font-bold text-[#6B665C] block mb-1">القسط الشهري</span>
+                        <input
+                          inputMode="numeric" value={a.monthly || ''}
+                          onChange={(e) => setA({ ...a, monthly: e.target.value })}
+                          placeholder={String(suggested.monthly)}
+                          className="w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-2.5 text-sm font-mono font-bold"
+                        />
+                      </label>
+                    </div>
+                    <div className="bg-[#FBF1E4] border border-[#E8D3A6] rounded-xl p-2.5 space-y-0.5">
+                      <p className="text-[11px] font-bold text-[#A07A26]">
+                        من شقق التقسيط عندنا: المقدم عادةً {hint.downPercent}٪ والتقسيط {hint.years} سنين
+                        {hint.sample > 0 ? ` (من ${hint.sample} شقة)` : ''}
+                      </p>
+                      {canAfford > 0 && (
+                        <p className="text-sm font-black text-[#141414]">
+                          يقدر على شقة لحد {canAfford.toLocaleString('en-US')} ج.م
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </section>
