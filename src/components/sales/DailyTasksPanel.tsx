@@ -316,36 +316,44 @@ export const DailyTasksPanel: React.FC<{
         </div>
       </div>
 
+      {/* التسجيل فوق قبل العدّادات. كان تحت ٦ عدّادات،
+          فالمندوب بيفتح الشاشة ومبيلاقيش يضيف منين. */}
+      <div className="space-y-2">
+        <button
+          type="button" onClick={() => { setPicking(true); setPickQuery(''); }}
+          className="w-full rounded-2xl py-4 bg-[#141414] text-white font-black flex items-center justify-center gap-2 text-sm"
+        >
+          <Megaphone size={18} /> سجّل إعلان جديد
+        </button>
+
+        <div className="grid grid-cols-2 gap-2">
+          <input ref={videoRef} type="file" accept="video/*,image/*" onChange={uploadVideo} className="hidden" />
+          <button
+            type="button" disabled={videoBusy} onClick={() => videoRef.current?.click()}
+            className="rounded-2xl py-3 bg-white border border-[#E4DFD4] font-bold text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {videoBusy ? <Loader2 size={14} className="animate-spin" /> : <Video size={14} className="text-[#A07A26]" />}
+            {videoBusy ? 'بيرفع…' : 'ارفع فيديو'}
+          </button>
+
+          <input ref={bonusRef} type="file" accept="image/*" onChange={uploadBonus} className="hidden" />
+          <button
+            type="button" disabled={bonusBusy} onClick={() => bonusRef.current?.click()}
+            className="rounded-2xl py-3 bg-white border border-[#E4DFD4] font-bold text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {bonusBusy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} className="text-[#A07A26]" />}
+            {bonusBusy ? 'بيرفع…' : `وحدة جديدة +${t.xpBonusListing}`}
+          </button>
+        </div>
+
+        <p className="text-[11px] text-stone-400 font-medium text-center">
+          الإعلان والفيديو والوحدة الجديدة محتاجين صورة إثبات — العدّاد مبيتحركش من غيرها
+        </p>
+      </div>
+
       <div className="grid sm:grid-cols-2 gap-3">
         {rows.map((r) => <Bar key={r.key} row={r} />)}
       </div>
-
-      {/* الفيديو — إثبات بالملف */}
-      <div className="bg-white rounded-2xl p-4 border border-[#ECE8DF] flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Video size={16} className="text-[#A07A26]" />
-          <span className="font-black text-sm text-stone-900">فيديو من الموقع</span>
-          <span className="text-xs text-stone-400 font-medium">
-            الهدف {t.videosWeekly} في الأسبوع
-          </span>
-        </div>
-        <input ref={videoRef} type="file" accept="video/*,image/*" onChange={uploadVideo} className="hidden" />
-        <button
-          type="button" disabled={videoBusy} onClick={() => videoRef.current?.click()}
-          className="rounded-xl px-4 py-2 bg-[#141414] text-white font-bold text-xs flex items-center gap-2 disabled:opacity-50"
-        >
-          {videoBusy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-          {videoBusy ? 'بيرفع…' : 'ارفع الفيديو'}
-        </button>
-      </div>
-
-      {/* سجّل إعلان على أي شقة — مش لازم تكون متوزّعة عليه */}
-      <button
-        type="button" onClick={() => { setPicking(true); setPickQuery(''); }}
-        className="w-full rounded-2xl py-3.5 bg-[#141414] text-white font-black flex items-center justify-center gap-2"
-      >
-        <Megaphone size={16} /> سجّل إعلان جديد
-      </button>
 
       {picking && (
         <div className="fixed inset-0 z-[115] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
@@ -395,29 +403,6 @@ export const DailyTasksPanel: React.FC<{
           </div>
         </div>
       )}
-
-      {/* بونص — مش هدف يومي، بس بياخد عليه نقط */}
-      <div className="bg-white rounded-2xl p-4 border border-dashed border-[#E8D3A6] flex items-center justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-black text-sm text-stone-900">وحدة جديدة برقم المالك</span>
-            <span className="text-[9px] font-black bg-[#FBF1E4] text-[#A07A26] px-2 py-0.5 rounded-full">
-              بونص +{t.xpBonusListing} نقطة
-            </span>
-          </div>
-          <p className="text-[11px] text-stone-400 font-medium mt-0.5">
-            مش هدف يومي · ارفع صورة أو سكرين فيه كود الوحدة
-          </p>
-        </div>
-        <input ref={bonusRef} type="file" accept="image/*" onChange={uploadBonus} className="hidden" />
-        <button
-          type="button" disabled={bonusBusy} onClick={() => bonusRef.current?.click()}
-          className="rounded-xl px-4 py-2 bg-white border border-[#E4DFD4] font-bold text-xs flex items-center gap-2 disabled:opacity-50"
-        >
-          {bonusBusy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-          {bonusBusy ? 'بيرفع…' : 'سجّل وحدة'}
-        </button>
-      </div>
 
       {/* شقق الدورة */}
       <div className="space-y-2">
