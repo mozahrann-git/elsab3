@@ -41,7 +41,7 @@ interface SalesAffiliateModalProps {
   /* ممكن يبقى فاضي: الأدمن بيفتح الأدوات من غير حساب مستشار.
      النوع كان مكتوب إجباري والواقع كان بيبعت فاضي — فالخطأ مكانش بيتمسك. */
   currentAgent?: SalesAgent;
-  onRecordAction?: (questCategory: string, points: number) => void;
+  onRecordAction?: (category: string, points: number) => void;
   onOpenSalesLogin?: () => void;
   onAddLead?: (newLead: Lead) => void;
   /* عملاء السيلز الداخل — عشان يختار منهم بدل ما يكتب الاسم من تاني ويعمل نسخة تانية */
@@ -100,9 +100,6 @@ export const SalesAffiliateModal: React.FC<SalesAffiliateModalProps> = ({
   );
   const [proposedTime, setProposedTime] = useState('اليوم الساعة 6:00 مساءً');
   const [clientNotes, setClientNotes] = useState('العميل مهتم وجاهز للمعاينة على الطبيعة');
-  /* نوع الطلب — الهدف اليومي ١٠: ٧ مهتم جداً + ٣ عادي.
-     الاختيار صريح عشان العدّاد يفرق بينهم من غير تخمين. */
-  const [requestKind, setRequestKind] = useState<'potential' | 'normal'>('potential');
 
   // مزامنة تقارير وكومنتات المعاينات الميدانية السابقة لهذه الشقة
   const [propertyFeedbacks, setPropertyFeedbacks] = useState<ViewingFeedback[]>([]);
@@ -368,7 +365,6 @@ ${fullShowcaseUrl}`;
         brokerId: property.brokerId || 'broker_ahmed',
         brokerName: 'أحمد فؤاد',
         leadId: linkedLeadId,
-        requestKind,
         requestingAgentId: agent.id,
         requestingAgentPhone: agent.phone,
         requestingAgentName: agent.name,
@@ -998,22 +994,6 @@ ${fullShowcaseUrl}`;
                   <label className="text-[#141414] font-bold block mb-1.5">الموعد المقترح للمعاينة:</label>
                   <WhenPicker quick={false} onChange={(v) => setProposedTime(v.label)} />
                     {proposedTime && <p className="text-xs text-[#6B665C] mt-1">المختار: <b>{proposedTime}</b></p>}
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="text-[#141414] font-bold block mb-1.5">نوع الطلب:</label>
-                  <div className="flex gap-2">
-                    {([['potential', 'مهتم جداً'], ['normal', 'عادي']] as const).map(([k, l]) => (
-                      <button
-                        key={k} type="button" onClick={() => setRequestKind(k)}
-                        className={`flex-1 rounded-2xl py-3 font-bold text-sm transition-colors ${
-                          requestKind === k
-                            ? 'bg-[#141414] text-white'
-                            : 'bg-[#FAF9F5] border border-[#ECE8DF] text-[#6B665C]'
-                        }`}
-                      >{l}</button>
-                    ))}
-                  </div>
                 </div>
 
                 <div className="sm:col-span-2">

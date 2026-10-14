@@ -652,11 +652,6 @@ export interface ViewingRequest {
   officeId?: string;               // المكتب التابع له
   assigneeName?: string;           // اسم مسؤول المعاينة الميداني
   leadId?: string;                 // مخفي تماماً عن البروكر (أدمن فقط)
-  /* نوع الطلب — اختيار صريح من السيلز وقت الطلب.
-     'potential' = عميل جاهز وقريب من القرار
-     'normal'    = طلب عادي
-     الهدف اليومي ١٠ مقسّمين ٧ potential + ٣ normal */
-  requestKind?: 'potential' | 'normal';
   requestingAgentId?: string;      // كود السيلز الذي طلب المعاينة
   requestingAgentName?: string;    // اسم السيلز
   requestingAgentPhone?: string;   // هاتف السيلز
@@ -746,84 +741,4 @@ export interface GovernanceAuditLog {
   severity: 'info' | 'warning' | 'urgent' | 'success';
   metadata?: Record<string, any>;
   isResolved?: boolean;
-}
-
-
-
-/* ============================================================
-   المهام اليومية للمبيعات
-   ============================================================
-   قاعدة أساسية: العدّاد اللي النظام يقدر يحسبه من شغل حقيقي
-   بيتحسب لوحده، واللي مش قادر عليه بيحتاج إثبات (سكرين شوت).
-   مفيش عدّاد بيتحرك بزرار "تم" فاضي.                        */
-
-/** أهداف قابلة للتعديل من الإدارة — الأرقام دي بتتغير مع الوقت */
-export interface SalesTargets {
-  callsDaily: number;          // ٥٠
-  callsFreshMin: number;       // ٥
-  callsFreshMax: number;       // ١٠
-  callsFollowMin: number;      // ٢٠
-  callsFollowMax: number;      // ٣٠
-  callsOldMin: number;         // ١٥
-  callsOldMax: number;         // ٣٠
-  requestsDaily: number;       // ١٠
-  requestsPotential: number;   // ٧
-  requestsNormal: number;      // ٣
-  adsResaleDaily: number;      // ٥
-  adsOffplanDaily: number;     // ٢
-  visitsWeekly: number;        // ٥
-  videosWeekly: number;        // ٢
-  unitsPerAgent: number;       // ٧٠
-  cycleDays: number;           // ١٢ يوم شغل = أسبوعين
-  workDaysPerWeek: number;     // ٦
-  weeksPerMonth: number;       // ٤
-  /* نقط لكل حاجة تتعمل فعلاً — مش لما يكمّل الهدف.
-     اللي عمل ٤٥ مكالمة من ٥٠ عمل شغل حقيقي ويستاهل عليه. */
-  xpCall: number;
-  xpRequest: number;
-  xpAd: number;
-  xpVideo: number;
-  xpVisit: number;
-  xpBonusListing: number;      // جاب وحدة جديدة برقم مالكها
-}
-
-export const DEFAULT_SALES_TARGETS: SalesTargets = {
-  callsDaily: 50,
-  callsFreshMin: 5, callsFreshMax: 10,
-  callsFollowMin: 20, callsFollowMax: 30,
-  callsOldMin: 15, callsOldMax: 30,
-  requestsDaily: 10, requestsPotential: 7, requestsNormal: 3,
-  adsResaleDaily: 5, adsOffplanDaily: 2,
-  visitsWeekly: 5, videosWeekly: 2,
-  unitsPerAgent: 70, cycleDays: 12,
-  workDaysPerWeek: 6, weeksPerMonth: 4,
-  xpCall: 5, xpRequest: 50, xpAd: 20, xpVideo: 150,
-  xpVisit: 300, xpBonusListing: 200,
-};
-
-/** إثبات شغل اتعمل بره النظام — لازم صورة، مفيش علامة من غير دليل */
-export interface WorkProof {
-  id: string;
-  agentId: string;
-  agentName: string;
-  /* bonus_listing = وحدة جديدة جابها المندوب برقم مالكها.
-     مش هدف يومي — بونص، بس بياخد عليه نقط. */
-  kind: 'ad_resale' | 'ad_offplan' | 'video' | 'bonus_listing';
-  propertyId?: string;
-  propertyCode?: string;
-  proofUrl: string;            // سكرين شوت الإعلان أو لينك الفيديو
-  note?: string;
-  at: number;
-  day: string;                 // YYYY-MM-DD بتوقيت القاهرة — عشان العد اليومي
-}
-
-/** الشقق المخصصة لمندوب في الدورة الحالية */
-export interface AgentUnitAssignment {
-  id: string;                  // agentId
-  agentId: string;
-  agentName: string;
-  propertyIds: string[];
-  cycleStart: number;
-  cycleEnd: number;
-  previousPropertyIds?: string[];  // عشان الدورة الجاية ما ترجعش نفس الشقق
 }

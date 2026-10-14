@@ -14,7 +14,6 @@ import { SalesFeedbackInbox } from './components/portal/SalesFeedbackInbox';
 import { OfferPublicPage } from './components/sales/OfferPublicPage';
 import { getTrackedLink, logLinkHit } from './services/salesToolsService';
 import { getStaffAccess, StaffAccess } from './services/firebaseService';
-import { subscribeWorkProofs, subscribeTargets, fetchAssignments } from './services/dailyTasksService';
 import { linkPropertyToOwner } from './services/portalService';
 import { imageHashes } from './services/imageFingerprint';
 import { 
@@ -33,10 +32,6 @@ import {
   ClosedDeal,
   ViewingRequest,
   BrokerProfile,
-  WorkProof,
-  SalesTargets,
-  AgentUnitAssignment,
-  DEFAULT_SALES_TARGETS,
 } from './types';
 import { 
   ALL_HADABA_PROPERTIES,
@@ -87,7 +82,6 @@ import { logVisit, markVisit } from './services/visitorService';
 import { floorStatusOf } from './services/floorRules';
 import { passes, passesBedrooms } from './utils/multiFilter';
 import { syncLeadWithViewing, findLeadFor } from './services/viewingSync';
-import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpByCategory } from './services/questService';
 import { alertCount } from './utils/followUpAlerts';
 import { seedOnce } from './services/seedGuard';
 import { BrokerPortalModal } from './components/BrokerPortalModal';
@@ -389,14 +383,6 @@ export default function App() {
       if (isQuota) setIsQuotaExceeded(true);
     });
 
-    /* 4ب. إثباتات الشغل وأهداف المهام — للموظفين بس.
-       الإثباتات بتتجاب لآخر ٤٠ يوم بس عشان القراءات. */
-    const unsubProofs = !isStaffSession ? noop : subscribeWorkProofs((l) => setWorkProofs(l));
-    /* التوزيع بيتغيّر كل أسبوعين، فقراءة واحدة وقت الدخول كفاية —
-       مش محتاج اشتراك حي يفضل مفتوح ويستهلك. */
-    if (isStaffSession) fetchAssignments().then(setUnitAssignments).catch(() => {});
-    const unsubTargets = !isStaffSession ? noop : subscribeTargets((t) => setSalesTargets(t));
-
     // 5. Subscribe to Site Config (Banner, Logo & Footer)
     const unsubConfig = subscribeToSiteConfig((config) => {
       if (config.bannerUrl) {
@@ -434,8 +420,6 @@ export default function App() {
       unsubAgents();
       unsubLeads();
       unsubSubmissions();
-      unsubProofs();
-      unsubTargets();
       unsubConfig();
       unsubBrokers();
     };
@@ -448,11 +432,6 @@ export default function App() {
   }, [properties]);
 
   // 2. Owner Submissions State (persisted in LocalStorage)
-  /* إثباتات الشغل (سكرين شوت الإعلانات والفيديو) وأهداف المهام.
-     الاتنين بييجوا من الفايربيز للموظفين بس. */
-  const [workProofs, setWorkProofs] = useState<WorkProof[]>([]);
-  const [salesTargets, setSalesTargets] = useState<SalesTargets>(DEFAULT_SALES_TARGETS);
-  const [unitAssignments, setUnitAssignments] = useState<AgentUnitAssignment[]>([]);
   /* طلبات المعاينة كانت بتتجاب وتتسرّب جوه الـeffect من غير ما تتخزّن.
      عدّادات المهام محتاجاها، فبقت متخزّنة. */
   const [allViewingRequests, setAllViewingRequests] = useState<ViewingRequest[]>([]);
@@ -1397,11 +1376,6 @@ export default function App() {
       if (before) setCrmLeads((prev) => prev.map((l) => (l.id === before.id ? before : l)));
     });
   };
-
-  /* المهام اليومية من إعدادات الأدمن — بنمسكها في مرجع عشان
-     الإفكت اللي بيسمع المعاينات ما يتعادش تشغيله مع كل تغيير */
-  const questTemplatesRef = useRef<QuestTemplate[]>(DEFAULT_QUESTS);
-  useEffect(() => subscribeQuestTemplates((l) => { questTemplatesRef.current = l; }), []);
 
   /* المعاينة بتحرّك كارت العميل لوحدها.
      البروكر بيأكد المعاد → الكارت ينط لـ"معاينة مؤكدة" والسيلز يتنبّه.
@@ -2517,20 +2491,6 @@ export default function App() {
       {/* 7. Full Admin Dashboard (Add/Edit/Delete Properties with 5 photos, Review Owner Submissions, Track Clicks) */}
       <AdminDashboardModal
         viewingRequests={allViewingRequests}
-        workProofs={workProofs}
-        assignments={unitAssignments}
-        salesTargets={salesTargets}
-        onAssignmentsChanged={() => { fetchAssignments().then(setUnitAssignments).catch(() => {}); }}
-        onResetXp={async () => {
-          /* النقط القديمة كانت بتتزوّد بزرار، فمالهاش معنى.
-             بنصفّر الرقم المخزّن والمهام القديمة — النقط
-             الجديدة محسوبة من الشغل ومش بتتخزّن أصلاً. */
-          const cleared = salesAgents.map((a) => ({
-            ...a, xp: 0, level: 1, currentStreak: 0, activeQuests: [],
-          }));
-          for (const a of cleared) await saveSalesAgentToDb(a);
-          setSalesAgents(cleared);
-        }}
         onCleanupDemo={{
           deleteAgents: async (ids) => {
             for (const id of ids) await deleteSalesAgentFromDb(id);
@@ -2638,9 +2598,6 @@ export default function App() {
         onSelectProperty={(prop) => setSelectedProperty(prop)}
         onOpenAffiliateModal={(prop) => setSalesToolkitProperty(prop)}
         viewingRequests={allViewingRequests}
-        workProofs={workProofs}
-        assignments={unitAssignments}
-        salesTargets={salesTargets}
       />
 
       {/* Sales Agent Email Login Modal */}

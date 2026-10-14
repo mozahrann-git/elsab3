@@ -9,7 +9,7 @@ import {
   FooterConfig,
   NeighborhoodPriceMapData,
   ClosedDeal,
-  BrokerProfile, Lead, ViewingRequest, WorkProof, AgentUnitAssignment, SalesTargets } from '../types';
+  BrokerProfile, Lead, ViewingRequest } from '../types';
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { INITIAL_SALES_AGENTS, INITIAL_BADGES, INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { INITIAL_PRICE_MAP_DATA, INITIAL_CLOSED_DEALS } from '../data/marketPriceData';
@@ -76,7 +76,6 @@ import {
   DollarSign,
   Compass,
   ImageOff,
-  ListChecks,
 } from 'lucide-react';
 import { formatPrice, formatNumber, generateWhatsAppLink, generateCallLink, compressImage } from '../utils/helpers';
 import { uploadFile, uploadDataUrl } from '../services/mediaStorage';
@@ -90,10 +89,8 @@ import { safeLocalStorageSet } from '../utils/storageHelper';
 import { ProjectsManager } from './admin/ProjectsManager';
 import { DeepAnalytics } from './admin/DeepAnalytics';
 import { DemoDataCleanup } from './admin/DemoDataCleanup';
-import { QuestsManager } from './admin/QuestsManager';
 import { FloorRuleRow } from './admin/FloorRuleRow';
 import { thumbUrl } from '../services/mediaStorage';
-import TasksOverview from './admin/TasksOverview';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -101,13 +98,6 @@ interface AdminDashboardModalProps {
   properties: Property[];
   /* للتحليلات العميقة */
   crmLeads?: Lead[];
-  /* متابعة المهام اليومية */
-  viewingRequests?: ViewingRequest[];
-  workProofs?: WorkProof[];
-  assignments?: AgentUnitAssignment[];
-  salesTargets?: SalesTargets;
-  onAssignmentsChanged?: () => void;
-  onResetXp?: () => Promise<void>;
   /* true = الحساب ده يقدر يعدّل الشقق بس، من غير الحسابات
      ولا الإعدادات ولا حذف شقق */
   propertiesOnly?: boolean;
@@ -174,11 +164,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   ownerSubmissions,
   crmLeads,
   viewingRequests,
-  workProofs,
-  assignments,
-  salesTargets,
-  onAssignmentsChanged,
-  onResetXp,
   propertiesOnly = false,
   onCleanupDemo,
   onApproveSubmission,
@@ -220,7 +205,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   /* حارس: حتى لو التبويب اتغيّر بأي طريقة تانية، الحساب
      المحدود مايشوفش غير الشقق والإضافة. */
-  const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'projects' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings' | 'tasks'>('manage');
+  const [activeTab, setActiveTab] = useState<'manage' | 'add' | 'projects' | 'submissions' | 'sales_team' | 'brokers' | 'market_pricing' | 'analytics' | 'settings'>('manage');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterNeighborhood, setFilterNeighborhood] = useState<string>('all');
   const [filterFinishing, setFilterFinishing] = useState<string>('all');
@@ -1275,18 +1260,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </span>
               </button>
             )}
-
-            <button
-              onClick={() => setActiveTab('tasks')}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-                activeTab === 'tasks'
-                  ? 'bg-[#141414] text-white'
-                  : 'bg-[#F6F4EF] text-[#6B665C]'
-              }`}
-            >
-              <ListChecks size={13} />
-              <span>متابعة المهام</span>
-            </button>
 
             <button
               onClick={() => setActiveTab('market_pricing')}
@@ -2603,20 +2576,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {/* TAB 4: SALES TEAM MANAGEMENT                                     */}
           {/* ================================================================ */}
-          {activeTab === 'tasks' && (
-            <TasksOverview
-              agents={salesAgentsList}
-              leads={crmLeads || []}
-              requests={viewingRequests || []}
-              properties={properties}
-              proofs={workProofs || []}
-              assignments={assignments || []}
-              targets={salesTargets}
-              onAssignmentsSaved={onAssignmentsChanged}
-              onResetXp={onResetXp}
-            />
-          )}
-
           {activeTab === 'sales_team' && (
             <div className="space-y-5">
               {/* الأرقام المكررة بين السيلز — فوق عشان متعديش */}
@@ -3269,11 +3228,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {activeTab === 'settings' && (
             <div className="space-y-6">
-
-              {/* المهام اليومية والنقط */}
-              <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-                <QuestsManager showToast={showToast} />
-              </div>
 
               {/* تنضيف البيانات التجريبية */}
               {onCleanupDemo && (

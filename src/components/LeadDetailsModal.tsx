@@ -44,9 +44,9 @@ const STAGES: { id: LeadStatus; label: string; badgeStyle: string }[] = [
   { id: 'sent_details', label: 'إرسال صور وتفاصيل الشقق', badgeStyle: 'bg-blue-50 text-blue-800 border-blue-200' },
   { id: 'visit_requested', label: 'معاينة تحت الطلب (تنسيق سارة حنفي)', badgeStyle: 'bg-[#FAF4E5] text-[#9E7A26] border-[#E9DFCA]' },
   { id: 'visit_booked', label: 'معاينة مؤكدة (ميعاد محدد)', badgeStyle: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-  { id: 'visit_done', label: 'تمت المعاينة (+300 XP)', badgeStyle: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
+  { id: 'visit_done', label: 'تمت المعاينة', badgeStyle: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
   { id: 'negotiation', label: 'تفاوض ودفع عربون', badgeStyle: 'bg-amber-50 text-amber-900 border-amber-200' },
-  { id: 'closed', label: 'صفقة مغلقة (+500 XP)', badgeStyle: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+  { id: 'closed', label: 'صفقة مغلقة', badgeStyle: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
   { id: 'lost', label: 'غير مهتم / مؤجل', badgeStyle: 'bg-stone-100 text-stone-700 border-stone-200' }
 ];
 

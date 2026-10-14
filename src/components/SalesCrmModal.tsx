@@ -53,25 +53,17 @@ import { matchDetailed, briefLine, briefGaps, readBrief, payModeOf, resaleFits, 
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
 import { humanDuration, followUpBadge } from '../utils/followUpAlerts';
-import { QuestTemplate, DEFAULT_QUESTS, subscribeQuestTemplates, buildAgentQuests, bumpQuest } from '../services/questService';
-import { AgentDayPanel } from './crm/AgentDayPanel';
 import { OwnerLinkCard } from './crm/OwnerLinkCard';
 import { QuickBriefRow } from './crm/QuickBriefRow';
 import { ProjectMatchPanel } from './crm/ProjectMatchPanel';
-import { QuestEditor } from './crm/QuestEditor';
-import { QuestLogSheet } from './crm/QuestLogSheet';
-import { DayLogSummary } from './crm/DayLogSummary';
-import { QuestLog, subscribeDayLogs, dayKey, summarizeCalls, summarizeAds, CALL_OUTCOMES } from '../services/questLogService';
 import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
 import { OfferBuilderModal } from './sales/OfferBuilderModal';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { INITIAL_DAILY_QUESTS } from '../data/crmData';
-import { DailyQuest, ViewingRequest, WorkProof, AgentUnitAssignment, SalesTargets } from '../types';
+import { ViewingRequest } from '../types';
 import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb } from '../services/crmBoardService';
 import { subscribeAllUnitViewings } from '../services/portalService';
 import { thumbUrl } from '../services/mediaStorage';
-import DailyTasksPanel from './sales/DailyTasksPanel';
-import { computeXp } from '../services/dailyTasksService';
 
 interface SalesCrmModalProps {
   isOpen: boolean;
@@ -98,11 +90,7 @@ interface SalesCrmModalProps {
   canEdit?: boolean;
   currentAgentId?: string;
   onLogout?: () => void;
-  /* بيانات المهام اليومية */
   viewingRequests?: ViewingRequest[];
-  workProofs?: WorkProof[];
-  assignments?: AgentUnitAssignment[];
-  salesTargets?: SalesTargets;
 }
 
 // All 9 Pipeline Stages matching operations room & mobile selector
@@ -149,12 +137,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   currentAgentId,
   onLogout,
   viewingRequests,
-  workProofs,
-  assignments,
-  salesTargets,
 }) => {
   // Navigation Tabs matching sidebar items (Properties tab removed)
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'leaderboard' | 'daily'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'leaderboard'>('pipeline');
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeMobileStageFilter, setActiveMobileStageFilter] = useState<string>('all');
@@ -333,13 +318,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     [leads],
   );
 
-  const [questTemplates, setQuestTemplates] = useState<QuestTemplate[]>(DEFAULT_QUESTS);
-  useEffect(() => subscribeQuestTemplates(setQuestTemplates), []);
-
-  /* سجل مهام النهارده لكل الفريق — منه بنعرف المكالمات راحت فين والإعلانات اتنشرت على إيه */
-  const [dayLogs, setDayLogs] = useState<QuestLog[]>([]);
-  useEffect(() => subscribeDayLogs(dayKey(), setDayLogs), []);
-  const [logQuest, setLogQuest] = useState<DailyQuest | null>(null);
   const [toast, setToast] = useState('');
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2800); };
 
@@ -400,25 +378,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   }).length;
   const todayDone = scopedLeads.filter((l) => (l.activity || []).some((a: any) => a.at >= startOfToday.getTime())).length;
   /* المهام جاية من إعدادات الأدمن، والعدّادات بتبدأ من الصفر كل يوم */
-  const questTemplate: DailyQuest[] = questTemplates.filter((t) => t.active !== false).map((t) => ({
-    id: t.id, title: t.title, description: t.description, xpReward: t.xpReward,
-    targetCount: t.targetCount, currentCount: 0, isCompleted: false, category: t.category,
-  }));
   /* الإدارة لما تدوس على حد في قايمة الفريق، المفروض تشوف نقطه هو ومهامه هو */
   const shownAgent = (viewAgentId !== 'all' ? agents.find((a) => a.id === viewAgentId) : null) || currentAgent;
 
-  /* النقط محسوبة من الشغل الحقيقي لحظة بلحظة، مش رقم مخزّن
-     على حساب المندوب. مفيش مصدرين للحقيقة، ومحدش يقدر
-     يزوّدها بزرار. */
-  const liveXp = useMemo(() => {
-    if (!shownAgent?.id) return 0;
-    return computeXp({
-      agentId: shownAgent.id, leads, requests: viewingRequests || [],
-      proofs: workProofs || [], targets: salesTargets,
-    }).total;
-  }, [shownAgent?.id, leads, viewingRequests, workProofs, salesTargets]);
   const viewingSomeoneElse = !!shownAgent && shownAgent.id !== currentAgent?.id;
-  const agentQuests: DailyQuest[] = shownAgent ? buildAgentQuests(questTemplates, shownAgent) : [];
   const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م', showMatching: true };
   const deleteRequests = isAdmin && canEdit ? leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved) : [];
   const [moveComment, setMoveComment] = useState('');
@@ -537,13 +500,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     });
   };
 
-  // Quests Increment
-  /* النقط بقت المكتوبة على المهمة، وبتتاخد مرة واحدة لما تكمل —
-     مش ٥٠ نقطة ثابتة مع كل ضغطة زي الأول */
-  const handleIncrementQuest = (questId: string) => {
-    if (!currentAgent) return;
-    onUpdateAgent(bumpQuest({ ...currentAgent, activeQuests: agentQuests }, questId));
-  };
 
   return (
     <div 
@@ -600,7 +556,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
               {/* بتتبع اللي إنت شايفه. الإدارة من غير اختيار = مفيش نقط، مش نقط حد تاني */}
               <span className="px-2 py-0.5 bg-[#FAF4E5]/10 border border-[#E9DFCA]/20 text-[#FAF4E5] text-[10px] font-mono font-bold rounded-lg">
-                {shownAgent ? `${liveXp.toLocaleString('en-US')} XP` : 'إدارة'}
+                {shownAgent ? shownAgent.name : 'إدارة'}
               </span>
             </div>
           </div>
@@ -818,7 +774,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {/* Mobile / Tablet Horizontal Navigation Tabs */}
         <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 no-scrollbar shrink-0 border-b border-[#ECE8DF]">
           {[
-            { id: 'daily', label: 'مهام النهارده' },
             { id: 'pipeline', label: 'مسار العملاء' },
             { id: 'followups', label: 'المتابعات' },
             { id: 'matching', label: 'المطابقة الذكية' },
@@ -892,18 +847,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 <p className="text-[11px] text-[#8C877D]">دوس على أي حد عشان تشوف عملاءه ونقطه وإنجازه النهارده</p>
 
                 {/* اللي إنت دايس عليه: نقطه هو ومهامه هو واللي عمله النهارده */}
-                {viewAgentId !== 'all' && (() => {
-                  const sel = agents.find((a) => a.id === viewAgentId);
-                  return sel ? (
-                    <AgentDayPanel
-                      agent={sel}
-                      leads={leads}
-                      questTemplates={questTemplates}
-                      dayLogs={dayLogs}
-                      onClose={() => setViewAgentId('all')}
-                    />
-                  ) : null;
-                })()}
                 {visibleAgents.map((a) => {
                   const mine = leads.filter((l) => l.assignedAgentId === a.id);
                   const late = mine.filter((l) => l.nextActionAt && l.nextActionAt < Date.now() && l.followUpStatus !== 'completed').length;
@@ -1825,25 +1768,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         )}
 
         {/* ========================================================= */}
-        {/* TAB 4: QUESTS & XP */}
         {/* ========================================================= */}
-        {activeTab === 'daily' && (
-          currentAgentId ? (
-            <DailyTasksPanel
-              agent={{ id: currentAgentId, name: agents.find((a) => a.id === currentAgentId)?.name || 'مندوب' }}
-              leads={leads}
-              requests={viewingRequests || []}
-              properties={properties}
-              proofs={workProofs || []}
-              assignment={(assignments || []).find((x) => x.agentId === currentAgentId)}
-              targets={salesTargets}
-            />
-          ) : (
-            <p className="text-sm text-stone-400 font-medium p-6 text-center">
-              المهام اليومية بتظهر للمندوب بحسابه — ادخل بحساب المندوب عشان تشوف مهامه
-            </p>
-          )
-        )}
+
 
 
 
@@ -1956,17 +1882,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         </div>
       )}
 
-      {/* تسجيل مكالمة أو إعلان بتفاصيله */}
-      {logQuest && currentAgent && (
-        <QuestLogSheet
-          quest={logQuest}
-          agent={currentAgent}
-          leads={leads}
-          onClose={() => setLogQuest(null)}
-          onSaved={() => handleIncrementQuest(logQuest.id)}
-          showToast={showToast}
-        />
-      )}
 
       {onAddLeadsBulk && (
         <CampaignLeadsModal
