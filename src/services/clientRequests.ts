@@ -183,6 +183,95 @@ export function existingMatches(
   return out.sort((a, b) => b.score - a.score);
 }
 
+/* ---------- عميل كاش ولا تقسيط ----------
+   الإجابة موجودة في مكالمة الاكتشاف من زمان، بس مكانتش
+   بتبان على الكارت — فالسيلز بيفتح الملف عشان يعرف.      */
+
+export type PayType = 'cash' | 'installment' | 'both' | null;
+
+export function paymentOf(lead: Lead): PayType {
+  const v = String((lead.discovery as any)?.payment || '').trim();
+  if (!v) return null;
+  if (v.includes('الاتنين')) return 'both';
+  if (v.includes('تقسيط')) return 'installment';
+  if (v.includes('كاش')) return 'cash';
+  return null;
+}
+
+export const PAY_LABEL: Record<Exclude<PayType, null>, string> = {
+  cash: 'كاش', installment: 'تقسيط', both: 'كاش/تقسيط',
+};
+
+/* ---------- العميل اللي المعروض مش عاجبه ----------
+   مؤشر عملي: العميل قاعد في مرحلة "إرسال صور وتفاصيل"،
+   والسيلز سجّل عليه أكتر من كومنت، ومع ذلك مش متحرّك.
+
+   ده معناه إن الشقق اللي اتبعتتله مش مناسبة — حتى لو نفس
+   الميزانية ونفس الحي. السبب غالباً حاجة مش في الأرقام:
+   جودة التشطيب، الدور، المصعد، الفيو، الواجهة.
+
+   النظام مش هيخمّن السبب، بس هيقول للسيلز: "ده محتاج
+   طلب مسجّل" ويسأله السبب بإيده.                        */
+
+export interface StuckLead {
+  lead: Lead;
+  comments: number;        // كام كومنت اتسجّل عليه في المرحلة دي
+  daysStuck: number;       // قاعد فيها من كام يوم
+}
+
+const STUCK_STAGE = 'sent_details';
+
+export function findStuckLeads(
+  leads: Lead[], requests: ClientRequest[],
+  opts?: { agentId?: string; minComments?: number; minDays?: number },
+): StuckLead[] {
+  const minC = opts?.minComments ?? 2;
+  const minD = opts?.minDays ?? 0;
+  /* اللي ليه طلب مفتوح خلاص مش محتاج تنبيه تاني */
+  const hasOpen = new Set(requests.filter((r) => r.status === 'open').map((r) => r.leadId));
+  const out: StuckLead[] = [];
+
+  leads.forEach((l) => {
+    if (l.status !== STUCK_STAGE) return;
+    if (hasOpen.has(l.id)) return;
+    if (opts?.agentId && l.assignedAgentId !== opts.agentId) return;
+
+    const acts = (l.activity || []).filter((a) => a && typeof a.at === 'number');
+    /* بنعدّ اللي حصل بعد آخر **نقل** للمرحلة دي.
+       الباج اللي كان هنا: كنت بدوّر على أي سطر فيه "إرسال صور"،
+       والسطور العادية بتقول "في: إرسال صور..." — فكان بياخد
+       آخر كومنت كأنه لحظة الدخول، ويطلع العدد ١ دايماً. */
+    const entry = acts.find((a) => {
+      const o = String(a.outcome || '');
+      return o.startsWith('نقل إلى') && o.includes('إرسال صور');
+    });
+    const enteredAt = entry?.at ?? (acts.length ? acts[acts.length - 1].at : 0);
+    const since = acts.filter((a) => a.at >= enteredAt);
+    /* الكومنت الحقيقي بس — التسجيل السريع للمكالمة مش كومنت */
+    const comments = since.filter((a) => String(a.comment || '').trim().length > 0).length;
+    if (comments < minC) return;
+
+    const days = enteredAt ? Math.floor((Date.now() - enteredAt) / 86400000) : 0;
+    if (days < minD) return;
+
+    out.push({ lead: l, comments, daysStuck: days });
+  });
+
+  return out.sort((a, b) => b.comments - a.comments || b.daysStuck - a.daysStuck);
+}
+
+/* أسباب الرفض الشائعة — السيلز بيختار، مش بيكتب من دماغه،
+   عشان نقدر نعدّهم بعدين ونعرف إيه اللي بيضيّع الصفقات */
+export const REJECTION_REASONS = [
+  'التشطيب مش على المستوى',
+  'الدور عالي ومفيش مصعد',
+  'الفيو مش عاجبه',
+  'الواجهة أو العمارة قديمة',
+  'المساحة مش موزّعة كويس',
+  'عايز استلام أسرع',
+  'السعر مش قابل للتفاوض',
+] as const;
+
 /* ---------- التخزين ---------- */
 
 export async function saveClientRequest(r: ClientRequest): Promise<void> {

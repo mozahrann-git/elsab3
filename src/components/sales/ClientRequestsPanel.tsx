@@ -4,7 +4,7 @@ import type { ClientRequest, Lead, Property, RequestKind } from '../../types';
 import {
   matchAllRequests, installmentHint, estimatePlan, affordableFromPlan,
   existingMatches, saveClientRequest, markRequestSeen, closeClientRequest,
-  requestFromLead, RequestMatch,
+  requestFromLead, RequestMatch, findStuckLeads, REJECTION_REASONS, paymentOf,
 } from '../../services/clientRequests';
 import { thumbUrl } from '../../services/mediaStorage';
 import { formatPrice } from '../../utils/helpers';
@@ -33,14 +33,18 @@ const RequestForm: React.FC<{
   const [down, setDown] = useState('');
   const [monthly, setMonthly] = useState('');
   const [note, setNote] = useState('');
+  const [reasons, setReasons] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
   const draft = useMemo(
-    () => requestFromLead(lead, agentName, kind, {
-      downPayment: num(down), monthly: num(monthly), note: note.trim(),
+    () => ({
+      ...requestFromLead(lead, agentName, kind, {
+        downPayment: num(down), monthly: num(monthly), note: note.trim(),
+      }),
+      rejectionReasons: reasons,
     }),
-    [lead, agentName, kind, down, monthly, note],
+    [lead, agentName, kind, down, monthly, note, reasons],
   );
 
   /* الميزانية المتوقّعة من المقدم والقسط — بأرقام الشقق الحقيقية */
@@ -136,6 +140,27 @@ const RequestForm: React.FC<{
             </div>
           )}
 
+          <div>
+            <p className="text-xs font-bold text-stone-500 mb-1.5">
+              إيه اللي مناسبوش في اللي شافه؟ (اختياري — بس بيفيدنا)
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {REJECTION_REASONS.map((x) => {
+                const on = reasons.includes(x);
+                return (
+                  <button
+                    key={x} type="button"
+                    onClick={() => setReasons((p) => on ? p.filter((y) => y !== x) : [...p, x])}
+                    className={`text-[11px] font-bold px-2.5 py-1.5 rounded-full border ${
+                      on ? 'bg-[#141414] text-white border-[#141414]'
+                         : 'bg-white text-stone-600 border-[#E4DFD4]'
+                    }`}
+                  >{x}</button>
+                );
+              })}
+            </div>
+          </div>
+
           <label className="block">
             <span className="text-xs font-bold text-stone-500 block mb-1">ملاحظة (اختياري)</span>
             <input
@@ -199,6 +224,13 @@ export const ClientRequestsPanel: React.FC<{
 
   const totalNew = rows.reduce((n, r) => n + r.matches.length, 0);
 
+  /* العميل اللي اتبعتله صور وسجّل عليه كومنتات وفضل مكانه:
+     اللي عندنا مناسبوش، والسبب مش في الأرقام */
+  const stuck = useMemo(
+    () => findStuckLeads(leads, requests, { agentId: isAdmin ? undefined : agentId }),
+    [leads, requests, agentId, isAdmin],
+  );
+
   const myLeads = useMemo(() => {
     const open = new Set(requests.filter((r) => r.status === 'open').map((r) => r.leadId));
     const mine = leads.filter((l) => (isAdmin || l.assignedAgentId === agentId) && !open.has(l.id));
@@ -239,6 +271,45 @@ export const ClientRequestsPanel: React.FC<{
           <Plus size={14} /> سجّل طلب
         </button>
       </div>
+
+      {stuck.length > 0 && (
+        <div className="bg-[#FBF1E4] border border-[#E8D3A6] rounded-2xl p-4 space-y-2">
+          <div>
+            <p className="font-black text-sm text-[#A07A26]">
+              {stuck.length} عميل اتبعتله صور وماتحركش
+            </p>
+            <p className="text-[11px] text-[#6B665C] font-medium mt-0.5">
+              يعني اللي عندنا مناسبوش — حتى لو الميزانية والحي مظبوطين.
+              سجّل طلبه عشان أول شقة مناسبة توصلك.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            {stuck.slice(0, 6).map((sl) => (
+              <button
+                key={sl.lead.id} type="button" onClick={() => setFormFor(sl.lead)}
+                className="w-full bg-white rounded-2xl p-3 flex items-center justify-between gap-2 text-right border border-[#ECE8DF]"
+              >
+                <span className="min-w-0">
+                  <span className="block text-xs font-black text-stone-900 truncate">
+                    {sl.lead.name}
+                    {paymentOf(sl.lead) === 'installment' && (
+                      <span className="text-[10px] font-bold text-[#1F5C8B]"> · تقسيط</span>
+                    )}
+                    {paymentOf(sl.lead) === 'cash' && (
+                      <span className="text-[10px] font-bold text-[#1E7A45]"> · كاش</span>
+                    )}
+                  </span>
+                  <span className="block text-[11px] text-stone-400 font-medium">
+                    {sl.comments} كومنت
+                    {sl.daysStuck > 0 ? ` · واقف من ${sl.daysStuck} يوم` : ''}
+                  </span>
+                </span>
+                <span className="text-[11px] font-black text-[#A07A26] shrink-0">سجّل طلبه</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {rows.length === 0 && (
         <p className="text-xs text-stone-400 font-medium bg-white rounded-2xl p-5 border border-[#ECE8DF] text-center">

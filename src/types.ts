@@ -778,6 +778,9 @@ export interface ClientRequest {
   monthly?: number;            // القسط الشهري اللي يقدر عليه
 
   note?: string;
+  /* ليه اللي معروض مناسبوش — اختيار من قايمة، مش كتابة حرة،
+     عشان نقدر نعدّهم ونعرف إيه اللي بيضيّع الصفقات */
+  rejectionReasons?: string[];
   status: 'open' | 'closed';
   createdAt: number;
   closedAt?: number;

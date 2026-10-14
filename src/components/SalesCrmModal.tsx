@@ -65,6 +65,7 @@ import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb 
 import { subscribeAllUnitViewings } from '../services/portalService';
 import { thumbUrl } from '../services/mediaStorage';
 import ClientRequestsPanel from './sales/ClientRequestsPanel';
+import { paymentOf, PAY_LABEL } from '../services/clientRequests';
 
 interface SalesCrmModalProps {
   isOpen: boolean;
@@ -1273,6 +1274,19 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                             {(tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
                               <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 ${tone.chip}`}>
                                 <Flame size={10} /> {tone.label}
+                              </span>
+                            )}
+                            {/* كاش ولا تقسيط — الإجابة موجودة من الاكتشاف،
+                                بس مكانتش بتبان غير لما تفتح الملف */}
+                            {paymentOf(lead) && (
+                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                                paymentOf(lead) === 'cash'
+                                  ? 'bg-[#EEF5F0] text-[#1E7A45]'
+                                  : paymentOf(lead) === 'installment'
+                                    ? 'bg-[#EAF1F8] text-[#1F5C8B]'
+                                    : 'bg-[#FBF1E4] text-[#A07A26]'
+                              }`}>
+                                {PAY_LABEL[paymentOf(lead)!]}
                               </span>
                             )}
                           </div>
