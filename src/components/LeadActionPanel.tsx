@@ -6,7 +6,23 @@ import { WhenPicker, WhenValue, formatWhen, relTime } from './common/WhenPicker'
   نقل العميل لمرحلة: لازم كومنت عشان رحلة العميل تتسجل بالتفصيل،
   وميعاد الأكشن الجاي (اختياري) بيتحول لتنبيه حقيقي.
 */
-export interface LeadActivity { at: number; by: string; outcome: string; comment: string; nextAt?: number; transferTo?: string }
+/* نتيجة المكالمة — دي اللي بتخلّي رقم الـ٥٠ يعني حاجة.
+   من غيرها العدّاد بيقول "٥٠ مكالمة" وانت مش عارف رد كام
+   ومردش كام ومهتم كام. */
+export type CallOutcome = 'interested' | 'answered' | 'no_answer';
+
+export const CALL_OUTCOMES: { id: CallOutcome; label: string; tone: string }[] = [
+  { id: 'interested', label: 'رد ومهتم', tone: 'bg-[#EEF5F0] text-[#1E7A45] border-[#BFE0CC]' },
+  { id: 'answered',   label: 'رد مش مهتم', tone: 'bg-[#FBF1E4] text-[#A07A26] border-[#E8D3A6]' },
+  { id: 'no_answer',  label: 'مردش', tone: 'bg-[#FBEDEA] text-[#C2412D] border-[#E8C4BC]' },
+];
+
+export interface LeadActivity {
+  at: number; by: string; outcome: string; comment: string;
+  nextAt?: number; transferTo?: string;
+  /* موجودة في التسجيل السريع بس — التسجيل الكامل بيسيبها فاضية */
+  call?: CallOutcome;
+}
 
 export const LeadActionPanel: React.FC<{
   lead: Lead;
@@ -24,6 +40,28 @@ export const LeadActionPanel: React.FC<{
   // الصفقة المغلقة والمؤجل/غير مهتم بس هما اللي مش محتاجين ميعاد جاي
   const closing = stage === ('closed' as LeadStatus) || stage === ('lost' as LeadStatus);
   const canSave = !!comment.trim() && (closing || !!next);
+
+  /* تسجيل سريع: دوسة واحدة بتسجّل المكالمة ونتيجتها.
+     ٥٠ مكالمة في اليوم مستحيلة لو كل واحدة محتاجة كومنت
+     وميعاد — فالمكالمة اللي مردش فيها بتتسجّل بدوسة،
+     واللي محتاجة تفاصيل بتتسجّل من التسجيل الكامل تحت. */
+  const quickLog = (c: CallOutcome) => {
+    const meta = CALL_OUTCOMES.find((x) => x.id === c)!;
+    const entry: LeadActivity = {
+      at: Date.now(), by: byName,
+      outcome: `مكالمة: ${meta.label}`,
+      comment: '', call: c,
+    };
+    onUpdateLead({
+      ...lead,
+      notes: [`مكالمة: ${meta.label}`, ...(lead.notes || [])],
+      activity: [entry, ...act].slice(0, 80),
+      lastContactDate: new Date().toISOString(),
+      isFresh: false,
+    });
+    setSaved(`اتسجّلت: ${meta.label}`);
+    setTimeout(() => setSaved(''), 2500);
+  };
 
   const save = () => {
     const moved = stage !== lead.status;
@@ -56,6 +94,21 @@ export const LeadActionPanel: React.FC<{
         <p className="font-bold text-[#141414]">نقل وتسجيل</p>
         {nextAt ? <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${nextAt < Date.now() ? 'bg-[#FBEDEA] text-[#C2412D]' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>الأكشن: {formatWhen(nextAt)} · {relTime(nextAt)}</span> : null}
       </div>
+      {/* التسجيل السريع — دوسة واحدة لكل مكالمة */}
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-bold text-[#6B665C]">سجّل المكالمة بدوسة:</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {CALL_OUTCOMES.map((o) => (
+            <button
+              key={o.id} type="button" onClick={() => quickLog(o.id)}
+              className={`rounded-xl py-2.5 text-[11px] font-black border transition-transform active:scale-95 ${o.tone}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <select value={stage} onChange={(e) => setStage(e.target.value as LeadStatus)} className="w-full rounded-xl bg-white border border-[#E4DFD4] p-3 text-sm font-bold">
         {stages.map((s) => <option key={s.id} value={s.id}>{s.id === lead.status ? `${s.label} (الحالية)` : `نقل إلى: ${s.label}`}</option>)}
       </select>

@@ -12,7 +12,7 @@
    مفيش عدّاد بيتحرك بزرار "تم" من غير دليل.               */
 
 import {
-  collection, doc, getDoc, getDocs, query, where, onSnapshot,
+  collection, doc, getDoc, getDocs, query, where, onSnapshot, writeBatch,
   serverTimestamp, setDoc, deleteDoc, orderBy, limit as qLimit,
 } from 'firebase/firestore';
 import { db, ensureAuth } from './firebaseService';
@@ -67,6 +67,11 @@ export interface CallCounts {
   fresh: number;
   follow: number;
   old_campaign: number;
+  /* نتيجة المكالمة — دي اللي بتخلّي الرقم يعني حاجة */
+  interested: number;
+  answered: number;
+  noAnswer: number;
+  unknown: number;      // تسجيلات قديمة قبل ما نضيف النتيجة
 }
 
 function bucketOf(lead: Lead): CallBucket {
@@ -78,7 +83,10 @@ function bucketOf(lead: Lead): CallBucket {
 /** بيعدّ تسجيلات المكالمات لمندوب في مجموعة أيام */
 export function countCalls(leads: Lead[], agentId: string, days: string[]): CallCounts {
   const want = new Set(days);
-  const out: CallCounts = { total: 0, fresh: 0, follow: 0, old_campaign: 0 };
+  const out: CallCounts = {
+    total: 0, fresh: 0, follow: 0, old_campaign: 0,
+    interested: 0, answered: 0, noAnswer: 0, unknown: 0,
+  };
   leads.forEach((l) => {
     if (l.assignedAgentId !== agentId) return;
     const b = bucketOf(l);
@@ -87,6 +95,11 @@ export function countCalls(leads: Lead[], agentId: string, days: string[]): Call
       if (!want.has(cairoDay(a.at))) return;
       out.total += 1;
       out[b] += 1;
+      const c = (a as any).call;
+      if (c === 'interested') out.interested += 1;
+      else if (c === 'answered') out.answered += 1;
+      else if (c === 'no_answer') out.noAnswer += 1;
+      else out.unknown += 1;
     });
   });
   return out;
@@ -214,7 +227,8 @@ export function buildScorecard(args: {
     agentId: args.agentId,
     rows: [
       { key: 'calls', label: 'مكالمات', done: c.total, target: t.callsDaily, auto: true,
-        hint: `فريش ${c.fresh} · متابعة ${c.follow} · كامبين قديمة ${c.old_campaign}` },
+        hint: `مهتم ${c.interested} · رد ${c.answered} · مردش ${c.noAnswer}`
+          + `  —  فريش ${c.fresh} · متابعة ${c.follow} · كامبين ${c.old_campaign}` },
       { key: 'requests', label: 'ريكويستات', done: r.total, target: t.requestsDaily, auto: true,
         hint: `مهتم جداً ${r.potential}/${t.requestsPotential} · عادي ${r.normal}/${t.requestsNormal}` },
       { key: 'ads_resale', label: 'إعلانات ريسيل', done: p.adResale, target: t.adsResaleDaily, auto: false,
@@ -266,6 +280,17 @@ export function subscribeWorkProofs(cb: (l: WorkProof[]) => void): () => void {
 export async function saveAssignment(a: AgentUnitAssignment): Promise<void> {
   await ensureAuth();
   await setDoc(doc(db, ASSIGN, a.agentId), a, { merge: true });
+}
+
+/* التوزيع كله في كتابة واحدة. قبل كده كان لوب بيكتب واحد
+   واحد: لو واحدة وقعت في النص، اللي قبلها بيتكتب واللي بعدها
+   لأ، وتفضل شايف توزيع ناقص من غير ما تعرف. الباتش بينجح
+   كله أو يفشل كله. */
+export async function saveAssignmentsBatch(list: AgentUnitAssignment[]): Promise<void> {
+  await ensureAuth();
+  const b = writeBatch(db);
+  list.forEach((a) => b.set(doc(db, ASSIGN, a.agentId), a, { merge: true }));
+  await b.commit();
 }
 
 export async function fetchAssignments(): Promise<AgentUnitAssignment[]> {
@@ -411,9 +436,11 @@ export function callDetails(leads: Lead[], agentId: string, days: string[]): Det
       : l.leadKind === 'old_campaign' ? 'كامبين قديمة' : 'متابعة';
     (l.activity || []).forEach((a, i) => {
       if (!a || typeof a.at !== 'number' || !want.has(cairoDay(a.at))) return;
+      const c = (a as any).call;
+      const res = c === 'interested' ? 'مهتم' : c === 'answered' ? 'رد' : c === 'no_answer' ? 'مردش' : '';
       out.push({
         id: `${l.id}_${i}`,
-        title: l.name || l.phone || 'عميل',
+        title: `${l.name || l.phone || 'عميل'}${res ? ' — ' + res : ''}`,
         sub: `${kind} · ${a.outcome || ''}${a.comment ? ' — ' + a.comment : ''}`,
         at: a.at,
       });

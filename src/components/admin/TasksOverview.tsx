@@ -5,7 +5,7 @@ import type {
 } from '../../types';
 import { DEFAULT_SALES_TARGETS } from '../../types';
 import {
-  buildScorecard, distributeUnits, saveAssignment, saveTargets, signedUnitIds, cairoDay,
+  buildScorecard, distributeUnits, saveAssignmentsBatch, saveTargets, signedUnitIds, cairoDay,
   detailsFor, DetailRow, diagnosePermissions, PermReport,
 } from '../../services/dailyTasksService';
 import { thumbUrl } from '../../services/mediaStorage';
@@ -120,13 +120,11 @@ export const TasksOverview: React.FC<{
       const map = res.map;
       const start = Date.now();
       const end = start + t.cycleDays * 86400000;
-      for (const a of good) {
-        await saveAssignment({
-          id: a.id, agentId: a.id, agentName: a.name,
-          propertyIds: map[a.id] || [], cycleStart: start, cycleEnd: end,
-          previousPropertyIds: prev[a.id] || [],
-        });
-      }
+      await saveAssignmentsBatch(good.map((a) => ({
+        id: a.id, agentId: a.id, agentName: a.name,
+        propertyIds: map[a.id] || [], cycleStart: start, cycleEnd: end,
+        previousPropertyIds: prev[a.id] || [],
+      })));
       onAssignmentsSaved?.();
       setPicking(false);
       setMsg(
