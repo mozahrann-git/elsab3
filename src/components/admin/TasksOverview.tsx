@@ -61,6 +61,10 @@ export const TasksOverview: React.FC<{
   /* الرقم اللي الإدارة دوست عليه — بنوريها الشغل اللي وراه */
   const [drill, setDrill] = useState<null | { agentName: string; label: string; rows: DetailRow[] }>(null);
   const [perm, setPerm] = useState<PermReport | null>(null);
+  /* مين ياخد شقق الدورة. مش كل حساب في النظام مندوب شغّال
+     على الشقق — فيه حسابات إدارية وقديمة. الاختيار بإيدك. */
+  const [picking, setPicking] = useState(false);
+  const [chosen, setChosen] = useState<string[]>([]);
 
   const active = useMemo(
     () => agents.filter((a) => a.isActive !== false),
@@ -84,10 +88,25 @@ export const TasksOverview: React.FC<{
   };
 
   const redistribute = async () => {
-    if (!active.length) { setMsg('مفيش مناديب نشطين'); return; }
+    /* بنوزّع على اللي أنت اخترتهم بس. لو مفيش اختيار، بنفتح
+       شاشة الاختيار بدل ما نوزّع على الكل من غير ما تقصد. */
+    const targetsList = active.filter((a) => chosen.includes(a.id));
+    if (!targetsList.length) { setPicking(true); return; }
+
+    /* كود فيه شرطة مايلة بيعمل مسار جوّه مسار في فايرستور،
+       والمسار ده مالوش قاعدة — فالكتابة بتترفض برسالة صلاحيات
+       مضلّلة. بنستبعدهم ونقول عليهم بالاسم. */
+    const bad = targetsList.filter((a) => !a.id || a.id.includes('/'));
+    const good = targetsList.filter((a) => a.id && !a.id.includes('/'));
+    if (!good.length) {
+      setErr(`كل الحسابات المختارة أكوادها مش صالحة: ${bad.map((b) => b.name).join('، ')}`);
+      return;
+    }
+
     const ok = window.confirm(
-      `هيتوزّع ${t.unitsPerAgent} شقة على ${active.length} مندوب.\n`
-      + `التوزيع القديم هيتبدّل، والنظام هيتجنّب يدّي أي مندوب نفس شققه السابقة.\n\nتمام؟`,
+      `هيتوزّع ${t.unitsPerAgent} شقة على ${good.length} مندوب:\n`
+      + `${good.map((a) => a.name).join('، ')}\n\n`
+      + `التوزيع القديم بتاعهم هيتبدّل، والنظام هيتجنّب يدّي أي مندوب نفس شققه السابقة.\n\nتمام؟`,
     );
     if (!ok) return;
     setBusy('dist'); setMsg(''); setErr('');
@@ -95,13 +114,13 @@ export const TasksOverview: React.FC<{
       const prev: Record<string, string[]> = {};
       assignments.forEach((a) => { prev[a.agentId] = a.propertyIds || []; });
       const res = distributeUnits({
-        properties, agentIds: active.map((a) => a.id),
+        properties, agentIds: good.map((a) => a.id),
         perAgent: t.unitsPerAgent, previous: prev,
       });
       const map = res.map;
       const start = Date.now();
       const end = start + t.cycleDays * 86400000;
-      for (const a of active) {
+      for (const a of good) {
         await saveAssignment({
           id: a.id, agentId: a.id, agentName: a.name,
           propertyIds: map[a.id] || [], cycleStart: start, cycleEnd: end,
@@ -109,9 +128,11 @@ export const TasksOverview: React.FC<{
         });
       }
       onAssignmentsSaved?.();
+      setPicking(false);
       setMsg(
-        `اتوزّعت على ${active.length} مندوب · ${res.priority.size} شقة تحت المتوسط `
-        + `اتكررت بينهم (متوسط التفاعل ${Math.round(res.average)})`,
+        `اتوزّعت على ${good.length} مندوب · ${res.priority.size} شقة تحت المتوسط `
+        + `اتكررت بينهم (متوسط التفاعل ${Math.round(res.average)})`
+        + (bad.length ? ` · اتستبعد ${bad.length} حساب كوده مش صالح` : ''),
       );
     } catch (e: any) { setErr(e?.message || 'التوزيع ما نجحش'); }
     finally { setBusy(''); }
@@ -148,7 +169,7 @@ export const TasksOverview: React.FC<{
             className="rounded-xl px-3 py-2 bg-white border border-[#E4DFD4] font-bold text-xs flex items-center gap-1.5">
             <Settings2 size={14} /> الأهداف
           </button>
-          <button type="button" onClick={redistribute} disabled={busy === 'dist'}
+          <button type="button" onClick={() => setPicking(true)} disabled={busy === 'dist'}
             className="rounded-xl px-3 py-2 bg-[#141414] text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50">
             {busy === 'dist' ? <Loader2 size={14} className="animate-spin" /> : <Shuffle size={14} />}
             وزّع الشقق
@@ -283,6 +304,69 @@ export const TasksOverview: React.FC<{
           </tbody>
         </table>
       </div>
+
+      {picking && (
+        <div className="bg-white rounded-2xl p-4 border border-[#E8D3A6] space-y-3" dir="rtl">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="font-black text-sm text-stone-900">مين ياخد شقق الدورة؟</p>
+              <p className="text-[11px] text-stone-400 font-medium">
+                عندك {active.length} حساب نشط — علّم على اللي شغّالين على الشقق بس
+              </p>
+            </div>
+            <button type="button" onClick={() => setPicking(false)} className="p-1.5 rounded-full hover:bg-stone-100">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto">
+            {active.map((a) => {
+              const on = chosen.includes(a.id);
+              const badId = !a.id || a.id.includes('/');
+              return (
+                <label
+                  key={a.id}
+                  className={`flex items-center gap-2.5 rounded-2xl p-3 border cursor-pointer ${
+                    on ? 'bg-[#FBF1E4] border-[#E8D3A6]' : 'bg-[#FBF8F1] border-[#ECE8DF]'
+                  } ${badId ? 'opacity-50' : ''}`}
+                >
+                  <input
+                    type="checkbox" checked={on} disabled={badId}
+                    onChange={(e) => setChosen((prev) =>
+                      e.target.checked ? [...prev, a.id] : prev.filter((x) => x !== a.id))}
+                    className="w-4 h-4 shrink-0 accent-[#A07A26]"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-black text-stone-900 truncate">{a.name}</span>
+                    <span className="block text-[10px] text-stone-400 font-mono truncate" dir="ltr">
+                      {badId ? 'كود مش صالح' : a.id}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-[#ECE8DF]">
+            <p className="text-[11px] font-bold text-stone-500">
+              {chosen.length === 0 ? 'لسه ما اخترتش حد'
+                : `${chosen.length} مندوب · ${chosen.length * t.unitsPerAgent} خانة على ${properties.length} شقة`}
+            </p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setChosen([])}
+                className="rounded-xl px-3 py-2 bg-white border border-[#E4DFD4] font-bold text-xs">
+                امسح الاختيار
+              </button>
+              <button
+                type="button" disabled={!chosen.length || busy === 'dist'} onClick={redistribute}
+                className="rounded-xl px-4 py-2 bg-[#141414] text-white font-bold text-xs disabled:opacity-40"
+              >
+                {busy === 'dist' ? 'بيوزّع…' : 'وزّع عليهم'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {perm && (
         <div className="bg-white rounded-2xl p-4 border border-[#ECE8DF] space-y-3 text-xs" dir="rtl">
