@@ -742,3 +742,45 @@ export interface GovernanceAuditLog {
   metadata?: Record<string, any>;
   isResolved?: boolean;
 }
+
+/* ============================================================
+   طلبات العملاء (الطلب المفتوح)
+   ============================================================
+   العميل اللي طلبه مش موجود على الموقع النهاردة مبيضيعش:
+   طلبه بيتسجّل، وأول ما شقة قريبة تتضاف السيلز بتاعه بيعرف.
+
+   المطابقة بتتحسب في المتصفح من الشقق والطلبات اللي موجودة
+   أصلاً — مفيش كتابة ولا وظيفة على السيرفر تفشل في صمت.    */
+
+export type RequestKind = 'cash' | 'installment';
+
+export interface ClientRequest {
+  id: string;
+  leadId: string;
+  leadName: string;
+  leadPhone: string;
+  agentId: string;
+  agentName: string;
+
+  kind: RequestKind;
+  neighborhoods: string[];
+  areaMin?: number;
+  areaMax?: number;
+  bedrooms?: number;
+  finishing?: string;
+
+  /* كاش */
+  budgetMin?: number;
+  budgetMax?: number;
+
+  /* تقسيط */
+  downPayment?: number;        // المقدم اللي يقدر عليه
+  monthly?: number;            // القسط الشهري اللي يقدر عليه
+
+  note?: string;
+  status: 'open' | 'closed';
+  createdAt: number;
+  closedAt?: number;
+  /* الشقق اللي السيلز شافها خلاص — عشان ما يتنبّهش عليها تاني */
+  seenPropertyIds?: string[];
+}

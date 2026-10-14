@@ -64,6 +64,7 @@ import { ViewingRequest } from '../types';
 import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb } from '../services/crmBoardService';
 import { subscribeAllUnitViewings } from '../services/portalService';
 import { thumbUrl } from '../services/mediaStorage';
+import ClientRequestsPanel from './sales/ClientRequestsPanel';
 
 interface SalesCrmModalProps {
   isOpen: boolean;
@@ -139,7 +140,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   viewingRequests,
 }) => {
   // Navigation Tabs matching sidebar items (Properties tab removed)
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'leaderboard'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'leaderboard' | 'requests'>('pipeline');
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeMobileStageFilter, setActiveMobileStageFilter] = useState<string>('all');
