@@ -45,7 +45,8 @@ service cloud.firestore {
     match /properties/{propertyId} {
       allow read: if true;
       allow create, update: if canEditProps();
-      allow delete: if isAdmin();
+      /* الحذف: الأدمن + السيلز اللي متعلّم له «يعدّل الشقق» */
+      allow delete: if canEditProps();
       // البروكر بيحدّث صور وحدته بس
       allow update: if isBroker() && resource.data.brokerId == myBrokerId() && onlyKeys(['images']);
       /* عدّاد المشاهدات والواتساب والاتصال: الزائر العادي بيحرّكه،

@@ -1726,11 +1726,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               <span>تعديل</span>
                             </button>
 
-                            {/* الحذف للأدمن بس — القواعد كمان بترفضه
-                                من غيره، فده مش مجرد إخفاء */}
-                            {!propertiesOnly && (
+                            {/* الحذف: الأدمن + السيلز اللي مسموحله يعدّل الشقق */}
+                            {(
                               <button
                                 onClick={() => {
+                                  if (!window.confirm(`تمسح الشقة ${prop.code} نهائياً؟`)) return;
                                   onDeleteProperty(prop.id);
                                   showToast(`تم حذف الشقة (${prop.code}) بنجاح`);
                                 }}
