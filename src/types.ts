@@ -774,8 +774,11 @@ export interface ClientRequest {
   budgetMax?: number;
 
   /* تقسيط */
-  downPayment?: number;        // المقدم اللي يقدر عليه
-  monthly?: number;            // القسط الشهري اللي يقدر عليه
+  offPlanKind?: 'standalone_building' | 'compound';  // عمارات ولا كمبوند
+  years?: number;              // سنين التقسيط اللي اختارها
+  downPayment?: number;        // المقدم اللي معاه
+  monthly?: number;            // القسط الشهري (محسوب أو مكتوب)
+  deliveryWithin?: string;     // الاستلام: ٦ شهور / سنة / سنتين / ٣ سنين
 
   note?: string;
   /* ليه اللي معروض مناسبوش — اختيار من قايمة، مش كتابة حرة،

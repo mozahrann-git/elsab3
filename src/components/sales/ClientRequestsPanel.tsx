@@ -1,11 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BellRing, Check, Loader2, Plus, Search, X } from 'lucide-react';
 import type { ClientRequest, Lead, Property, RequestKind } from '../../types';
 import {
   matchAllRequests, installmentHint, estimatePlan, affordableFromPlan,
   existingMatches, saveClientRequest, markRequestSeen, closeClientRequest,
   requestFromLead, RequestMatch, findStuckLeads, REJECTION_REASONS, paymentOf,
+  offPlanOptions, minDownAmount, OffPlanKind,
 } from '../../services/clientRequests';
+import { HADABA_WOSTA_NEIGHBORHOODS } from '../../data/properties';
 import { thumbUrl } from '../../services/mediaStorage';
 import { formatPrice } from '../../utils/helpers';
 
@@ -28,48 +30,97 @@ const RequestForm: React.FC<{
   onClose: () => void;
   onSaved: () => void;
 }> = ({ lead, agentName, properties, onClose, onSaved }) => {
-  const hint = useMemo(() => installmentHint(properties), [properties]);
   const [kind, setKind] = useState<RequestKind>('cash');
-  const [down, setDown] = useState('');
-  const [monthly, setMonthly] = useState('');
-  const [note, setNote] = useState('');
-  const [reasons, setReasons] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
-  const draft = useMemo(
-    () => ({
-      ...requestFromLead(lead, agentName, kind, {
-        downPayment: num(down), monthly: num(monthly), note: note.trim(),
-      }),
-      rejectionReasons: reasons,
-    }),
-    [lead, agentName, kind, down, monthly, note, reasons],
+  /* مشترك */
+  const [beds, setBeds] = useState<number>(lead.preferredBedrooms || 3);
+  const [note, setNote] = useState('');
+  const [reasons, setReasons] = useState<string[]>([]);
+
+  /* كاش */
+  const [hoods, setHoods] = useState<string[]>(
+    lead.preferredNeighborhood ? [lead.preferredNeighborhood] : [],
   );
+  const [finishing, setFinishing] = useState('');
+  const [bMin, setBMin] = useState<number>(lead.budgetMin || 1500000);
+  const [bMax, setBMax] = useState<number>(lead.budgetMax || 3500000);
 
-  /* الميزانية المتوقّعة من المقدم والقسط — بأرقام الشقق الحقيقية */
-  const afford = kind === 'installment'
-    ? affordableFromPlan(num(down), num(monthly), hint)
-    : 0;
+  /* تقسيط */
+  const [planKind, setPlanKind] = useState<OffPlanKind>('standalone_building');
+  const opts = useMemo(() => offPlanOptions(properties, planKind), [properties, planKind]);
+  const floorDown = useMemo(() => minDownAmount(opts), [opts]);
+  const [years, setYears] = useState<number>(0);
+  const [down, setDown] = useState<number>(0);
+  const [delivery, setDelivery] = useState('');
 
-  /* لو فيه شقق موجودة دلوقتي تناسبه، مفيش داعي نسجّل طلب */
+  /* أول ما يغيّر النوع، الخيارات بتتغيّر — فبنرجّع الاختيار
+     لأقل حاجة موجودة بدل ما يفضل على رقم مش متاح للنوع ده */
+  useEffect(() => {
+    setYears(opts.years[0] || 0);
+    setDown(floorDown);
+  }, [planKind, opts.years.length, floorDown]);
+
+  const monthly = useMemo(() => {
+    if (!years || !opts.minPrice) return 0;
+    const rest = Math.max(0, opts.minPrice - down);
+    return Math.round(rest / (years * 12));
+  }, [years, down, opts.minPrice]);
+
+  const draft = useMemo(() => {
+    const base = requestFromLead(lead, agentName, kind, { note: note.trim() });
+    if (kind === 'cash') {
+      return {
+        ...base,
+        neighborhoods: hoods,
+        bedrooms: beds || undefined,
+        finishing: finishing || undefined,
+        budgetMin: bMin, budgetMax: bMax,
+        rejectionReasons: reasons,
+      };
+    }
+    return {
+      ...base,
+      neighborhoods: hoods,
+      bedrooms: beds || undefined,
+      /* تحت الإنشاء بييجي نص تشطيب على طول — مفيش سؤال */
+      finishing: 'نص تشطيب',
+      offPlanKind: planKind,
+      years: years || undefined,
+      downPayment: down || undefined,
+      monthly: monthly || undefined,
+      deliveryWithin: delivery || undefined,
+      rejectionReasons: reasons,
+    };
+  }, [lead, agentName, kind, hoods, beds, finishing, bMin, bMax,
+      planKind, years, down, monthly, delivery, note, reasons]);
+
   const already = useMemo(() => existingMatches(draft, properties).slice(0, 4), [draft, properties]);
 
+  const tooLow = kind === 'installment' && floorDown > 0 && down < floorDown;
+
   const save = async () => {
+    if (tooLow) { setErr(`أقل مقدم موجود عندنا ${floorDown.toLocaleString('en-US')} ج.م`); return; }
     setBusy(true); setErr('');
-    try { await saveClientRequest(draft); onSaved(); onClose(); }
+    try { await saveClientRequest(draft as any); onSaved(); onClose(); }
     catch (e: any) { setErr(e?.code || e?.message || 'الحفظ ما نجحش'); }
     finally { setBusy(false); }
   };
 
+  const chip = (on: boolean) =>
+    `text-[11px] font-black px-3 py-2 rounded-xl border transition-colors ${
+      on ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white text-stone-600 border-[#E4DFD4]'
+    }`;
+
   return (
     <div className="fixed inset-0 z-[125] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
-      <div className="bg-[#FBF8F1] w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#FBF8F1] w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto">
         <div className="sticky top-0 bg-[#FBF8F1] px-5 py-4 flex items-center justify-between border-b border-[#ECE8DF] z-10">
           <div className="min-w-0">
-            <p className="font-black text-stone-900 truncate">سجّل طلب {lead.name}</p>
+            <p className="font-black text-stone-900 truncate">طلب {lead.name}</p>
             <p className="text-xs text-stone-400 font-medium">
-              أول ما شقة قريبة تتضاف هتبان لك هنا
+              مرة واحدة · وأول ما شقة قريبة تتضاف هتعرف
             </p>
           </div>
           <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-stone-100 shrink-0">
@@ -79,83 +130,169 @@ const RequestForm: React.FC<{
 
         <div className="p-5 space-y-4">
           <div>
-            <p className="text-xs font-bold text-stone-500 mb-1.5">طريقة الدفع</p>
+            <p className="text-xs font-bold text-stone-500 mb-1.5">كاش ولا تقسيط</p>
             <div className="grid grid-cols-2 gap-2">
               {([['cash', 'كاش'], ['installment', 'تقسيط']] as [RequestKind, string][]).map(([k, l]) => (
-                <button
-                  key={k} type="button" onClick={() => setKind(k)}
+                <button key={k} type="button" onClick={() => setKind(k)}
                   className={`rounded-2xl py-3 font-black text-sm ${
                     kind === k ? 'bg-[#141414] text-white' : 'bg-white border border-[#E4DFD4] text-stone-600'
-                  }`}
-                >{l}</button>
+                  }`}>{l}</button>
               ))}
             </div>
           </div>
 
-          {kind === 'cash' ? (
-            <div className="bg-white rounded-2xl p-4 border border-[#ECE8DF]">
-              <p className="text-xs font-bold text-stone-500">ميزانيته من ملفه</p>
-              <p className="text-sm font-black text-stone-900 mt-1">
-                {lead.budgetMin ? `${formatPrice(lead.budgetMin)} — ` : 'لحد '}
-                {lead.budgetMax ? formatPrice(lead.budgetMax) : '؟'} ج.م
-              </p>
-              {!lead.budgetMax && (
-                <p className="text-[11px] text-[#C2412D] font-bold mt-1">
-                  مفيش ميزانية في ملفه — املاها من مكالمة الاكتشاف الأول
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="text-xs font-bold text-stone-500 block mb-1">المقدم اللي معاه</span>
-                  <input
-                    inputMode="numeric" value={down} onChange={(e) => setDown(e.target.value)}
-                    placeholder="600000"
-                    className="w-full rounded-2xl border border-[#E4DFD4] px-3 py-2.5 text-sm font-mono font-bold"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-bold text-stone-500 block mb-1">القسط الشهري</span>
-                  <input
-                    inputMode="numeric" value={monthly} onChange={(e) => setMonthly(e.target.value)}
-                    placeholder="40000"
-                    className="w-full rounded-2xl border border-[#E4DFD4] px-3 py-2.5 text-sm font-mono font-bold"
-                  />
-                </label>
+          {kind === 'installment' ? (
+            <>
+              <div>
+                <p className="text-xs font-bold text-stone-500 mb-1.5">كمبوند ولا عمارات</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {([['standalone_building', 'عمارات'], ['compound', 'كمبوند']] as [OffPlanKind, string][]).map(([k, l]) => (
+                    <button key={k} type="button" onClick={() => setPlanKind(k)} className={chip(planKind === k)}>
+                      {l}
+                      <span className="block text-[10px] font-bold opacity-60 mt-0.5">
+                        {offPlanOptions(properties, k).count} متاحة
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="bg-[#FBF1E4] border border-[#E8D3A6] rounded-2xl p-3 space-y-1">
-                <p className="text-[11px] font-bold text-[#A07A26]">
-                  من شقق التقسيط الموجودة عندنا: المقدم عادةً {hint.downPercent}٪ والتقسيط {hint.years} سنين
-                  {hint.sample > 0 ? ` (من ${hint.sample} شقة)` : ''}
+              {opts.count === 0 ? (
+                <p className="text-xs font-black text-[#C2412D] bg-[#FBEDEA] rounded-2xl p-3">
+                  مفيش عندنا {planKind === 'compound' ? 'كمبوندات' : 'عمارات'} تحت الإنشاء دلوقتي —
+                  سجّل الطلب وهيوصلك أول ما تتضاف
                 </p>
-                {afford > 0 && (
-                  <p className="text-sm font-black text-[#141414]">
-                    يقدر على شقة لحد {formatPrice(afford)} ج.م
+              ) : (
+                <>
+                  <div>
+                    <p className="text-xs font-bold text-stone-500 mb-1.5">
+                      التقسيط على كام سنة
+                      <span className="text-stone-400 font-medium"> — المتاح في {opts.count} وحدة</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {opts.years.map((y) => (
+                        <button key={y} type="button" onClick={() => setYears(y)} className={chip(years === y)}>
+                          {y} سنين
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <p className="text-xs font-bold text-stone-500">المقدم اللي معاه</p>
+                      <p className="text-sm font-black text-stone-900 font-mono">
+                        {down.toLocaleString('en-US')} ج.م
+                      </p>
+                    </div>
+                    <input
+                      type="range" min={floorDown} max={Math.max(floorDown, Math.round(opts.maxPrice * 0.6))}
+                      step={25000} value={down}
+                      onChange={(e) => setDown(Number(e.target.value))}
+                      className="w-full accent-[#A07A26]"
+                    />
+                    <p className="text-[11px] font-bold text-[#A07A26] mt-1">
+                      أقل مقدم موجود عندنا {floorDown.toLocaleString('en-US')} ج.م
+                      ({opts.minDownPercent}٪ من أرخص وحدة) — مفيش أقل من كده
+                    </p>
+                    {monthly > 0 && (
+                      <p className="text-[11px] font-bold text-stone-500 mt-0.5">
+                        يعني قسط حوالي {monthly.toLocaleString('en-US')} ج.م في الشهر
+                      </p>
+                    )}
+                  </div>
+
+                  {opts.deliveries.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-stone-500 mb-1.5">عايز الاستلام خلال</p>
+                      <div className="flex flex-wrap gap-2">
+                        {['٦ شهور', 'سنة', 'سنتين', '٣ سنين'].map((d) => (
+                          <button key={d} type="button" onClick={() => setDelivery(delivery === d ? '' : d)} className={chip(delivery === d)}>
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-stone-400 font-medium mt-1">
+                        الاستلام المتاح عندنا: {opts.deliveries.join(' · ')}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <p className="text-xs font-bold text-stone-500">ميزانيته</p>
+                  <p className="text-sm font-black text-stone-900 font-mono">
+                    {formatPrice(bMin)} — {formatPrice(bMax)}
                   </p>
-                )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="range" min={500000} max={15000000} step={100000} value={bMin}
+                    onChange={(e) => setBMin(Math.min(Number(e.target.value), bMax))}
+                    className="w-full accent-[#A07A26]" />
+                  <input type="range" min={500000} max={15000000} step={100000} value={bMax}
+                    onChange={(e) => setBMax(Math.max(Number(e.target.value), bMin))}
+                    className="w-full accent-[#A07A26]" />
+                </div>
               </div>
-            </div>
+
+              <div>
+                <p className="text-xs font-bold text-stone-500 mb-1.5">نوع التشطيب</p>
+                <div className="flex flex-wrap gap-2">
+                  {['متشطبة', 'نص تشطيب', 'على الطوب', 'مش فارق'].map((x) => (
+                    <button key={x} type="button" onClick={() => setFinishing(finishing === x ? '' : x)} className={chip(finishing === x)}>
+                      {x}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           <div>
+            <p className="text-xs font-bold text-stone-500 mb-1.5">الأحياء (ممكن أكتر من واحد)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(HADABA_WOSTA_NEIGHBORHOODS as unknown as string[]).map((h) => {
+                const on = hoods.includes(h);
+                return (
+                  <button key={h} type="button"
+                    onClick={() => setHoods((p) => on ? p.filter((x) => x !== h) : [...p, h])}
+                    className={chip(on)}>{h}</button>
+                );
+              })}
+            </div>
+            {hoods.length === 0 && (
+              <p className="text-[11px] text-stone-400 font-medium mt-1">
+                من غير اختيار = أي حي
+              </p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-stone-500 mb-1.5">كام غرفة</p>
+            <div className="flex flex-wrap gap-2">
+              {[2, 3, 4, 5].map((b) => (
+                <button key={b} type="button" onClick={() => setBeds(b)} className={chip(beds === b)}>
+                  {b === 5 ? '5+' : b} غرف
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <p className="text-xs font-bold text-stone-500 mb-1.5">
-              إيه اللي مناسبوش في اللي شافه؟ (اختياري — بس بيفيدنا)
+              إيه اللي مناسبوش في اللي شافه؟ (اختياري)
             </p>
             <div className="flex flex-wrap gap-1.5">
               {REJECTION_REASONS.map((x) => {
                 const on = reasons.includes(x);
                 return (
-                  <button
-                    key={x} type="button"
+                  <button key={x} type="button"
                     onClick={() => setReasons((p) => on ? p.filter((y) => y !== x) : [...p, x])}
-                    className={`text-[11px] font-bold px-2.5 py-1.5 rounded-full border ${
-                      on ? 'bg-[#141414] text-white border-[#141414]'
-                         : 'bg-white text-stone-600 border-[#E4DFD4]'
-                    }`}
-                  >{x}</button>
+                    className={chip(on)}>{x}</button>
                 );
               })}
             </div>
@@ -163,15 +300,13 @@ const RequestForm: React.FC<{
 
           <label className="block">
             <span className="text-xs font-bold text-stone-500 block mb-1">ملاحظة (اختياري)</span>
-            <input
-              value={note} onChange={(e) => setNote(e.target.value)}
+            <input value={note} onChange={(e) => setNote(e.target.value)}
               placeholder="مثلاً: لازم دور عالي، أو مستعجل"
-              className="w-full rounded-2xl border border-[#E4DFD4] px-3 py-2.5 text-sm"
-            />
+              className="w-full rounded-2xl border border-[#E4DFD4] px-3 py-2.5 text-sm" />
           </label>
 
           {already.length > 0 && (
-            <div className="bg-[#EEF5F0] border border-[#BFE0CC] rounded-2xl p-3 space-y-2">
+            <div className="bg-[#EEF5F0] border border-[#BFE0CC] rounded-2xl p-3 space-y-1">
               <p className="text-xs font-black text-[#1E7A45]">
                 استنى — فيه {already.length} شقة موجودة دلوقتي تناسبه:
               </p>
@@ -180,18 +315,14 @@ const RequestForm: React.FC<{
                   • {m.property.code} · {formatPrice(m.property.price)} ج.م · {m.property.area} م²
                 </p>
               ))}
-              <p className="text-[11px] text-[#1E7A45] font-medium">
-                اعرضهم عليه الأول. سجّل الطلب لو مناسبوهوش.
-              </p>
+              <p className="text-[11px] text-[#1E7A45] font-medium">اعرضهم عليه الأول.</p>
             </div>
           )}
 
           {err && <p className="text-xs font-black text-[#C2412D] bg-[#FBEDEA] rounded-xl p-3">✗ {err}</p>}
 
-          <button
-            type="button" onClick={save} disabled={busy}
-            className="w-full rounded-2xl py-3.5 bg-[#141414] text-white font-black flex items-center justify-center gap-2 disabled:opacity-50"
-          >
+          <button type="button" onClick={save} disabled={busy || tooLow}
+            className="w-full rounded-2xl py-3.5 bg-[#141414] text-white font-black flex items-center justify-center gap-2 disabled:opacity-50">
             {busy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             {busy ? 'بيسجّل…' : 'سجّل الطلب'}
           </button>
@@ -202,6 +333,8 @@ const RequestForm: React.FC<{
 };
 
 /* ---------- الشاشة ---------- */
+export { RequestForm };
+
 export const ClientRequestsPanel: React.FC<{
   requests: ClientRequest[];
   properties: Property[];

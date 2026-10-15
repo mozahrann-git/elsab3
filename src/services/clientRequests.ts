@@ -65,6 +65,56 @@ export function affordableFromPlan(down: number, monthly: number, hint: Installm
   return Math.round((Number(down) || 0) + (Number(monthly) || 0) * months);
 }
 
+/* ---------- خيارات التقسيط من الداتا الحقيقية ----------
+   الخيارات مش مكتوبة بإيدنا. بتتقرا من شقق التقسيط الموجودة:
+   العمارات ليها نسب مقدم وسنين، والكمبوندات ليها غيرها.
+   والمقدم مينفعش يقل عن أقل نسبة موجودة فعلاً — مفيش حاجة
+   بالرقم ده عشان نعرضها عليه.                              */
+
+export type OffPlanKind = 'standalone_building' | 'compound';
+
+export interface PlanOptions {
+  years: number[];            // سنين التقسيط المتاحة
+  downPercents: number[];     // نسب المقدم المتاحة
+  minDownPercent: number;     // أقل نسبة موجودة — ممنوع أقل منها
+  deliveries: string[];       // سنين الاستلام
+  minPrice: number;
+  maxPrice: number;
+  count: number;              // الشقق اللي الأرقام دي منها
+}
+
+const EMPTY_PLAN: PlanOptions = {
+  years: [], downPercents: [], minDownPercent: 0,
+  deliveries: [], minPrice: 0, maxPrice: 0, count: 0,
+};
+
+export function offPlanOptions(properties: Property[], kind: OffPlanKind): PlanOptions {
+  const hit = properties.filter((p) => (p as any).offPlanType === kind);
+  if (!hit.length) return EMPTY_PLAN;
+  const uniqSort = (a: number[]) => Array.from(new Set(a.filter((x) => x > 0))).sort((x, y) => x - y);
+  const years = uniqSort(hit.map((p) => Number((p as any).installmentYears)));
+  const downPercents = uniqSort(hit.map((p) => Number((p as any).downPaymentPercentage)));
+  const deliveries = Array.from(new Set(
+    hit.map((p) => String((p as any).deliveryYear || '').trim()).filter(Boolean),
+  )).sort();
+  const prices = hit.map((p) => Number(p.price) || 0).filter((x) => x > 0);
+  return {
+    years,
+    downPercents,
+    minDownPercent: downPercents.length ? downPercents[0] : 0,
+    deliveries,
+    minPrice: prices.length ? Math.min(...prices) : 0,
+    maxPrice: prices.length ? Math.max(...prices) : 0,
+    count: hit.length,
+  };
+}
+
+/** أقل مقدم بالجنيه موجود فعلاً للنوع ده — المندوب ممنوع ينزل تحته */
+export function minDownAmount(opts: PlanOptions): number {
+  if (!opts.minPrice || !opts.minDownPercent) return 0;
+  return Math.round((opts.minPrice * opts.minDownPercent) / 100);
+}
+
 /* ---------- المطابقة ----------
    الشقة بتتحسب مطابقة لو: الحي من اللي طلبهم (أو مطلبش حي)،
    والمساحة والغرف في المدى، والسعر في الميزانية.

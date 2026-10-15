@@ -64,7 +64,7 @@ import { ViewingRequest } from '../types';
 import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb } from '../services/crmBoardService';
 import { subscribeAllUnitViewings } from '../services/portalService';
 import { thumbUrl } from '../services/mediaStorage';
-import ClientRequestsPanel from './sales/ClientRequestsPanel';
+import ClientRequestsPanel, { RequestForm } from './sales/ClientRequestsPanel';
 import { paymentOf, PAY_LABEL } from '../services/clientRequests';
 
 interface SalesCrmModalProps {
@@ -328,6 +328,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
      زيادة، والمندوب بيسيب مكانه وهو على التليفون. دلوقتي
      الرقم بيبان على الزرار والشقق بتتفتح مكانها. */
   const [openMatchLead, setOpenMatchLead] = useState<string>('');
+  /* فورم الطلب بيتفتح من أي مكان فيه كارت عميل — مش محتاج
+     تروح تبويب تاني وتدوّر على الاسم */
+  const [requestLead, setRequestLead] = useState<Lead | null>(null);
 
   /* اللي بيبان في شاشة المتابعات بس — مش الـ٢٣١ كلهم.
      الحساب على كل العملاء كان ١١٧ ملي ثانية على كمبيوتر سريع،
@@ -514,7 +517,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         setMatchingLeadId(newLead.id);
         setActiveTab('matching');
       } else {
-        setTimeout(() => setDiscoveryLead(newLead), 220);
+        /* الاكتشاف مابقاش بيفتح لوحده. الطلب بيتسجّل مرة واحدة
+           من زرار "سجّل طلبه"، والاكتشاف فضل متاح من الملف
+           لمين عايز يملاه بالتفصيل. */
+        setRequestLead(newLead);
       }
     }
     setNewLeadForm({
@@ -1481,6 +1487,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                           );
                         })()}
                         <button
+                          onClick={() => setRequestLead(lead)}
+                          className="px-3 py-1.5 bg-[#FBF1E4] text-[#A07A26] text-xs font-bold rounded-xl border border-[#E8D3A6] whitespace-nowrap shrink-0"
+                        >
+                          سجّل طلبه
+                        </button>
+                        <button
                           onClick={() => setSelectedLeadForDetails(lead)}
                           className="px-3 py-1.5 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] text-xs font-bold rounded-xl border border-[#ECE8DF] whitespace-nowrap shrink-0"
                         >
@@ -1982,6 +1994,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         />
       )}
 
+      {requestLead && (
+        <RequestForm
+          lead={requestLead}
+          agentName={agents.find((a) => a.id === requestLead.assignedAgentId)?.name || actorName}
+          properties={properties}
+          onClose={() => setRequestLead(null)}
+          onSaved={() => showToast('اتسجّل الطلب — أول شقة قريبة هتوصلك')}
+        />
+      )}
+
       {isAddLeadOpen && (
         <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div 
@@ -2155,7 +2177,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   onClick={() => setAfterAdd('discovery')}
                   className="px-5 py-2.5 bg-[#A07A26] hover:bg-[#8B681D] text-white font-bold rounded-xl shadow-xs cursor-pointer"
                 >
-                  احفظ وكمّل الاكتشاف
+                  احفظ وسجّل طلبه
                 </button>
               </div>
             </form>
