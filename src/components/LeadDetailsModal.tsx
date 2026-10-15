@@ -110,7 +110,11 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   const handleSaveVisitSchedule = async () => {
     if (!visitDate) { setVisitError('حدد ميعاد المعاينة الأول'); return; }
     setVisitSaving(true); setVisitError('');
-    const prop = properties.find((p) => p.code === lead.interestedPropertyCode);
+    /* نفس غلطة "فاضي = فاضي": من غير الشرط ده، معاينة لعميل مالوش
+       شقة كانت بتتربط بأول مستند في الشقق مالوش كود */
+    const prop = lead.interestedPropertyCode
+      ? properties.find((p) => p.code && p.code === lead.interestedPropertyCode)
+      : undefined;
 
     onUpdateLead({
       ...lead,
@@ -157,7 +161,12 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   };
 
   // Find linked property in inventory
-  const linkedProperty = properties.find((p) => p.code === lead.interestedPropertyCode);
+  /* لازم يكون فيه كود فعلاً. العميل اللي مالوش شقة مهتم بيها كان
+     كوده فاضي، وأي مستند في الشقق مالوش كود كان بيتطابق معاه
+     (فاضي = فاضي) — فيظهر بوكس "الوحدة المهتم بها" فاضي كله صفر. */
+  const linkedProperty = lead.interestedPropertyCode
+    ? properties.find((p) => p.code && p.code === lead.interestedPropertyCode)
+    : undefined;
   const cleanPhone = lead.phone.replace(/\D/g, '');
 
   return (
@@ -407,15 +416,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                   <Building size={15} className="text-[#A07A26]" />
                   <span>الوحدة المهتم بها العميل حالياً من المخزون:</span>
                 </div>
-                {onOpenAffiliateModal && (
-                  <button
-                    onClick={() => onOpenAffiliateModal(linkedProperty)}
-                    className="text-xs text-[#A07A26] hover:underline font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>تجهيز إعلان</span>
-                    <ExternalLink size={12} />
-                  </button>
-                )}
+
               </div>
 
               <div className="flex items-center gap-3 p-3 bg-[#FAF9F5] border border-[#ECE8DF] rounded-xl">

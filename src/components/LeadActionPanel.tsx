@@ -94,21 +94,6 @@ export const LeadActionPanel: React.FC<{
         <p className="font-bold text-[#141414]">نقل وتسجيل</p>
         {nextAt ? <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${nextAt < Date.now() ? 'bg-[#FBEDEA] text-[#C2412D]' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>الأكشن: {formatWhen(nextAt)} · {relTime(nextAt)}</span> : null}
       </div>
-      {/* التسجيل السريع — دوسة واحدة لكل مكالمة */}
-      <div className="space-y-1.5">
-        <p className="text-[11px] font-bold text-[#6B665C]">سجّل المكالمة بدوسة:</p>
-        <div className="grid grid-cols-3 gap-1.5">
-          {CALL_OUTCOMES.map((o) => (
-            <button
-              key={o.id} type="button" onClick={() => quickLog(o.id)}
-              className={`rounded-xl py-2.5 text-[11px] font-black border transition-transform active:scale-95 ${o.tone}`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <select value={stage} onChange={(e) => setStage(e.target.value as LeadStatus)} className="w-full rounded-xl bg-white border border-[#E4DFD4] p-3 text-sm font-bold">
         {stages.map((s) => <option key={s.id} value={s.id}>{s.id === lead.status ? `${s.label} (الحالية)` : `نقل إلى: ${s.label}`}</option>)}
       </select>

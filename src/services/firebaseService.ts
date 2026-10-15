@@ -359,7 +359,14 @@ export function subscribeToProperties(
       wait = 10000;
       const properties: Property[] = [];
       snapshot.forEach((docSnap) => {
-        properties.push(docSnap.data() as Property);
+        /* مستندات مش شقق: زرار فحص الصلاحيات القديم كتب مستند
+           اسمه _perm_check هنا عشان يختبر الكتابة، فظهر في
+           لوحة الإدارة كوحدة فاضية كلها صفر. أي مستند اسمه
+           بيبدأ بـ "_" أو مالوش كود ولا سعر مش شقة. */
+        if (docSnap.id.startsWith('_')) return;
+        const d = docSnap.data() as Property;
+        if (!d || (!d.code && !Number(d.price))) return;
+        properties.push(d);
       });
       onUpdate(properties);
     }, (error) => {
