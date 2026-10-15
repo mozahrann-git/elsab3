@@ -157,3 +157,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   outline: 2px solid #A07A26;
   outline-offset: 2px;
 }
+
+/* شريط التمرير عربي: الأقل على اليمين والأكبر على الشمال.
+   dir="rtl" على شريط التمرير مش مضمون على آيفون، فبنقلبه
+   بـ scaleX — بيشتغل على كل الأجهزة بنفس الشكل. */
+input[type="range"].range-rtl {
+  direction: ltr;
+  transform: scaleX(-1);
+}

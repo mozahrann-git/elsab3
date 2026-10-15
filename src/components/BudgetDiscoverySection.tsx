@@ -420,7 +420,7 @@ export const BudgetDiscoverySection: React.FC<BudgetDiscoverySectionProps> = ({
                     step={15}
                     value={downPaymentPercent}
                     onChange={(e) => setDownPaymentPercent(Number(e.target.value) as 35 | 50)}
-                    className="w-full accent-[#A07A26] cursor-pointer"
+                    className="range-rtl w-full accent-[#A07A26] cursor-pointer"
                   />
                   <div className="flex justify-between text-[10px] text-[#6B665C] font-bold mt-0.5">
                     <span className={downPaymentPercent === 35 ? 'text-[#A07A26] font-bold' : ''}>35% مقدم (أقساط 2-3 سنوات)</span>
@@ -499,7 +499,7 @@ export const BudgetDiscoverySection: React.FC<BudgetDiscoverySectionProps> = ({
                 step={100000}
                 value={budget}
                 onChange={handleSliderChange}
-                className="w-full accent-[#A07A26] cursor-pointer"
+                className="range-rtl w-full accent-[#A07A26] cursor-pointer"
               />
               <div className="flex justify-between text-[11px] text-[#6B665C] font-mono mt-1">
                 <span>1.5M ج.م</span>

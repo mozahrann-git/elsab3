@@ -116,7 +116,12 @@ export const BudgetRange: React.FC<{ min: number; max: number; onChange: (min: n
         <span className="text-[11px] font-normal text-[#8C877D]">الفرق {f(Math.max(0, max - min))}</span>
         <span>لحد {f(max)}</span>
       </div>
-      <div className="relative h-8">
+      {/* الشريط بيتقلب عشان يبقى عربي: الأقل على اليمين والأكبر
+          على الشمال. قبل كده الشريط كان شمال→يمين والأرقام تحته
+          يمين→شمال، فالكلام بيقول حاجة والشريط بيعمل العكس.
+          القلب بـ scaleX عشان يشتغل على كل الموبايلات — dir="rtl"
+          على شريط التمرير مش مضمون على آيفون. */}
+      <div className="relative h-8" style={{ transform: 'scaleX(-1)' }}>
         <div className="absolute top-2 inset-x-0 flex justify-between px-0.5">
           {Array.from({ length: 10 }, (_, i) => <span key={i} className="w-px h-2 bg-[#DCD6CA]" />)}
         </div>

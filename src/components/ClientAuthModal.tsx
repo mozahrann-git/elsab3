@@ -457,7 +457,7 @@ export const ClientAuthModal: React.FC<ClientAuthModalProps> = ({
                   step={100000}
                   value={budgetMax}
                   onChange={(e) => setBudgetMax(Number(e.target.value))}
-                  className="w-full accent-[#A07A26]"
+                  className="range-rtl w-full accent-[#A07A26]"
                 />
               </div>
 

@@ -231,7 +231,7 @@ const RequestForm: React.FC<{
                       type="range" min={floorDown} max={Math.max(floorDown + 25000, opts.maxDown * 2)}
                       step={25000} value={down}
                       onChange={(e) => setDown(Number(e.target.value))}
-                      className="w-full accent-[#A07A26]"
+                      className="range-rtl w-full accent-[#A07A26]"
                     />
                     <p className="text-[11px] font-bold text-[#A07A26] mt-1">
                       أقل مقدم في أنظمة السداد عندنا {floorDown.toLocaleString('en-US')} ج.م
@@ -288,10 +288,10 @@ const RequestForm: React.FC<{
                 <div className="grid grid-cols-2 gap-2">
                   <input type="range" min={500000} max={15000000} step={100000} value={bMin}
                     onChange={(e) => setBMin(Math.min(Number(e.target.value), bMax))}
-                    className="w-full accent-[#A07A26]" />
+                    className="range-rtl w-full accent-[#A07A26]" />
                   <input type="range" min={500000} max={15000000} step={100000} value={bMax}
                     onChange={(e) => setBMax(Math.max(Number(e.target.value), bMin))}
-                    className="w-full accent-[#A07A26]" />
+                    className="range-rtl w-full accent-[#A07A26]" />
                 </div>
               </div>
 
