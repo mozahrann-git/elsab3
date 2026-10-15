@@ -125,7 +125,7 @@ export const ClientShowcaseView: React.FC<ClientShowcaseViewProps> = ({
 
   const handleWhatsApp = () => {
     bumpPropertyClick(property.id, 'whatsapp').catch(() => {});
-    markVisit(property.id, { requested: true }).catch(() => {});
+    markVisit(property.id, { requested: true }, property.code).catch(() => {});
     logEvent('unit_whatsapp', {
       propertyId: property.id, code: property.code, value: property.price,
       ...(agent?.id ? { agentId: agent.id } : {}),

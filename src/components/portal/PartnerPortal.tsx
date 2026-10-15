@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Home, CalendarClock, MessageSquareText, UserRound, Plus, ExternalLink, Pause, Play, Image as ImageIcon, BadgeDollarSign, LogOut, KeyRound, Phone } from 'lucide-react';
 import { Property } from '../../types';
 import { StaffAccess, fetchPropertyPrivateOwner } from '../../services/firebaseService';
-import { UnitVisit, subscribeVisits, summarize } from '../../services/visitorService';
+import { UnitVisit, subscribeVisitsByCodes, summarize } from '../../services/visitorService';
 import { uploadFile } from '../../services/mediaStorage';
 import {
   UnitViewing, OwnerFeedback, ChangeRequest,
@@ -49,7 +49,6 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
   const [nag, setNag] = useState(false);
   const [myFb, setMyFb] = useState<BrokerFeedback[]>([]);
   const [visits, setVisits] = useState<UnitVisit[]>([]);
-  useEffect(() => subscribeVisits(setVisits), []);
   // نبضة كل دقيقة عشان العدّاد اللي على كارت المعاينة يفضل صح من غير ريفريش
   const [, tickMin] = useState(0);
   useEffect(() => { const t = setInterval(() => tickMin((x) => x + 1), 60000); return () => clearInterval(t); }, []);
@@ -79,6 +78,10 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
     const u4 = subscribeMySubmissions(setSubs);
     return () => { u1(); u2(); u3(); u4(); };
   }, [codes.join(','), access.brokerId, isBroker]);
+
+  /* زيارات وحداته هو بس — بالكود */
+  const mineCodes = mine.map((p) => p.code).filter(Boolean).sort().join(',');
+  useEffect(() => subscribeVisitsByCodes(mineCodes ? mineCodes.split(',') : [], setVisits), [mineCodes]);
 
   const pending = viewings.filter((v) => isBroker ? v.brokerStatus !== 'confirmed' && v.ownerStatus === 'pending' : v.ownerStatus === 'pending');
 

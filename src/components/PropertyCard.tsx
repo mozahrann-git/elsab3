@@ -101,13 +101,11 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   };
 
   const handleCardClick = () => {
-    onTrackClick(property.id, 'views');
     onSelect(property);
   };
 
   const handleVideoClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onTrackClick(property.id, 'views');
     if (onSelectVideo) {
       onSelectVideo(property);
     } else {

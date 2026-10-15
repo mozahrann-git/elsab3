@@ -1561,12 +1561,23 @@ export default function App() {
         if (type === 'views') {
           logVisit(prop.id, prop.code, { source: 'site' }).catch(() => {});
         } else if (type === 'whatsapp' || type === 'call') {
-          markVisit(prop.id, { requested: true }).catch(() => {});
+          markVisit(prop.id, { requested: true }, prop.code).catch(() => {});
         }
         return updated;
       })
     );
   };
+
+  /* المشاهدة بتتسجّل من مكان واحد: لما أي شقة تتفتح، من أي حتة
+     (الكارت، الخريطة، الأحياء، الإشعارات، الشقق المشابهة...).
+     كانت بتتسجّل من الكارت بس، فكل فتحة من مكان تاني كانت بتضيع. */
+  const selectedPropId = selectedProperty?.id;
+  useEffect(() => {
+    /* الموظفين والمالك والبروكر مابيتحسبوش زوار — المالك اللي بيفتح
+       شقته عشر مرات كان هيشوف عشر زيارات من نفسه */
+    if (selectedPropId && !isAdminLoggedIn && !staffAccess) handleTrackClick(selectedPropId, 'views');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPropId]);
 
   const toggleFavorite = (id: string) => {
     setFavoriteIds((prev) => {

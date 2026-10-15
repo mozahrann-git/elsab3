@@ -30,12 +30,39 @@ export async function logVisit(propertyId: string, code: string, extra: Partial<
   const id = `${propertyId}_${v}_${dayOf()}`;
   await setDoc(doc(db, 'unit_visits', id), cleanFirestoreData({
     id, propertyId, code, visitor: v, at: Date.now(), day: dayOf(), ...extra,
-  }), { merge: true }).catch(() => {});
+  }), { merge: true }).catch((e) => console.warn('[visits] الزيارة ماتسجّلتش', e?.code || e));
   return id;
 }
-export async function markVisit(propertyId: string, data: Partial<UnitVisit>) {
-  const id = `${propertyId}_${visitorId()}_${dayOf()}`;
-  await setDoc(doc(db, 'unit_visits', id), cleanFirestoreData(data), { merge: true }).catch(() => {});
+/* طلب تواصل. كان بيكتب {requested:true} بس — فلو الزائر داس واتساب
+   من الكارت من غير ما يفتح الشقة، المستند بيتعمل من غير كود ولا
+   زائر، والبوابة مابتشوفوش خالص. دلوقتي بيكتب بيانات الزيارة كاملة. */
+export async function markVisit(propertyId: string, data: Partial<UnitVisit>, code?: string) {
+  const v = visitorId();
+  const id = `${propertyId}_${v}_${dayOf()}`;
+  await setDoc(doc(db, 'unit_visits', id), cleanFirestoreData({
+    id, propertyId, visitor: v, day: dayOf(), at: Date.now(),
+    ...(code ? { code } : {}), ...data,
+  }), { merge: true }).catch((e) => console.warn('[visits] طلب التواصل ماتسجّلش', e?.code || e));
+}
+
+/* زيارات وحدات معيّنة بس — للمالك والبروكر.
+   كانت البوابة بتجيب آخر ٤٠٠ زيارة في الموقع كله وتدوّر فيهم على
+   وحداته. الموقع فيه مئات الشقق، فالـ٤٠٠ بيخلصوا في يوم، ووحدة
+   زيارتها قليلة بتطلع صفر حتى لو اتشافت. دلوقتي بنسأل على أكواده
+   هو بالاسم. */
+export function subscribeVisitsByCodes(codes: string[], cb: (l: UnitVisit[]) => void) {
+  const list = Array.from(new Set(codes.filter(Boolean)));
+  if (!list.length) { cb([]); return () => {}; }
+  const chunks: string[][] = [];
+  for (let i = 0; i < list.length; i += 30) chunks.push(list.slice(i, i + 30));
+  const parts: UnitVisit[][] = chunks.map(() => []);
+  const emit = () => cb(parts.flat().sort((a, b) => (b.at || 0) - (a.at || 0)));
+  const unsubs = chunks.map((c, i) => onSnapshot(
+    query(collection(db, 'unit_visits'), where('code', 'in', c)),
+    (snap) => { const l: UnitVisit[] = []; snap.forEach((d) => l.push(d.data() as UnitVisit)); parts[i] = l; emit(); },
+    (e) => { console.warn('[visits] قراءة الزيارات اترفضت', e?.code || e); parts[i] = []; emit(); },
+  ));
+  return () => unsubs.forEach((u) => u());
 }
 
 /* المجموعة دي بتكبر كل يوم (مستند لكل زائر لكل وحدة يومياً). كانت
