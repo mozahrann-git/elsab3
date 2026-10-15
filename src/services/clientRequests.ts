@@ -137,6 +137,13 @@ export function matchRequest(
   /* شروطه الصريحة الأول — دي بتشيل خالص مش بتقلّل النقط */
   if (blockedBy(r, p)) return null;
 
+  /* عميل التقسيط مايتعرضلوش شقة ريسيل — الريسيل كاش، المالك
+     مش بيقسّط. كان بيطلع له "فيه شقة تناسبه" وهي ريسيل. */
+  if (r.kind === 'installment') {
+    const offPlan = (p as any).category === 'off_plan' || !!(p as any).offPlanType;
+    if (!offPlan) return null;
+  }
+
   const reasons: string[] = [];
   let score = 0;
 
@@ -421,12 +428,42 @@ export function leadWithRequest(lead: Lead, r: ClientRequest): Lead {
     by: r.agentName,
   };
 
+  /* الميزانية — فيه قاعدة أمان: السيلز مايغيّرش ميزانية معتمدة.
+     لازم يبعت طلب تعديل والإدارة توافق. الفورم كان بيغيّرها
+     على طول، فالقاعدة كانت بترفض الحفظ كله — والطلب كله يضيع
+     ويطلع "المزامنة واقفة · التعديل ماتحفظش".
+
+     دلوقتي زي ما مكالمة الاكتشاف كانت بتعمل:
+     - مفيش ميزانية قبل كده → بتتحط على طول
+     - فيه ميزانية واتغيّرت → القديمة بتفضل، والجديدة بتروح
+       طلب تعديل للإدارة، والطلب نفسه بيتحفظ عادي */
+  const wantMin = isInst ? 0 : (Number(r.budgetMin) || 0);
+  const wantMax = isInst ? instMax : (Number(r.budgetMax) || 0);
+  const hadBudget = Number(lead.budgetMax) > 0;
+  const changed = hadBudget && wantMax > 0
+    && (wantMin !== (Number(lead.budgetMin) || 0) || wantMax !== (Number(lead.budgetMax) || 0));
+
+  const budgetPart = !wantMax
+    ? {}
+    : !hadBudget
+      ? { budgetMin: wantMin, budgetMax: wantMax }
+      : changed
+        ? {
+            budgetChangeRequest: {
+              by: r.agentName, at: Date.now(),
+              fromMin: Number(lead.budgetMin) || 0, fromMax: Number(lead.budgetMax) || 0,
+              toMin: wantMin, toMax: wantMax,
+              note: isInst ? 'من طلب العميل (تقسيط)' : 'من طلب العميل',
+              status: 'pending' as const,
+            },
+          }
+        : {};
+
   return {
     ...lead,
     clientRequest: r,
     discovery,
-    budgetMin: isInst ? 0 : (r.budgetMin ?? lead.budgetMin),
-    budgetMax: isInst ? (instMax || lead.budgetMax) : (r.budgetMax ?? lead.budgetMax),
+    ...budgetPart,
     preferredBedrooms: r.bedrooms || lead.preferredBedrooms,
     preferredNeighborhood: r.neighborhoods?.[0] || lead.preferredNeighborhood,
   } as Lead;

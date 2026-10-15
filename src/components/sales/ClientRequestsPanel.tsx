@@ -70,11 +70,30 @@ const RequestForm: React.FC<{
     setDown(floorDown);
   }, [planKind, opts.years.length, floorDown]);
 
-  const monthly = useMemo(() => {
-    if (!years || !opts.minPrice) return 0;
-    const rest = Math.max(0, opts.minPrice - down);
-    return Math.round(rest / (years * 12));
-  }, [years, down, opts.minPrice]);
+  /* كام مشروع المقدم ده يكفيه، بنفس عدد السنين.
+     كان فيه "يعني قسط حوالي كذا" — بس الرقم ده كان متحسب من
+     أرخص مشروع في الفئة كلها، مش من حاجة العميل اختارها،
+     فكان رقم مالوش معنى. ده بقى عدد حقيقي من أنظمة السداد. */
+  const covered = useMemo(() => {
+    const hits: { name: string; monthly: number }[] = [];
+    projects.filter((p) => p.kind === planKind).forEach((p) => {
+      const start = Number(p.startingPrice || p.cashPrice || 0);
+      let best = 0;
+      (p.plans || []).forEach((pl) => {
+        if (years && Number(pl.years) !== years) return;
+        const pct = Number(pl.downPaymentPercent) || 0;
+        const need = Number(pl.downPaymentAmount) || (pct && start ? Math.round((start * pct) / 100) : 0);
+        if (!need || need > down) return;
+        const m = Number(pl.monthly)
+          || (start && pl.years ? Math.round((start - need) / (Number(pl.years) * 12)) : 0);
+        if (m && (!best || m < best)) best = m;
+      });
+      if (best) hits.push({ name: p.name, monthly: best });
+    });
+    return hits.sort((a, b) => a.monthly - b.monthly);
+  }, [projects, planKind, years, down]);
+  /* القسط اللي بيتسجّل = أقل قسط في المشاريع اللي المقدم يغطيها */
+  const monthly = covered.length ? covered[0].monthly : 0;
 
   const draft = useMemo(() => {
     const base = requestFromLead(lead, agentName, kind, { note: note.trim() });
@@ -207,11 +226,25 @@ const RequestForm: React.FC<{
                       أقل مقدم في أنظمة السداد عندنا {floorDown.toLocaleString('en-US')} ج.م
                       {opts.minDownPercent ? ` (${opts.minDownPercent}٪)` : ''} — مفيش أقل من كده
                     </p>
-                    {monthly > 0 && (
-                      <p className="text-[11px] font-bold text-stone-500 mt-0.5">
-                        يعني قسط حوالي {monthly.toLocaleString('en-US')} ج.م في الشهر
-                      </p>
-                    )}
+                    <div className={`mt-2 rounded-xl p-2.5 ${covered.length ? 'bg-[#EEF5F0]' : 'bg-[#FBEDEA]'}`}>
+                      {covered.length ? (
+                        <>
+                          <p className="text-[11px] font-black text-[#1E7A45]">
+                            المقدم ده يكفي {covered.length} من {opts.count} مشروع
+                            {years ? ` على ${years} سنين` : ''}
+                          </p>
+                          {covered.slice(0, 3).map((c) => (
+                            <p key={c.name} className="text-[11px] font-bold text-stone-600">
+                              • {c.name} — قسط {c.monthly.toLocaleString('en-US')} في الشهر
+                            </p>
+                          ))}
+                        </>
+                      ) : (
+                        <p className="text-[11px] font-black text-[#C2412D]">
+                          مفيش مشروع المقدم ده يكفيه{years ? ` على ${years} سنين` : ''} — زوّد المقدم أو غيّر السنين
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {opts.deliveries.length > 0 && (
