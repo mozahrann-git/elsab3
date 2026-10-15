@@ -335,7 +335,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
      الزرار كان بينقل لتبويب المطابقة وبس — يعني مفيش معلومة
      زيادة، والمندوب بيسيب مكانه وهو على التليفون. دلوقتي
      الرقم بيبان على الزرار والشقق بتتفتح مكانها. */
-  const [openMatchLead, setOpenMatchLead] = useState<string>('');
   /* فورم الطلب بيتفتح من أي مكان فيه كارت عميل — مش محتاج
      تروح تبويب تاني وتدوّر على الاسم */
   const [requestLead, setRequestLead] = useState<Lead | null>(null);
@@ -356,7 +355,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       try {
         const b = readBrief(l);
         const res = matchDetailed(l, properties, {
-          tolerance: 0.05, strictDistrict: true, payMode: payModeOf(b),
+          /* نفس إعدادات صفحة المطابقة بالظبط (الميزانية بالظبط + نفس الحي)
+             — كان ±٥٪ هنا، فالرقم هنا ٣٨ وهناك ٢٩ */
+          tolerance: 0, strictDistrict: true, payMode: payModeOf(b),
         });
         m.set(l.id, res.filter((r) => r.inDistrict).map((r) => r.property));
       } catch { m.set(l.id, []); }
@@ -1405,36 +1406,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                           <span>اتصال</span>
                         </a>
 
-                        <button
-                          onClick={() => {
-                            /* على طول للمطابقة. الطلب بيتسجّل من هناك
-                               لما يحتاج — مش بيتفرض عليه هنا. */
-                            setMatchingLeadId(lead.id);
-                            setActiveTab('matching');
-                          }}
-                          className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl whitespace-nowrap shrink-0"
-                        >
-                          المطابقة
-                        </button>
+                        {/* زرار واحد: المطابقة ومعاه العدد — نفس الرقم اللي في صفحة المطابقة */}
                         {(() => {
-                          const hits = followUpMatches.get(lead.id) || [];
-                          if (hits.length === 0) {
-                            return (
-                              <button
-                                onClick={() => setActiveTab('requests')}
-                                title="مفيش شقة مناسبة — سجّل طلبه عشان أول واحدة تتضاف توصلك"
-                                className="px-3 py-1.5 bg-[#FBF1E4] text-[#A07A26] text-xs font-bold rounded-xl border border-[#E8D3A6] whitespace-nowrap shrink-0"
-                              >
-                                مفيش مناسب — سجّل طلبه
-                              </button>
-                            );
-                          }
+                          const n = (followUpMatches.get(lead.id) || []).length;
                           return (
                             <button
-                              onClick={() => setOpenMatchLead(openMatchLead === lead.id ? '' : lead.id)}
-                              className="px-3 py-1.5 bg-[#E6F7ED] text-[#0E7A5A] text-xs font-bold rounded-xl border border-[#B3E8C8] whitespace-nowrap shrink-0"
+                              onClick={() => { setMatchingLeadId(lead.id); setActiveTab('matching'); }}
+                              className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl whitespace-nowrap shrink-0"
                             >
-                              {hits.length} شقة مناسبة
+                              المطابقة · {n ? `${n} شقة` : 'مفيش مناسب'}
                             </button>
                           );
                         })()}
@@ -1461,31 +1441,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         )}
                       </div>
 
-                      {/* الشقق بتتفتح هنا مكانها — المندوب على التليفون
-                          وميقدرش يسيب القايمة ويروح تبويب تاني */}
-                      {openMatchLead === lead.id && (
-                        <div className="mt-2 pt-2 border-t border-[#ECE8DF] space-y-1.5">
-                          {(followUpMatches.get(lead.id) || []).slice(0, 4).map((p) => (
-                            <div key={p.id} className="flex items-center gap-2 bg-[#F6F4EF] rounded-xl p-2">
-                              <span className="text-[11px] font-mono font-black bg-white px-2 py-0.5 rounded-full shrink-0">
-                                {p.code}
-                              </span>
-                              <span className="text-[11px] font-bold text-[#141414] truncate flex-1">
-                                {p.neighborhood} · {p.area} م² · {p.bedrooms} غرف
-                              </span>
-                              <span className="text-[11px] font-black text-[#0E7A5A] shrink-0 font-mono">
-                                {(p.price || 0).toLocaleString('en-US')}
-                              </span>
-                            </div>
-                          ))}
-                          <button
-                            onClick={() => { setMatchingLeadId(lead.id); setActiveTab('matching'); }}
-                            className="w-full py-1.5 text-[11px] font-bold text-[#0E7A5A]"
-                          >
-                            افتح المطابقة وجهّز العرض ←
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
