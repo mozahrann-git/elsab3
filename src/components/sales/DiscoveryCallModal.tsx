@@ -42,6 +42,30 @@ export const DiscoveryCallModal: React.FC<Props> = ({ isOpen, lead, properties, 
     [a.downCash, a.monthly, hint],
   );
 
+  /* المقدم والقسط مش أسئلة لوحدها في القايمة — دول بيفتحوا
+     جوه سؤال الدفع لما يختار تقسيط. كانوا ظاهرين دايماً حتى
+     لعميل الكاش، فالفورم كان ١١ سؤال ونصهم مش في محله. */
+  const PLAN_IDS = ['downCash', 'monthly'];
+  /* وسنين التقسيط كانت بتتسأل لعميل الكاش كمان — سؤال
+     مالوش معنى بالنسباله وبيطوّل المكالمة. */
+  const INSTALLMENT_ONLY = ['years'];
+  const payAns = String((a as any).payment || '');
+  const wantsInstallment = payAns.includes('تقسيط') || payAns.includes('الاتنين');
+  const visibleQuestions = useMemo(
+    () => forms.discovery.filter((q) => {
+      if (PLAN_IDS.includes(q.id)) return false;
+      if (INSTALLMENT_ONLY.includes(q.id) && !wantsInstallment) return false;
+      return true;
+    }),
+    [forms.discovery, wantsInstallment],
+  );
+
+  /* العدّاد على الأسئلة الظاهرة بس — كان بيقول "٥ من ١١"
+     وفيهم سؤالين مش ظاهرين أصلاً */
+  const answeredVisible = visibleQuestions.filter((q) =>
+    q.type === 'range' ? true : Array.isArray(a[q.id]) ? a[q.id].length > 0 : !!a[q.id],
+  ).length;
+
   if (!isOpen) return null;
 
   const pick = (q: DiscoveryQuestion, v: string) => {
@@ -97,14 +121,14 @@ export const DiscoveryCallModal: React.FC<Props> = ({ isOpen, lead, properties, 
             <p className="text-xs text-[#CFCBC2]">{lead.name} · {lead.phone}</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#D9B864] text-[#141414]">{answered} من {forms.discovery.length}</span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#D9B864] text-[#141414]">{answeredVisible} من {visibleQuestions.length}</span>
             <button onClick={onClose} aria-label="إغلاق" className="p-2 rounded-xl hover:bg-white/10"><X size={18} /></button>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3">
           <p className="text-sm text-[#6B665C] leading-7">دوس الإجابات وانت بتتكلم معاه. ملف العميل والمطابقة والعرض بيتبنوا من هنا.</p>
-          {forms.discovery.map((q, i) => {
+          {visibleQuestions.map((q, i) => {
             const opts = q.id === 'districts' ? (HADABA_WOSTA_NEIGHBORHOODS as unknown as string[]) : (q.options || []);
             const val = a[q.id];
             const done = q.type === 'range' ? true : Array.isArray(val) ? val.length > 0 : !!val;
@@ -129,7 +153,8 @@ export const DiscoveryCallModal: React.FC<Props> = ({ isOpen, lead, properties, 
                 {/* لما يختار تقسيط، المقدم والقسط بيفتحوا هنا على طول
                     بأرقام تقريبية من شقق التقسيط الموجودة فعلاً —
                     بدل ما السيلز يخمّن أو يسأل بعدين */}
-                {q.id === 'payment' && String(val || '').includes('تقسيط') && (
+                {q.id === 'payment'
+                  && (String(val || '').includes('تقسيط') || String(val || '').includes('الاتنين')) && (
                   <div className="space-y-2 pt-2 border-t border-[#F0ECE4]">
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
