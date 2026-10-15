@@ -90,7 +90,10 @@ function finishingOf(lead: Lead, d: any): ClientBrief['finishing'] {
   const raw = S(d?.finishing);
   if (raw === 'متشطبة') return 'finished';
   if (raw === 'نص تشطيب') return 'semi_finished';
-  if (raw === 'الاتنين') return 'all';
+  if (raw === 'الاتنين' || raw === 'مش فارق') return 'all';
+  /* طلب متسجّل → اللي فيه هو الكلام. مانرجعش لقيم وقت الإضافة
+     (كانت بتتحط افتراضي "متشطبة" من غير ما حد يقولها) */
+  if (typeof d?.answeredAt === 'number') return 'all';
   return lead.preferredFinishing || 'all';
 }
 
@@ -100,11 +103,14 @@ export function readBrief(lead: Lead): ClientBrief {
 
   // الأحياء: اللي اتقالوا في المكالمة الأول (ممكن أكتر من واحد)، وإلا الحي اللي اتكتب وقت الإضافة
   const fromCall: string[] = Array.isArray(d.districts) ? d.districts.filter(Boolean) : [];
-  const districts = fromCall.length
+  const hasRequest = typeof d.answeredAt === 'number';
+  /* لو الطلب متسجّل و"أي حي" → أي حي فعلاً. كان بيرجع للحي
+     اللي اتحط افتراضي وقت الإضافة ("الحي الثاني") */
+  const districts = fromCall.length || hasRequest
     ? fromCall
     : (S(lead.preferredNeighborhood) ? [S(lead.preferredNeighborhood)] : []);
 
-  const roomsRaw = d.rooms ?? lead.preferredBedrooms;
+  const roomsRaw = hasRequest ? d.rooms : (d.rooms ?? lead.preferredBedrooms);
   const bedrooms = Number(String(roomsRaw ?? '').replace('+', '')) || 0;
 
   return {

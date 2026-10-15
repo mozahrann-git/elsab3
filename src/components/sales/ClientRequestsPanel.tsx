@@ -45,7 +45,7 @@ const RequestForm: React.FC<{
   const [err, setErr] = useState('');
 
   /* مشترك */
-  const [beds, setBeds] = useState<number>(prev?.bedrooms || lead.preferredBedrooms || 3);
+  const [beds, setBeds] = useState<number>(prev?.bedrooms || lead.preferredBedrooms || 0);
   const [note, setNote] = useState(prev?.note || '');
   const [reasons, setReasons] = useState<string[]>(prev?.rejectionReasons || []);
 
@@ -86,26 +86,31 @@ const RequestForm: React.FC<{
      كان فيه "يعني قسط حوالي كذا" — بس الرقم ده كان متحسب من
      أرخص مشروع في الفئة كلها، مش من حاجة العميل اختارها،
      فكان رقم مالوش معنى. ده بقى عدد حقيقي من أنظمة السداد. */
+  /* القسط اللي العميل يقدر عليه — العميل هو اللي بيقوله، اختياري.
+     كان بيتسجّل لوحده "أقل قسط في المشاريع" فكان رقم محدش قاله. */
+  const [monthly, setMonthly] = useState<number>(prev?.monthly || 0);
+
+  /* المشاريع اللي المقدم ده يكفيها بنفس عدد السنين. القسط بيتعرض
+     بس لو متسجّل فعلاً في نظام السداد — مفيش حساب تقديري. */
   const covered = useMemo(() => {
     const hits: { name: string; monthly: number }[] = [];
     projects.filter((p) => p.kind === planKind).forEach((p) => {
       const start = Number(p.startingPrice || p.cashPrice || 0);
-      let best = 0;
+      let ok = false; let best = 0;
       (p.plans || []).forEach((pl) => {
         if (years && Number(pl.years) !== years) return;
         const pct = Number(pl.downPaymentPercent) || 0;
         const need = Number(pl.downPaymentAmount) || (pct && start ? Math.round((start * pct) / 100) : 0);
         if (!need || need > down) return;
-        const m = Number(pl.monthly)
-          || (start && pl.years ? Math.round((start - need) / (Number(pl.years) * 12)) : 0);
+        const m = Number(pl.monthly) || 0;
+        if (monthly && m && m > monthly) return;
+        ok = true;
         if (m && (!best || m < best)) best = m;
       });
-      if (best) hits.push({ name: p.name, monthly: best });
+      if (ok) hits.push({ name: p.name, monthly: best });
     });
-    return hits.sort((a, b) => a.monthly - b.monthly);
-  }, [projects, planKind, years, down]);
-  /* القسط اللي بيتسجّل = أقل قسط في المشاريع اللي المقدم يغطيها */
-  const monthly = covered.length ? covered[0].monthly : 0;
+    return hits.sort((a, b) => (a.monthly || 9e15) - (b.monthly || 9e15));
+  }, [projects, planKind, years, down, monthly]);
 
   const draft = useMemo(() => {
     const base = requestFromLead(lead, agentName, kind, { note: note.trim() });
@@ -237,6 +242,19 @@ const RequestForm: React.FC<{
                       أقل مقدم في أنظمة السداد عندنا {floorDown.toLocaleString('en-US')} ج.م
                       {opts.minDownPercent ? ` (${opts.minDownPercent}٪)` : ''} — مفيش أقل من كده
                     </p>
+                    <div className="mt-3">
+                      <p className="text-xs font-bold text-stone-500 mb-1.5">
+                        القسط الشهري اللي يقدر عليه
+                        <span className="text-stone-400 font-medium"> — اختياري، لو قاله</span>
+                      </p>
+                      <input
+                        type="number" inputMode="numeric" min={0} step={500}
+                        value={monthly || ''}
+                        onChange={(e) => setMonthly(Math.max(0, Number(e.target.value) || 0))}
+                        placeholder="مثلاً 15000"
+                        className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-sm font-mono"
+                      />
+                    </div>
                     <div className={`mt-2 rounded-xl p-2.5 ${covered.length ? 'bg-[#EEF5F0]' : 'bg-[#FBEDEA]'}`}>
                       {covered.length ? (
                         <>
@@ -246,13 +264,13 @@ const RequestForm: React.FC<{
                           </p>
                           {covered.slice(0, 3).map((c) => (
                             <p key={c.name} className="text-[11px] font-bold text-stone-600">
-                              • {c.name} — قسط {c.monthly.toLocaleString('en-US')} في الشهر
+                              • {c.name} — {c.monthly ? `قسط ${c.monthly.toLocaleString('en-US')} في الشهر` : 'القسط مش متسجّل في المشروع'}
                             </p>
                           ))}
                         </>
                       ) : (
                         <p className="text-[11px] font-black text-[#C2412D]">
-                          مفيش مشروع المقدم ده يكفيه{years ? ` على ${years} سنين` : ''} — زوّد المقدم أو غيّر السنين
+                          مفيش مشروع المقدم ده يكفيه{years ? ` على ${years} سنين` : ''}{monthly ? ' بالقسط ده' : ''} — زوّد المقدم أو غيّر السنين
                         </p>
                       )}
                     </div>

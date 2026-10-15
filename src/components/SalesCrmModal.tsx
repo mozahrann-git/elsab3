@@ -174,12 +174,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     name: '',
     phone: '',
     source: 'facebook_group' as Lead['source'],
-    preferredNeighborhood: 'الحي الثاني',
+    /* فاضيين عن قصد. كانوا "الحي الثاني · ٢.٥–٣.٥ مليون · ٣ غرف ·
+       متشطبة" وبيتحفظوا حتى لو السيلز ماشافهمش — فكل عميل جديد
+       كان بيطلع ليه طلب ماحدش قاله، والـ٣.٥ مليون بتبقى ميزانية
+       معتمدة تحتاج موافقة الإدارة عشان تتغيّر. */
+    preferredNeighborhood: '',
     districts: [] as string[],
-    budgetMin: 2500000,
-    budgetMax: 3500000,
-    preferredBedrooms: 3,
-    preferredFinishing: 'finished' as 'finished' | 'semi_finished' | 'all',
+    budgetMin: 0,
+    budgetMax: 0,
+    preferredBedrooms: 0,
+    preferredFinishing: 'all' as 'finished' | 'semi_finished' | 'all',
     interestedPropertyCode: '',
     notes: '',
     followUpScheduledAt: 'اليوم بعد ساعتين',
@@ -190,10 +194,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     leadKind: 'personal' as 'personal' | 'fresh' | 'old_campaign',
   };
 
-  const [newLeadForm, setNewLeadForm] = useState(() => loadDraft('new_lead', EMPTY_LEAD_FORM));
+  const [newLeadForm, setNewLeadForm] = useState(() => {
+    /* من المسودة القديمة بناخد الاسم والرقم وبس — المسودات القديمة
+       كان فيها الحي والميزانية المخبّيين */
+    const d = loadDraft('new_lead', EMPTY_LEAD_FORM);
+    return { ...EMPTY_LEAD_FORM, name: d.name || '', phone: d.phone || '', source: d.source || EMPTY_LEAD_FORM.source, leadKind: d.leadKind ?? EMPTY_LEAD_FORM.leadKind };
+  });
   /* الفورم بقى اسم ورقم وبس. الباقي بيتسأل في مكالمة
      الاكتشاف اللي بتفتح بعد الحفظ على طول. */
-  const [showExtra, setShowExtra] = useState(false);
 
   useEffect(() => {
     const hasAnything = newLeadForm.name.trim() || newLeadForm.phone.trim() || newLeadForm.notes.trim();
@@ -428,7 +436,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   /* بعد الحفظ رايح فين: مكالمة الاكتشاف ولا المطابقة على طول.
      لازم يفضل فوق الـ return اللي تحت — أي hook تحته بيكسر الصفحة. */
-  const [afterAdd, setAfterAdd] = useState<'discovery' | 'matching'>('discovery');
 
   if (!isOpen) return null;
 
@@ -474,19 +481,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       phone: newLeadForm.phone.trim(),
       status: 'new',
       source: newLeadForm.source,
-      preferredNeighborhood: newLeadForm.districts?.[0] || newLeadForm.preferredNeighborhood,
-      /* اللي السيلز كتبه هنا بيتسجّل كأول جزء من مكالمة الاكتشاف،
-         فالمطابقة بتشتغل على طول والمكالمة بتفتح وهي نصّها متملّي. */
-      discovery: {
-        districts: newLeadForm.districts?.length ? newLeadForm.districts : (newLeadForm.preferredNeighborhood ? [newLeadForm.preferredNeighborhood] : []),
-        rooms: String(newLeadForm.preferredBedrooms || ''),
-        finishing: newLeadForm.preferredFinishing === 'finished' ? 'متشطبة' : newLeadForm.preferredFinishing === 'semi_finished' ? 'نص تشطيب' : '',
-        by: actorName,
-      },
-      budgetMin: Number(newLeadForm.budgetMin) || 0,
-      budgetMax: Number(newLeadForm.budgetMax) || 0,
-      preferredBedrooms: Number(newLeadForm.preferredBedrooms) || 3,
-      preferredFinishing: newLeadForm.preferredFinishing,
       interestedPropertyCode: newLeadForm.interestedPropertyCode.trim() || undefined,
       notes: newLeadForm.notes.trim() ? [newLeadForm.notes.trim()] : ['تم إضافة العميل للمتابعة'],
       assignedAgentId: assignedAgent.id,
@@ -513,30 +507,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     // مكالمة الاكتشاف بتفتح على طول عشان الطلب يبقى كامل من أول لحظة.
     /* الربط: العميل الجديد بيروح على طول للخطوة اللي بعده.
        عميل الكامبين بييجي بالجملة فبيتضاف وبس. */
-    if (newLead.source !== 'campaign') {
-      if (afterAdd === 'matching') {
-        setMatchingLeadId(newLead.id);
-        setActiveTab('matching');
-      }
-      /* العميل الجديد بينزل في "جديد" وبس. مفيش فورم بيتفتح
-         في وشه — الطلب بيتسجّل من المطابقة لما يحتاج. */
-    }
-    setNewLeadForm({
-      name: '',
-      phone: '',
-      source: 'facebook_group',
-      preferredNeighborhood: 'الحي الثاني',
-      districts: [] as string[],
-      budgetMin: 2500000,
-      budgetMax: 3500000,
-      preferredBedrooms: 3,
-      preferredFinishing: 'finished',
-      interestedPropertyCode: '',
-      notes: '',
-      followUpScheduledAt: 'اليوم بعد ساعتين',
-      followUpUrgency: 'urgent',
-      assignedAgentId: '',
-    });
+    /* العميل الجديد بينزل في "جديد" وبس — مفيش فورم ولا قفزة
+       للمطابقة. الطلب بيتسجّل من المطابقة لما يحتاج. */
+    setNewLeadForm(EMPTY_LEAD_FORM);
   };
 
 
@@ -2039,81 +2012,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 />
               </div>
 
-              {/* التفاصيل دي بتتسأل في مكالمة الاكتشاف اللي بتفتح
-                  بعد الحفظ على طول. مكانتش لازم هنا — الفورم كان
-                  طويل والسيلز والعميل على التليفون. */}
-              <button
-                type="button" onClick={() => setShowExtra((v) => !v)}
-                className="w-full text-[11px] font-bold text-[#A07A26] py-1.5"
-              >
-                {showExtra ? 'اخفي التفاصيل الزيادة' : '+ تفاصيل زيادة (اختياري)'}
-              </button>
-
-              {showExtra && (<>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="text-[#141414] block mb-1 font-bold">الحي المطلوب:</label>
-                  {/* أكتر من حي — نفس اللي مكالمة الاكتشاف والفلاتر بيقبلوه */}
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setNewLeadForm({ ...newLeadForm, districts: [] })}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${!newLeadForm.districts?.length ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}
-                    >أي حي</button>
-                    {HADABA_WOSTA_NEIGHBORHOODS.map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => setNewLeadForm({ ...newLeadForm, districts: toggleValue(newLeadForm.districts, n) })}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${newLeadForm.districts?.includes(n) ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}
-                      >{n}</button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[#141414] block mb-1 font-bold">عدد الغرف:</label>
-                  <select
-                    value={newLeadForm.preferredBedrooms}
-                    onChange={(e) => setNewLeadForm({ ...newLeadForm, preferredBedrooms: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
-                  >
-                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} {n > 2 ? 'غرف' : n === 2 ? 'أوضتين' : 'أوضة'}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[#141414] block mb-1 font-bold">كود الشقة المهتم بها:</label>
-                  <select
-                    value={newLeadForm.interestedPropertyCode}
-                    onChange={(e) => setNewLeadForm({ ...newLeadForm, interestedPropertyCode: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
-                  >
-                    <option value="">مفيش شقة معيّنة</option>
-                    {properties.map((p) => <option key={p.id} value={p.code}>{p.code} · {p.neighborhood} · {p.area}م²</option>)}
-                  </select>
-                </div>
-
-                <div className="col-span-2 space-y-3">
-                  <BudgetRange min={newLeadForm.budgetMin} max={newLeadForm.budgetMax} onChange={(mn, mx) => setNewLeadForm({ ...newLeadForm, budgetMin: mn, budgetMax: mx })} />
-                  <WhenPicker value={newLeadForm.nextAt} onChange={(v) => setNewLeadForm({ ...newLeadForm, nextAt: v })} label="أول متابعة" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[#141414] block mb-1 font-bold">ملاحظات العميل:</label>
-                <textarea
-                  rows={2}
-                  value={newLeadForm.notes}
-                  onChange={(e) => setNewLeadForm({ ...newLeadForm, notes: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-[#141414] focus:outline-none focus:border-[#A07A26]"
-                  placeholder="تفاصيل طلب العميل وموعد الاتصال..."
-                />
-              </div>
-              </>)}
-
               <div className="pt-3 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -2124,17 +2022,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  onClick={() => setAfterAdd('matching')}
-                  className="px-4 py-2.5 bg-[#E6F7ED] text-[#0E7A5A] border border-[#B3E8C8] font-bold rounded-xl cursor-pointer"
-                >
-                  احفظ وشوف الشقق
-                </button>
-                <button
-                  type="submit"
-                  onClick={() => setAfterAdd('discovery')}
                   className="px-5 py-2.5 bg-[#A07A26] hover:bg-[#8B681D] text-white font-bold rounded-xl shadow-xs cursor-pointer"
                 >
-                  احفظ وسجّل طلبه
+                  احفظ
                 </button>
               </div>
             </form>

@@ -50,7 +50,11 @@ export const ProjectMatchPanel: React.FC<Props> = ({ lead }) => {
         </p>
         {!noNumbers && (
           <p className="text-[11px] text-[#D9B864] font-bold">
-            مقدم لحد {f(b.downCash)} · قسط لحد {f(b.monthly)} شهرياً
+            {[
+              b.downCash ? `مقدم لحد ${f(b.downCash)}` : '',
+              b.monthly ? `قسط لحد ${f(b.monthly)} شهرياً` : '',
+              b.districts.length ? b.districts.join('، ') : 'أي حي',
+            ].filter(Boolean).join(' · ')}
           </p>
         )}
       </div>

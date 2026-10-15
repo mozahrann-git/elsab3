@@ -307,9 +307,11 @@ export function affordablePlans(p: Project, f: ProjectFilter): PaymentPlan[] {
   return (p.plans || []).filter((pl) => {
     const m = planMonthly(p, pl);
     const d = planDownAmount(p, pl);
-    // اللي مش عارفين رقمه مبنستبعدوش — بنستبعد اللي متأكدين إنه أعلى
-    if (m !== undefined && m > maxM) return false;
-    if (d !== undefined && d > maxD) return false;
+    /* العميل قال رقم → النظام لازم رقمه معروف وفي حدوده.
+       كان "اللي مش عارفين رقمه مبنستبعدوش"، فمشروع من غير أرقام
+       كان بيظهر للسيلز كإنه مناسب. */
+    if (maxM !== Infinity && (m === undefined || m > maxM)) return false;
+    if (maxD !== Infinity && (d === undefined || d > maxD)) return false;
     return true;
   });
 }
@@ -326,7 +328,7 @@ export function matchProject(p: Project, f: ProjectFilter): boolean {
   }
   // القسط والمقدم: المشروع بيعدّي لو فيه نظام واحد على الأقل يقدر عليه
   const wantsAfford = (f.maxMonthly && f.maxMonthly !== 'all') || (f.maxDownAmount && f.maxDownAmount !== 'all');
-  if (wantsAfford && (p.plans || []).length && affordablePlans(p, f).length === 0) return false;
+  if (wantsAfford && affordablePlans(p, f).length === 0) return false;
   return true;
 }
 

@@ -416,8 +416,9 @@ export function leadWithRequest(lead: Lead, r: ClientRequest): Lead {
     ...prevD,
     payment: isInst ? 'تقسيط' : 'كاش',
     districts: r.neighborhoods || [],
-    rooms: r.bedrooms ? String(r.bedrooms) : prevD.rooms,
-    finishing: r.finishing || prevD.finishing,
+    /* اللي في الطلب هو الكلام — مش القديم ولا الافتراضي */
+    rooms: r.bedrooms ? String(r.bedrooms) : '',
+    finishing: r.finishing || '',
     downCash: isInst ? (r.downPayment || 0) : prevD.downCash,
     monthly: isInst ? (r.monthly || 0) : prevD.monthly,
     years: isInst ? (r.years || prevD.years) : prevD.years,
