@@ -12,7 +12,7 @@ import { matchProperties, briefLine, briefGaps, readBrief, payModeOf } from '../
 import { copyText, downloadAll } from '../../utils/shareKit';
 
 /*
-  العرض المخصوص: الفلترة آلية من مكالمة الاكتشاف، والاختيار والترتيب والسطور بشرية.
+  العرض المخصوص: الفلترة آلية من طلب العميل، والاختيار والترتيب والسطور بشرية.
   بعد الإرسال بيتسجل أكشن في رحلة العميل وميعاد متابعة تلقائي.
 */
 interface Props {
@@ -126,7 +126,7 @@ export const OfferBuilderModal: React.FC<Props> = ({ isOpen, lead, properties, a
 
         {!done && briefGaps(lead).length > 0 && (
           <p className="mx-4 mt-3 text-[11px] bg-[#FFF8E6] border border-[#EBD9A6] text-[#7A5E12] rounded-xl px-3 py-2 leading-relaxed">
-            طلبه لسه ناقص: <b>{briefGaps(lead).map((g) => g.label).join('، ')}</b> — الاقتراحات دي تقريبية لحد ما تعمل مكالمة اكتشاف.
+            طلبه لسه ناقص: <b>{briefGaps(lead).map((g) => g.label).join('، ')}</b> — الاقتراحات دي تقريبية لحد ما تسجّل طلبه.
           </p>
         )}
         {done ? (

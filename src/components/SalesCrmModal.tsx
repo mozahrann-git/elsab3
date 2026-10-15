@@ -56,7 +56,6 @@ import { humanDuration, followUpBadge } from '../utils/followUpAlerts';
 import { OwnerLinkCard } from './crm/OwnerLinkCard';
 import { QuickBriefRow } from './crm/QuickBriefRow';
 import { ProjectMatchPanel } from './crm/ProjectMatchPanel';
-import { DiscoveryCallModal } from './sales/DiscoveryCallModal';
 import { OfferBuilderModal } from './sales/OfferBuilderModal';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { INITIAL_DAILY_QUESTS } from '../data/crmData';
@@ -395,7 +394,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     await deleteLeadFromDb(lead.id).catch(() => {});
     onDeleteLead?.(lead.id);
   };
-  const [discoveryLead, setDiscoveryLead] = useState<Lead | null>(null);
+  /* مكالمة الاكتشاف اتشالت. الطلب بيتسجّل من المطابقة
+     بفورم واحد — مفيش ١١ سؤال على مراحل. */
   const [offerLead, setOfferLead] = useState<Lead | null>(null);
   const [moveTarget, setMoveTarget] = useState<LeadStatus | null>(null);
   const [board, setBoard] = useState<CrmBoard>({});
@@ -2272,12 +2272,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         }}
       />
 
-    {discoveryLead && (
-        <DiscoveryCallModal isOpen={!!discoveryLead} lead={discoveryLead} properties={properties} byName={actorName}
-          onClose={() => setDiscoveryLead(null)}
-          onSaved={(u) => { onUpdateLead(u); setDiscoveryLead((d) => (d ? u : d)); }}
-          onBuildOffer={(u) => { setDiscoveryLead(null); setOfferLead(u); }} />
-      )}
       {offerLead && (
         <OfferBuilderModal isOpen={!!offerLead} lead={offerLead} properties={properties} preselectedIds={offerPicks}
           agentId={currentAgent?.id || ''} agentName={currentAgent?.name || ''} agentPhone={currentAgent?.phone}
