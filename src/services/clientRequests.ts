@@ -8,14 +8,8 @@
    جايباهم أصلاً — مفيش كتابة ولا وظيفة على السيرفر ممكن
    تفشل في صمت وتسيبك فاكر إن النظام شغال وهو واقف.        */
 
-import {
-  collection, doc, onSnapshot, query, where, setDoc, serverTimestamp,
-} from 'firebase/firestore';
-import { db, ensureAuth } from './firebaseService';
 import type { ClientRequest, Lead, Property, RequestKind } from '../types';
 import { normHood } from './unitMatch';
-
-const COL = 'client_requests';
 
 /* ---------- الأرقام التقريبية من الداتا الحقيقية ----------
    لما السيلز يفتح خانة التقسيط، مش منطقي نسيبه يخمّن المقدم
@@ -140,6 +134,9 @@ export function requestBudget(r: ClientRequest, hint: InstallmentHint): { min: n
 export function matchRequest(
   r: ClientRequest, p: Property, hint: InstallmentHint,
 ): RequestMatch | null {
+  /* شروطه الصريحة الأول — دي بتشيل خالص مش بتقلّل النقط */
+  if (blockedBy(r, p)) return null;
+
   const reasons: string[] = [];
   let score = 0;
 
@@ -156,8 +153,12 @@ export function matchRequest(
   /* السعر */
   const { min, max } = requestBudget(r, hint);
   const price = Number(p.price) || 0;
+  const strict = (r.rejectionReasons || []).some(
+    (x) => x === 'strict_budget' || x === 'الميزانية نهائي',
+  );
+  const tol = strict ? 0 : PRICE_TOLERANCE;
   if (max > 0) {
-    if (price > max * (1 + PRICE_TOLERANCE)) return null;
+    if (price > max * (1 + tol)) return null;
     if (price < min * 0.7) return null;
     score += price <= max ? 35 : 25;
     reasons.push(price <= max ? 'في الميزانية' : `أعلى من ميزانيته بـ${Math.round(((price / max) - 1) * 100)}٪`);
@@ -310,46 +311,98 @@ export function findStuckLeads(
   return out.sort((a, b) => b.comments - a.comments || b.daysStuck - a.daysStuck);
 }
 
-/* أسباب الرفض الشائعة — السيلز بيختار، مش بيكتب من دماغه،
-   عشان نقدر نعدّهم بعدين ونعرف إيه اللي بيضيّع الصفقات */
-export const REJECTION_REASONS = [
-  'التشطيب مش على المستوى',
-  'الدور عالي ومفيش مصعد',
-  'الفيو مش عاجبه',
-  'الواجهة أو العمارة قديمة',
-  'المساحة مش موزّعة كويس',
-  'عايز استلام أسرع',
-  'السعر مش قابل للتفاوض',
-] as const;
+/* شروط بتفلتر فعلاً.
+   قبل كده كانت قايمة أسباب بتتخزّن وخلاص — السيلز بيدوس
+   ومفيش حاجة بتحصل. دلوقتي كل واحدة فيهم بتشيل شقق من
+   النتيجة بناءً على الداتا.
 
-/* ---------- التخزين ---------- */
+   الأسباب اللي مش موجودة في الداتا (الفيو، شكل الواجهة،
+   توزيع المساحة) اتشالت من القايمة — مكانها الملاحظة،
+   مش زرار بيوهم إنه بيعمل حاجة. */
 
-export async function saveClientRequest(r: ClientRequest): Promise<void> {
-  await ensureAuth();
-  await setDoc(doc(db, COL, r.id), { ...r, updatedAt: serverTimestamp() }, { merge: true });
+export type FilterRule = 'needs_elevator' | 'finished_only' | 'ready_now' | 'strict_budget';
+
+export const REQUEST_FILTERS: { id: FilterRule; label: string; note: string }[] = [
+  { id: 'needs_elevator', label: 'لازم مصعد أو دور واطي', note: 'بيشيل الأدوار العالية اللي من غير مصعد' },
+  { id: 'finished_only', label: 'متشطبة بس', note: 'بيشيل نص التشطيب والطوب' },
+  { id: 'ready_now', label: 'استلام فوري', note: 'بيشيل اللي تحت الإنشاء' },
+  { id: 'strict_budget', label: 'الميزانية نهائي', note: 'مش هيعرض أي حاجة فوق ميزانيته' },
+];
+
+/* توافق مع الطلبات القديمة */
+export const REJECTION_REASONS = REQUEST_FILTERS.map((f) => f.label);
+
+const FLOOR_NUM = (v: unknown): number => {
+  const t = String(v || '');
+  const words: Record<string, number> = {
+    'الأرضي': 0, 'الارضي': 0, 'الأول': 1, 'الاول': 1, 'الثاني': 2, 'التاني': 2,
+    'الثالث': 3, 'التالت': 3, 'الرابع': 4, 'الخامس': 5, 'السادس': 6,
+    'السابع': 7, 'الثامن': 8, 'التاسع': 9, 'العاشر': 10,
+  };
+  for (const k of Object.keys(words)) if (t.includes(k)) return words[k];
+  const n = Number(t.replace(/\D/g, ''));
+  return Number.isFinite(n) ? n : -1;
+};
+
+/** بترجّع سبب الاستبعاد لو الشقة مش مطابقة لشروطه، وإلا null */
+export function blockedBy(r: ClientRequest, p: Property): string | null {
+  const rules = (r.rejectionReasons || []) as string[];
+  const has = (id: FilterRule) => {
+    const f = REQUEST_FILTERS.find((x) => x.id === id)!;
+    return rules.includes(f.label) || rules.includes(id);
+  };
+
+  if (has('needs_elevator')) {
+    const fl = FLOOR_NUM(p.floor);
+    const lift = (p as any).hasElevator ?? (p as any).elevator;
+    if (fl >= 3 && lift === false) return 'دور عالي من غير مصعد';
+    if (fl >= 5 && lift === undefined) return 'دور عالي والمصعد مش مأكّد';
+  }
+  if (has('finished_only')) {
+    const fin = String(p.finishing || '');
+    if (fin && !fin.includes('متشطب') && !fin.includes('سوبر') && !fin.includes('لوكس')) {
+      return 'مش متشطبة';
+    }
+  }
+  if (has('ready_now')) {
+    if ((p as any).category === 'off_plan') return 'تحت الإنشاء';
+  }
+  return null;
 }
 
-export async function markRequestSeen(r: ClientRequest, propertyIds: string[]): Promise<void> {
-  await ensureAuth();
+/* ---------- التخزين ----------
+   الطلب متخزّن على ملف العميل نفسه (lead.clientRequest).
+   كان مجموعة لوحدها، فكان محتاج قاعدة أمان جديدة وكان
+   بيترفض بـ permission-denied لحد ما القواعد تتنشر.
+   الملف بيتكتب عادي من كل الأجهزة، فالمشكلة دي راحت
+   من أصلها.                                            */
+
+/** بتطلّع الطلبات المفتوحة من ملفات العملاء */
+export function requestsFromLeads(leads: Lead[]): ClientRequest[] {
+  const out: ClientRequest[] = [];
+  leads.forEach((l) => {
+    const r = (l as any).clientRequest as ClientRequest | undefined;
+    if (r && r.status === 'open') out.push({ ...r, leadId: l.id, leadName: l.name, leadPhone: l.phone });
+  });
+  return out;
+}
+
+/** بيرجّع نسخة من الملف وفيها الطلب — الحفظ بيتم من onUpdateLead */
+export function leadWithRequest(lead: Lead, r: ClientRequest): Lead {
+  return { ...lead, clientRequest: r } as Lead;
+}
+
+export function leadWithSeen(lead: Lead, propertyIds: string[]): Lead {
+  const r = (lead as any).clientRequest as ClientRequest | undefined;
+  if (!r) return lead;
   const seen = Array.from(new Set([...(r.seenPropertyIds || []), ...propertyIds]));
-  await setDoc(doc(db, COL, r.id), { seenPropertyIds: seen }, { merge: true });
+  return { ...lead, clientRequest: { ...r, seenPropertyIds: seen } } as Lead;
 }
 
-export async function closeClientRequest(r: ClientRequest): Promise<void> {
-  await ensureAuth();
-  await setDoc(doc(db, COL, r.id), { status: 'closed', closedAt: Date.now() }, { merge: true });
-}
-
-export function subscribeClientRequests(cb: (l: ClientRequest[]) => void): () => void {
-  return onSnapshot(
-    query(collection(db, COL), where('status', '==', 'open')),
-    (snap) => {
-      const l: ClientRequest[] = [];
-      snap.forEach((d) => l.push(d.data() as ClientRequest));
-      cb(l);
-    },
-    () => cb([]),
-  );
+export function leadWithClosedRequest(lead: Lead): Lead {
+  const r = (lead as any).clientRequest as ClientRequest | undefined;
+  if (!r) return lead;
+  return { ...lead, clientRequest: { ...r, status: 'closed', closedAt: Date.now() } } as Lead;
 }
 
 /** بيبني طلب من ملف العميل وإجابات الاكتشاف */

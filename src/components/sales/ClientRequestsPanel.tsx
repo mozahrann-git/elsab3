@@ -3,9 +3,9 @@ import { BellRing, Check, Loader2, Plus, Search, X } from 'lucide-react';
 import type { ClientRequest, Lead, Property, RequestKind } from '../../types';
 import {
   matchAllRequests, installmentHint, estimatePlan, affordableFromPlan,
-  existingMatches, saveClientRequest, markRequestSeen, closeClientRequest,
-  requestFromLead, RequestMatch, findStuckLeads, REJECTION_REASONS, paymentOf,
-  offPlanOptions, minDownAmount, OffPlanKind,
+  existingMatches, leadWithRequest, leadWithSeen, leadWithClosedRequest,
+  requestsFromLeads, requestFromLead, RequestMatch, findStuckLeads,
+  REQUEST_FILTERS, paymentOf, offPlanOptions, minDownAmount, OffPlanKind,
 } from '../../services/clientRequests';
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../../data/properties';
 import { thumbUrl } from '../../services/mediaStorage';
@@ -29,7 +29,8 @@ const RequestForm: React.FC<{
   properties: Property[];
   onClose: () => void;
   onSaved: () => void;
-}> = ({ lead, agentName, properties, onClose, onSaved }) => {
+  onUpdateLead: (l: Lead) => void;
+}> = ({ lead, agentName, properties, onClose, onSaved, onUpdateLead }) => {
   const [kind, setKind] = useState<RequestKind>('cash');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -103,8 +104,12 @@ const RequestForm: React.FC<{
   const save = async () => {
     if (tooLow) { setErr(`أقل مقدم موجود عندنا ${floorDown.toLocaleString('en-US')} ج.م`); return; }
     setBusy(true); setErr('');
-    try { await saveClientRequest(draft as any); onSaved(); onClose(); }
-    catch (e: any) { setErr(e?.code || e?.message || 'الحفظ ما نجحش'); }
+    try {
+      /* الحفظ بيمشي على نفس مسار تحديث ملف العميل اللي شغال
+         طول اليوم — مفيش مجموعة جديدة ولا قاعدة ممكن ترفض */
+      onUpdateLead(leadWithRequest(lead, draft as any));
+      onSaved(); onClose();
+    } catch (e: any) { setErr(e?.message || 'الحفظ ما نجحش'); }
     finally { setBusy(false); }
   };
 
@@ -284,15 +289,22 @@ const RequestForm: React.FC<{
 
           <div>
             <p className="text-xs font-bold text-stone-500 mb-1.5">
-              إيه اللي مناسبوش في اللي شافه؟ (اختياري)
+              شروط لازمة (اختياري) — دي بتشيل شقق من نتيجته
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {REJECTION_REASONS.map((x) => {
-                const on = reasons.includes(x);
+            <div className="space-y-1.5">
+              {REQUEST_FILTERS.map((f) => {
+                const on = reasons.includes(f.label);
                 return (
-                  <button key={x} type="button"
-                    onClick={() => setReasons((p) => on ? p.filter((y) => y !== x) : [...p, x])}
-                    className={chip(on)}>{x}</button>
+                  <button key={f.id} type="button"
+                    onClick={() => setReasons((p) => on ? p.filter((y) => y !== f.label) : [...p, f.label])}
+                    className={`w-full text-right rounded-2xl p-3 border ${
+                      on ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'
+                    }`}>
+                    <span className="block text-xs font-black">{f.label}</span>
+                    <span className={`block text-[10px] font-medium mt-0.5 ${on ? 'text-white/60' : 'text-stone-400'}`}>
+                      {f.note}
+                    </span>
+                  </button>
                 );
               })}
             </div>
@@ -301,7 +313,7 @@ const RequestForm: React.FC<{
           <label className="block">
             <span className="text-xs font-bold text-stone-500 block mb-1">ملاحظة (اختياري)</span>
             <input value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="مثلاً: لازم دور عالي، أو مستعجل"
+              placeholder="الفيو، شكل الواجهة، توزيع المساحة… أي حاجة مش في الداتا"
               className="w-full rounded-2xl border border-[#E4DFD4] px-3 py-2.5 text-sm" />
           </label>
 
@@ -336,15 +348,17 @@ const RequestForm: React.FC<{
 export { RequestForm };
 
 export const ClientRequestsPanel: React.FC<{
-  requests: ClientRequest[];
   properties: Property[];
   leads: Lead[];
+  onUpdateLead: (l: Lead) => void;
   agentId?: string;
   agentName: string;
   isAdmin?: boolean;
   onRefresh?: () => void;
   onOpenProperty?: (p: Property) => void;
-}> = ({ requests, properties, leads, agentId, agentName, isAdmin, onRefresh, onOpenProperty }) => {
+}> = ({ properties, leads, onUpdateLead, agentId, agentName, isAdmin, onRefresh, onOpenProperty }) => {
+  /* الطلبات بتتقرا من ملفات العملاء — مفيش مصدر تاني */
+  const requests = useMemo(() => requestsFromLeads(leads), [leads]);
   const [formFor, setFormFor] = useState<Lead | null>(null);
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState('');
@@ -374,17 +388,17 @@ export const ClientRequestsPanel: React.FC<{
     ).slice(0, 40);
   }, [leads, requests, agentId, isAdmin, q]);
 
-  const seen = async (r: ClientRequest, ms: RequestMatch[]) => {
-    setBusy(r.id);
-    try { await markRequestSeen(r, ms.map((m) => m.property.id)); onRefresh?.(); }
-    finally { setBusy(''); }
+  const leadOf = (id: string) => leads.find((l) => l.id === id);
+
+  const seen = (r: ClientRequest, ms: RequestMatch[]) => {
+    const l = leadOf(r.leadId);
+    if (l) onUpdateLead(leadWithSeen(l, ms.map((m) => m.property.id)));
   };
 
-  const close = async (r: ClientRequest) => {
+  const close = (r: ClientRequest) => {
     if (!window.confirm(`تقفل طلب ${r.leadName}؟ مش هيتنبّه عليه تاني.`)) return;
-    setBusy(r.id);
-    try { await closeClientRequest(r); onRefresh?.(); }
-    finally { setBusy(''); }
+    const l = leadOf(r.leadId);
+    if (l) onUpdateLead(leadWithClosedRequest(l));
   };
 
   return (
@@ -576,6 +590,7 @@ export const ClientRequestsPanel: React.FC<{
       {formFor && (
         <RequestForm
           lead={formFor} agentName={agentName} properties={properties}
+          onUpdateLead={onUpdateLead}
           onClose={() => setFormFor(null)}
           onSaved={() => onRefresh?.()}
         />

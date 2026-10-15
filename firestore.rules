@@ -251,18 +251,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    /* طلبات العملاء: العميل اللي طلبه مش موجود دلوقتي.
-       السيلز بيسجّل ويقفل طلباته، والإدارة بتشوف الكل.
-       مفيش حذف — الطلب بيتقفل مش بيتمسح، عشان يفضل أثر. */
-    match /client_requests/{id} {
-      allow read: if isStaff() || isOps() || isBoss() || isMkt();
-      allow create: if (isStaff() || isOps())
-                    && request.resource.data.leadId is string
-                    && request.resource.data.agentId is string;
-      allow update: if isStaff() || isOps();
-      allow delete: if isAdmin();
-    }
-
     /* الإعدادات — منها أهداف المهام اليومية.
        من غير القاعدة دي كانت هتترفض في صمت بسبب قاعدة المنع
        العامة في آخر الملف، والأهداف تفضل على الافتراضي

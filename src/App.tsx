@@ -32,7 +32,6 @@ import {
   ClosedDeal,
   ViewingRequest,
   BrokerProfile,
-  ClientRequest,
 } from './types';
 import { 
   ALL_HADABA_PROPERTIES,
@@ -436,8 +435,6 @@ export default function App() {
   /* طلبات المعاينة كانت بتتجاب وتتسرّب جوه الـeffect من غير ما تتخزّن.
      عدّادات المهام محتاجاها، فبقت متخزّنة. */
   const [allViewingRequests, setAllViewingRequests] = useState<ViewingRequest[]>([]);
-  /* طلبات العملاء المفتوحة — اللي طلبهم لسه مش موجود عندنا */
-  const [clientRequests, setClientRequests] = useState<ClientRequest[]>([]);
 
   const [ownerSubmissions, setOwnerSubmissions] = useState<OwnerSubmission[]>(() => {
     try {

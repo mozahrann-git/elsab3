@@ -294,6 +294,11 @@ export interface Lead {
     decidedBy?: string; decidedAt?: number; decisionNote?: string;
   };
   snoozeCount?: number;             // كام مرة اتأجل، بيظهر في تقرير الليدر
+  /* طلب العميل — اللي بيدوّر عليه. متخزّن على ملفه نفسه
+     مش في مجموعة لوحدها: الطلب بتاعه، وملف العميل بيتكتب
+     عادي من كل الأجهزة، فمفيش قواعد جديدة ولا صلاحيات
+     ممكن ترفض. */
+  clientRequest?: ClientRequest;
 }
 
 export interface FollowUpAlert {

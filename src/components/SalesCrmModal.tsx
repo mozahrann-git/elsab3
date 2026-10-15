@@ -516,12 +516,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       if (afterAdd === 'matching') {
         setMatchingLeadId(newLead.id);
         setActiveTab('matching');
-      } else {
-        /* الاكتشاف مابقاش بيفتح لوحده. الطلب بيتسجّل مرة واحدة
-           من زرار "سجّل طلبه"، والاكتشاف فضل متاح من الملف
-           لمين عايز يملاه بالتفصيل. */
-        setRequestLead(newLead);
       }
+      /* العميل الجديد بينزل في "جديد" وبس. مفيش فورم بيتفتح
+         في وشه — الطلب بيتسجّل من المطابقة لما يحتاج. */
     }
     setNewLeadForm({
       name: '',
@@ -1436,33 +1433,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
                         <button
                           onClick={() => {
-                            // العرض بيتبني من المطابقة — بيختار الشقق الأول وبعدين يبعت،
-                            // بدل ما العرض يفتح على طول باقتراح مش شايفه
-                            if (briefGaps(lead).length > 0) { setDiscoveryLead(lead); return; }
+                            /* على طول للمطابقة. الطلب بيتسجّل من هناك
+                               لما يحتاج — مش بيتفرض عليه هنا. */
                             setMatchingLeadId(lead.id);
                             setActiveTab('matching');
                           }}
                           className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl whitespace-nowrap shrink-0"
                         >
-                          {briefGaps(lead).length === 0 ? 'ابني عرض من المطابقة' : 'كمّل طلبه'}
-                        </button>
-                        {/* الطلب بيتفتح للتعديل دايماً — ناقص أو كامل.
-                            العميل بيغيّر رأيه، والمسار لازم يغيّر معاه. */}
-                        <button
-                          onClick={() => setDiscoveryLead(lead)}
-                          title={briefGaps(lead).length ? `ناقص: ${briefGaps(lead).map((g) => g.label).join('، ')}` : 'افتح الطلب وعدّله'}
-                          className={`px-2.5 py-1.5 text-[11px] font-bold rounded-xl border whitespace-nowrap shrink-0 cursor-pointer ${
-                            briefGaps(lead).length
-                              ? 'bg-[#FFF8E6] text-[#7A5E12] border-[#EBD9A6]'
-                              : 'bg-white text-[#141414] border-[#E4DFD4]'
-                          }`}
-                        >
-                          {/* مختصرة عشان ما تتكسرش عمودي وتبوّظ شكل الكارت */}
-                          {briefGaps(lead).length === 0
-                            ? 'عدّل الطلب كله'
-                            : briefGaps(lead).length === 1
-                            ? `ناقص ${briefGaps(lead)[0].label}`
-                            : `ناقص ${briefGaps(lead).length} بيانات`}
+                          المطابقة
                         </button>
                         {(() => {
                           const hits = followUpMatches.get(lead.id) || [];
@@ -1486,12 +1464,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                             </button>
                           );
                         })()}
-                        <button
-                          onClick={() => setRequestLead(lead)}
-                          className="px-3 py-1.5 bg-[#FBF1E4] text-[#A07A26] text-xs font-bold rounded-xl border border-[#E8D3A6] whitespace-nowrap shrink-0"
-                        >
-                          سجّل طلبه
-                        </button>
                         <button
                           onClick={() => setSelectedLeadForDetails(lead)}
                           className="px-3 py-1.5 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] text-xs font-bold rounded-xl border border-[#ECE8DF] whitespace-nowrap shrink-0"
@@ -1570,10 +1542,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   {selectedMatchingLead && briefGaps(selectedMatchingLead).length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setDiscoveryLead(selectedMatchingLead)}
+                      onClick={() => setRequestLead(selectedMatchingLead)}
                       className="text-[11px] bg-[#FFF8E6] border border-[#EBD9A6] text-[#7A5E12] rounded-xl px-2.5 py-1.5 font-bold cursor-pointer text-right leading-relaxed"
                     >
-                      طلبه ناقص: {briefGaps(selectedMatchingLead).map((g) => g.label).join('، ')} — افتح مكالمة الاكتشاف
+                      طلبه ناقص: {briefGaps(selectedMatchingLead).map((g) => g.label).join('، ')} — سجّل طلبه
                     </button>
                   )}
                   <div className="flex flex-wrap gap-1.5 mt-2">
@@ -1630,7 +1602,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                       {activePay !== 'cash' && !matchBrief.downCash && !matchBrief.monthly && (
                         <button
                           type="button"
-                          onClick={() => setDiscoveryLead(selectedMatchingLead!)}
+                          onClick={() => setRequestLead(selectedMatchingLead!)}
                           className="text-[11px] font-bold text-[#7A5E12] bg-[#FFF8E6] border border-[#EBD9A6] rounded-lg px-2.5 py-1.5 cursor-pointer"
                         >
                           اكتب المقدم والقسط عشان نفلتر المشاريع
@@ -1999,6 +1971,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           lead={requestLead}
           agentName={agents.find((a) => a.id === requestLead.assignedAgentId)?.name || actorName}
           properties={properties}
+          onUpdateLead={onUpdateLead}
           onClose={() => setRequestLead(null)}
           onSaved={() => showToast('اتسجّل الطلب — أول شقة قريبة هتوصلك')}
         />
