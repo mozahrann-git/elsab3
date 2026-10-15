@@ -443,7 +443,11 @@ export function leadWithRequest(lead: Lead, r: ClientRequest): Lead {
   const changed = hadBudget && wantMax > 0
     && (wantMin !== (Number(lead.budgetMin) || 0) || wantMax !== (Number(lead.budgetMax) || 0));
 
-  const budgetPart = !wantMax
+  /* التقسيط مابيلمسش الميزانية خالص. مطابقة التقسيط شغالة على
+     المقدم والقسط، والريسيل مش بيتعرض له أصلاً. لو كتبنا الميزانية
+     = المقدم + القسط، الرقم ده بيبقى "ميزانية معتمدة"، ولما العميل
+     يقلب كاش بعدين الميزانية الحقيقية تروح للإدارة توافق عليها. */
+  const budgetPart = (isInst || !wantMax)
     ? {}
     : !hadBudget
       ? { budgetMin: wantMin, budgetMax: wantMax }

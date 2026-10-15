@@ -34,40 +34,52 @@ const RequestForm: React.FC<{
   onSaved: () => void;
   onUpdateLead: (l: Lead) => void;
 }> = ({ lead, agentName, properties, onClose, onSaved, onUpdateLead }) => {
-  const [kind, setKind] = useState<RequestKind>('cash');
+  /* الفورم بيفتح مليان باللي متسجّل — "عدّل طلبه" مايبقاش
+     فورم فاضي تملاه من الأول */
+  const prev = (lead as any).clientRequest as Partial<ClientRequest> | undefined;
+  const d0 = ((lead as any).discovery || {}) as Record<string, any>;
+  const [kind, setKind] = useState<RequestKind>(
+    prev?.kind || (String(d0.payment || '').includes('تقسيط') ? 'installment' : 'cash'),
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
   /* مشترك */
-  const [beds, setBeds] = useState<number>(lead.preferredBedrooms || 3);
-  const [note, setNote] = useState('');
-  const [reasons, setReasons] = useState<string[]>([]);
+  const [beds, setBeds] = useState<number>(prev?.bedrooms || lead.preferredBedrooms || 3);
+  const [note, setNote] = useState(prev?.note || '');
+  const [reasons, setReasons] = useState<string[]>(prev?.rejectionReasons || []);
 
   /* كاش */
   const [hoods, setHoods] = useState<string[]>(
-    lead.preferredNeighborhood ? [lead.preferredNeighborhood] : [],
+    prev?.neighborhoods?.length ? prev.neighborhoods
+      : Array.isArray(d0.districts) && d0.districts.length ? d0.districts
+      : lead.preferredNeighborhood ? [lead.preferredNeighborhood] : [],
   );
-  const [finishing, setFinishing] = useState('');
-  const [bMin, setBMin] = useState<number>(lead.budgetMin || 1500000);
-  const [bMax, setBMax] = useState<number>(lead.budgetMax || 3500000);
+  const [finishing, setFinishing] = useState(prev?.kind === 'cash' ? (prev?.finishing || '') : '');
+  const [bMin, setBMin] = useState<number>(prev?.budgetMin || lead.budgetMin || 1500000);
+  const [bMax, setBMax] = useState<number>(prev?.budgetMax || lead.budgetMax || 3500000);
 
   /* تقسيط — من المشاريع الحقيقية (قسم المشاريع)، نفس المكان
      اللي المطابقة بتعرض منه. كان بيقرا من شقق قديمة في الموقع
      فالخيارات مكانتش بتطابق اللي بيظهر في المطابقة. */
   const [projects, setProjects] = useState<Project[]>([]);
   useEffect(() => subscribeProjects(setProjects), []);
-  const [planKind, setPlanKind] = useState<ProjectKind>('building');
+  const [planKind, setPlanKind] = useState<ProjectKind>(
+    prev?.offPlanKind === 'compound' ? 'compound' : 'building',
+  );
   const opts = useMemo(() => projectPlanOptions(projects, planKind), [projects, planKind]);
   const floorDown = opts.minDown;
-  const [years, setYears] = useState<number>(0);
-  const [down, setDown] = useState<number>(0);
-  const [delivery, setDelivery] = useState('');
+  const [years, setYears] = useState<number>(prev?.years || 0);
+  const [down, setDown] = useState<number>(prev?.downPayment || 0);
+  const [delivery, setDelivery] = useState(prev?.deliveryWithin || '');
 
   /* أول ما يغيّر النوع، الخيارات بتتغيّر — فبنرجّع الاختيار
      لأقل حاجة موجودة بدل ما يفضل على رقم مش متاح للنوع ده */
   useEffect(() => {
-    setYears(opts.years[0] || 0);
-    setDown(floorDown);
+    /* لو القيمة المتسجّلة لسه متاحة في النوع ده نسيبها،
+       وإلا نرجع لأقل حاجة موجودة */
+    setYears((y) => (y && opts.years.includes(y) ? y : (opts.years[0] || 0)));
+    setDown((v) => (v && v >= floorDown ? v : floorDown));
   }, [planKind, opts.years.length, floorDown]);
 
   /* كام مشروع المقدم ده يكفيه، بنفس عدد السنين.
@@ -123,7 +135,6 @@ const RequestForm: React.FC<{
   }, [lead, agentName, kind, hoods, beds, finishing, bMin, bMax,
       planKind, years, down, monthly, delivery, note, reasons]);
 
-  const already = useMemo(() => existingMatches(draft, properties).slice(0, 4), [draft, properties]);
 
   const tooLow = kind === 'installment' && floorDown > 0 && down < floorDown;
 
@@ -149,7 +160,7 @@ const RequestForm: React.FC<{
       <div className="bg-[#FBF8F1] w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto">
         <div className="sticky top-0 bg-[#FBF8F1] px-5 py-4 flex items-center justify-between border-b border-[#ECE8DF] z-10">
           <div className="min-w-0">
-            <p className="font-black text-stone-900 truncate">طلب {lead.name}</p>
+            <p className="font-black text-stone-900 truncate">{prev ? 'عدّل طلب' : 'طلب'} {lead.name}</p>
             <p className="text-xs text-stone-400 font-medium">
               مرة واحدة · وأول ما شقة قريبة تتضاف هتعرف
             </p>
@@ -356,20 +367,6 @@ const RequestForm: React.FC<{
               placeholder="الفيو، شكل الواجهة، توزيع المساحة… أي حاجة مش في الداتا"
               className="w-full rounded-2xl border border-[#E4DFD4] px-3 py-2.5 text-sm" />
           </label>
-
-          {already.length > 0 && (
-            <div className="bg-[#EEF5F0] border border-[#BFE0CC] rounded-2xl p-3 space-y-1">
-              <p className="text-xs font-black text-[#1E7A45]">
-                استنى — فيه {already.length} شقة موجودة دلوقتي تناسبه:
-              </p>
-              {already.map((m) => (
-                <p key={m.property.id} className="text-[11px] font-bold text-stone-700">
-                  • {m.property.code} · {formatPrice(m.property.price)} ج.م · {m.property.area} م²
-                </p>
-              ))}
-              <p className="text-[11px] text-[#1E7A45] font-medium">اعرضهم عليه الأول.</p>
-            </div>
-          )}
 
           {err && <p className="text-xs font-black text-[#C2412D] bg-[#FBEDEA] rounded-xl p-3">✗ {err}</p>}
 

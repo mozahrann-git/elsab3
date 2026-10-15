@@ -294,7 +294,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     () => (selectedMatchingLead ? readBrief(selectedMatchingLead) : null),
     [selectedMatchingLead],
   );
-  const activePay: PayMode = matchPay || (matchBrief ? payModeOf(matchBrief) : 'cash');
+  /* الدفع من طلب العميل المتسجّل بس — مفيش تبديل مؤقت */
+  const activePay: PayMode = matchBrief ? payModeOf(matchBrief) : 'cash';
   const showResale = resaleFits(activePay);
   const showProjects = projectsFit(activePay);
 
@@ -1539,13 +1540,23 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   <p className="text-xs text-[#6B665C]">
                     الطلب: <span className="font-bold text-[#141414]">{selectedMatchingLead ? briefLine(selectedMatchingLead) : '—'}</span>
                   </p>
-                  {selectedMatchingLead && briefGaps(selectedMatchingLead).length > 0 && (
+                  {/* مكان واحد لتعديل الطلب — الفورم بيفتح مليان باللي متسجّل.
+                      قبل كده كان فيه أزرار دفع هنا بتغيّر المطابقة مؤقتاً من
+                      غير ما تتحفظ، و"رجّع اللي قاله"، وعشان تعدّل الميزانية
+                      تقلب كاش… مكانين بيعدّلوا نفس الحاجة. */}
+                  {selectedMatchingLead && (
                     <button
                       type="button"
                       onClick={() => setRequestLead(selectedMatchingLead)}
-                      className="text-[11px] bg-[#FFF8E6] border border-[#EBD9A6] text-[#7A5E12] rounded-xl px-2.5 py-1.5 font-bold cursor-pointer text-right leading-relaxed"
+                      className={`text-[11px] rounded-xl px-3 py-1.5 font-bold cursor-pointer text-right leading-relaxed border ${
+                        briefGaps(selectedMatchingLead).length
+                          ? 'bg-[#FFF8E6] border-[#EBD9A6] text-[#7A5E12]'
+                          : 'bg-[#141414] border-[#141414] text-white'
+                      }`}
                     >
-                      طلبه ناقص: {briefGaps(selectedMatchingLead).map((g) => g.label).join('، ')} — سجّل طلبه
+                      {briefGaps(selectedMatchingLead).length
+                        ? `طلبه ناقص: ${briefGaps(selectedMatchingLead).map((g) => g.label).join('، ')} — سجّل طلبه`
+                        : 'عدّل طلبه'}
                     </button>
                   )}
                   <div className="flex flex-wrap gap-1.5 mt-2">
@@ -1558,24 +1569,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   {/* كاش ولا تقسيط — ده اللي بيحدد السقف اللي بنطابق عليه */}
                   {matchBrief && (
                     <div className="mt-2 bg-[#FAF8F3] border border-[#ECE8DF] rounded-xl p-2.5 space-y-2">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[11px] font-bold text-[#6B665C] ml-1">الدفع:</span>
-                        {([['cash', 'كاش'], ['instalment', 'تقسيط'], ['both', 'الاتنين']] as [PayMode, string][]).map(([v, t]) => (
-                          <button
-                            key={v}
-                            type="button"
-                            onClick={() => setMatchPay(v)}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold border cursor-pointer ${activePay === v ? 'bg-[#A07A26] text-white border-[#A07A26]' : 'bg-white border-[#E4DFD4]'}`}
-                          >
-                            {t}
-                          </button>
-                        ))}
-                        {matchPay && (
-                          <button type="button" onClick={() => setMatchPay(null)} className="text-[11px] font-bold text-[#6B665C] underline cursor-pointer">
-                            رجّع اللي قاله
-                          </button>
-                        )}
-                      </div>
 
                       {/* القاعدة بالكلام — الريسيل كاش، والتقسيط مشاريع */}
                       <p className="text-[11px] text-[#6B665C] leading-relaxed">
@@ -1599,15 +1592,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         )}
                       </p>
 
-                      {activePay !== 'cash' && !matchBrief.downCash && !matchBrief.monthly && (
-                        <button
-                          type="button"
-                          onClick={() => setRequestLead(selectedMatchingLead!)}
-                          className="text-[11px] font-bold text-[#7A5E12] bg-[#FFF8E6] border border-[#EBD9A6] rounded-lg px-2.5 py-1.5 cursor-pointer"
-                        >
-                          اكتب المقدم والقسط عشان نفلتر المشاريع
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
