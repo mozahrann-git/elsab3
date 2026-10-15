@@ -323,6 +323,36 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     [leads],
   );
 
+  /* شقق كل عميل في شاشة المتابعات.
+     الزرار كان بينقل لتبويب المطابقة وبس — يعني مفيش معلومة
+     زيادة، والمندوب بيسيب مكانه وهو على التليفون. دلوقتي
+     الرقم بيبان على الزرار والشقق بتتفتح مكانها. */
+  const [openMatchLead, setOpenMatchLead] = useState<string>('');
+
+  /* اللي بيبان في شاشة المتابعات بس — مش الـ٢٣١ كلهم.
+     الحساب على كل العملاء كان ١١٧ ملي ثانية على كمبيوتر سريع،
+     يعني نص ثانية تقفيل على موبايل المندوب كل ما حاجة تتغيّر. */
+  const followUpList = useMemo(
+    () => scopedLeads
+      .filter((l) => l.followUpStatus !== 'completed' && l.status !== 'closed' && l.status !== 'lost')
+      .sort((a, b) => (a.nextActionAt || Infinity) - (b.nextActionAt || Infinity)),
+    [scopedLeads],
+  );
+
+  const followUpMatches = useMemo(() => {
+    const m = new Map<string, Property[]>();
+    followUpList.forEach((l) => {
+      try {
+        const b = readBrief(l);
+        const res = matchDetailed(l, properties, {
+          tolerance: 0.05, strictDistrict: true, payMode: payModeOf(b),
+        });
+        m.set(l.id, res.filter((r) => r.inDistrict).map((r) => r.property));
+      } catch { m.set(l.id, []); }
+    });
+    return m;
+  }, [followUpList, properties]);
+
   const [toast, setToast] = useState('');
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2800); };
 
@@ -1240,9 +1270,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* Followups Cards / Table */}
             <div className="space-y-3">
-              {scopedLeads
-                .filter((lead) => lead.followUpStatus !== 'completed' && lead.status !== 'closed' && lead.status !== 'lost')
-                .sort((a, b) => (a.nextActionAt || Infinity) - (b.nextActionAt || Infinity))
+              {followUpList
                 .map((lead) => {
                 const stageObj = CRM_PIPELINE_STAGES.find((s) => s.id === lead.status) || CRM_PIPELINE_STAGES[0];
                 const tone = toneStyle(lead);
@@ -1430,12 +1458,28 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                             ? `ناقص ${briefGaps(lead)[0].label}`
                             : `ناقص ${briefGaps(lead).length} بيانات`}
                         </button>
-                        <button
-                          onClick={() => { setMatchingLeadId(lead.id); setActiveTab('matching'); }}
-                          className="px-3 py-1.5 bg-[#E6F7ED] text-[#0E7A5A] text-xs font-bold rounded-xl border border-[#B3E8C8] whitespace-nowrap shrink-0"
-                        >
-                          شقق مناسبة له
-                        </button>
+                        {(() => {
+                          const hits = followUpMatches.get(lead.id) || [];
+                          if (hits.length === 0) {
+                            return (
+                              <button
+                                onClick={() => setActiveTab('requests')}
+                                title="مفيش شقة مناسبة — سجّل طلبه عشان أول واحدة تتضاف توصلك"
+                                className="px-3 py-1.5 bg-[#FBF1E4] text-[#A07A26] text-xs font-bold rounded-xl border border-[#E8D3A6] whitespace-nowrap shrink-0"
+                              >
+                                مفيش مناسب — سجّل طلبه
+                              </button>
+                            );
+                          }
+                          return (
+                            <button
+                              onClick={() => setOpenMatchLead(openMatchLead === lead.id ? '' : lead.id)}
+                              className="px-3 py-1.5 bg-[#E6F7ED] text-[#0E7A5A] text-xs font-bold rounded-xl border border-[#B3E8C8] whitespace-nowrap shrink-0"
+                            >
+                              {hits.length} شقة مناسبة
+                            </button>
+                          );
+                        })()}
                         <button
                           onClick={() => setSelectedLeadForDetails(lead)}
                           className="px-3 py-1.5 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] text-xs font-bold rounded-xl border border-[#ECE8DF] whitespace-nowrap shrink-0"
@@ -1458,6 +1502,32 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                           </button>
                         )}
                       </div>
+
+                      {/* الشقق بتتفتح هنا مكانها — المندوب على التليفون
+                          وميقدرش يسيب القايمة ويروح تبويب تاني */}
+                      {openMatchLead === lead.id && (
+                        <div className="mt-2 pt-2 border-t border-[#ECE8DF] space-y-1.5">
+                          {(followUpMatches.get(lead.id) || []).slice(0, 4).map((p) => (
+                            <div key={p.id} className="flex items-center gap-2 bg-[#F6F4EF] rounded-xl p-2">
+                              <span className="text-[11px] font-mono font-black bg-white px-2 py-0.5 rounded-full shrink-0">
+                                {p.code}
+                              </span>
+                              <span className="text-[11px] font-bold text-[#141414] truncate flex-1">
+                                {p.neighborhood} · {p.area} م² · {p.bedrooms} غرف
+                              </span>
+                              <span className="text-[11px] font-black text-[#0E7A5A] shrink-0 font-mono">
+                                {(p.price || 0).toLocaleString('en-US')}
+                              </span>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => { setMatchingLeadId(lead.id); setActiveTab('matching'); }}
+                            className="w-full py-1.5 text-[11px] font-bold text-[#0E7A5A]"
+                          >
+                            افتح المطابقة وجهّز العرض ←
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
