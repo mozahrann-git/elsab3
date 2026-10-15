@@ -333,3 +333,56 @@ export function matchProject(p: Project, f: ProjectFilter): boolean {
 export const countActiveProjectFilters = (f: ProjectFilter): number =>
   [f.kind !== 'all', !!(f.neighborhoods?.length) || f.neighborhood !== 'all', f.delivery !== 'all', f.maxPrice !== 'all', f.maxDownPercent !== 'all',
    !!f.maxMonthly && f.maxMonthly !== 'all', !!f.maxDownAmount && f.maxDownAmount !== 'all'].filter(Boolean).length;
+
+/* ============================================================
+   خيارات التقسيط لفورم طلب العميل — من المشاريع الحقيقية
+   ============================================================
+   الفورم كان بيقرا سنين التقسيط والمقدم من شقق قديمة في
+   الموقع، والمطابقة بتعرض من المشاريع دي. فالمندوب يختار
+   "٣ سنين" والمطابقة تدوّر في مكان تاني. دلوقتي الاتنين
+   من نفس المكان.                                           */
+
+export interface ProjectPlanOptions {
+  years: number[];          // سنين التقسيط الموجودة في أنظمة السداد
+  minDown: number;          // أقل مقدم بالجنيه موجود فعلاً
+  minDownPercent: number;   // أقل نسبة مقدم موجودة
+  maxDown: number;          // أعلى مقدم — حد الشريط
+  deliveries: string[];     // مواعيد الاستلام
+  minPrice: number;
+  count: number;            // عدد المشاريع
+}
+
+export function projectPlanOptions(projects: Project[], kind: ProjectKind): ProjectPlanOptions {
+  const list = projects.filter((p) => p.kind === kind);
+  const years = new Set<number>();
+  const downs: number[] = [];
+  const pcts: number[] = [];
+  const prices: number[] = [];
+  const deliveries = new Set<string>();
+
+  list.forEach((p) => {
+    const start = Number(p.startingPrice || p.cashPrice || 0);
+    if (start > 0) prices.push(start);
+    if (p.deliveryDate) deliveries.add(String(p.deliveryDate).trim());
+    (p.plans || []).forEach((pl) => {
+      const y = Number(pl.years);
+      if (y > 0) years.add(y);
+      const pct = Number(pl.downPaymentPercent);
+      if (pct > 0) pcts.push(pct);
+      /* المقدم بالجنيه: لو مكتوب ناخده، لو لأ بنحسبه من النسبة وسعر البداية */
+      const amt = Number(pl.downPaymentAmount)
+        || (pct > 0 && start > 0 ? Math.round((start * pct) / 100) : 0);
+      if (amt > 0) downs.push(amt);
+    });
+  });
+
+  return {
+    years: Array.from(years).sort((a, b) => a - b),
+    minDown: downs.length ? Math.min(...downs) : 0,
+    minDownPercent: pcts.length ? Math.min(...pcts) : 0,
+    maxDown: downs.length ? Math.max(...downs) : 0,
+    deliveries: Array.from(deliveries).filter(Boolean).sort(),
+    minPrice: prices.length ? Math.min(...prices) : 0,
+    count: list.length,
+  };
+}

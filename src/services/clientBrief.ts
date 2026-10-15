@@ -135,8 +135,9 @@ export function briefGaps(lead: Lead): BriefGap[] {
   if (!b.districts.length) gaps.push({ id: 'districts', label: 'الحي' });
   if (!b.budgetMax) gaps.push({ id: 'budget', label: 'الميزانية' });
   if (!b.bedrooms) gaps.push({ id: 'rooms', label: 'عدد الغرف' });
-  if (!b.purpose) gaps.push({ id: 'purpose', label: 'ساكن ولا مستثمر' });
-  if (!b.urgency) gaps.push({ id: 'urgency', label: 'محتاجها إمتى' });
+  /* "ساكن ولا مستثمر" و"محتاجها إمتى" كانوا من مكالمة الاكتشاف
+     اللي اتشالت، ومش بيأثروا في المطابقة. كانوا بيخلّوا كل
+     عميل "ناقص ٢ بيانات" للأبد حتى بعد ما طلبه يتسجّل. */
   return gaps;
 }
 
@@ -288,9 +289,14 @@ export function briefLine(lead: Lead): string {
  */
 export function briefToProjectFilter(lead: Lead) {
   const b = readBrief(lead);
+  /* عمارات ولا كمبوند — كان مكتوب 'all' ثابت، فالمندوب يختار
+     "كمبوند" والمطابقة تعرضله عمارات */
+  const pk = String(((lead as any).discovery || {}).projectKind || '');
   return {
-    kind: 'all' as const,
+    kind: (pk === 'compound' || pk === 'building' ? pk : 'all') as 'all',
     neighborhood: b.districts.length === 1 ? b.districts[0] : 'all',
+    /* أكتر من حي — كان بيتحوّل لـ"كل الأحياء" لو اختار اتنين */
+    neighborhoods: b.districts.length > 1 ? b.districts : undefined,
     maxDownPercent: 'all' as const,
     delivery: 'all' as const,
     maxPrice: b.budgetMax ? b.budgetMax : ('all' as const),

@@ -387,9 +387,49 @@ export function requestsFromLeads(leads: Lead[]): ClientRequest[] {
   return out;
 }
 
-/** بيرجّع نسخة من الملف وفيها الطلب — الحفظ بيتم من onUpdateLead */
+/** بيرجّع نسخة من الملف وفيها الطلب — الحفظ بيتم من onUpdateLead.
+
+    الباج اللي كان هنا: الطلب كان بيتكتب في lead.clientRequest
+    بس، والمطابقة بتقرا من lead.discovery والميزانية. فالطلب
+    يتسجّل ومايتنفّذش — المطابقة مش شايفاه خالص.
+
+    دلوقتي الطلب بيكتب في نفس الحقول اللي المطابقة بتقرا منها
+    بالظبط، فأول ما يتحفظ المطابقة بتشتغل عليه. */
 export function leadWithRequest(lead: Lead, r: ClientRequest): Lead {
-  return { ...lead, clientRequest: r } as Lead;
+  const prevD = ((lead as any).discovery || {}) as Record<string, unknown>;
+  const isInst = r.kind === 'installment';
+
+  /* التقسيط: الميزانية = المقدم + القسط × عدد الشهور.
+     من غيرها المطابقة بتفتكر إن ميزانيته صفر. */
+  const instMax = isInst && r.years && r.monthly
+    ? Math.round((r.downPayment || 0) + r.monthly * r.years * 12)
+    : 0;
+
+  const discovery = {
+    ...prevD,
+    payment: isInst ? 'تقسيط' : 'كاش',
+    districts: r.neighborhoods || [],
+    rooms: r.bedrooms ? String(r.bedrooms) : prevD.rooms,
+    finishing: r.finishing || prevD.finishing,
+    downCash: isInst ? (r.downPayment || 0) : prevD.downCash,
+    monthly: isInst ? (r.monthly || 0) : prevD.monthly,
+    years: isInst ? (r.years || prevD.years) : prevD.years,
+    /* عمارات ولا كمبوند — فلتر المشاريع كان بيتجاهلها */
+    projectKind: isInst ? (r.offPlanKind === 'compound' ? 'compound' : 'building') : undefined,
+    deliveryWithin: isInst ? r.deliveryWithin : undefined,
+    answeredAt: Date.now(),
+    by: r.agentName,
+  };
+
+  return {
+    ...lead,
+    clientRequest: r,
+    discovery,
+    budgetMin: isInst ? 0 : (r.budgetMin ?? lead.budgetMin),
+    budgetMax: isInst ? (instMax || lead.budgetMax) : (r.budgetMax ?? lead.budgetMax),
+    preferredBedrooms: r.bedrooms || lead.preferredBedrooms,
+    preferredNeighborhood: r.neighborhoods?.[0] || lead.preferredNeighborhood,
+  } as Lead;
 }
 
 export function leadWithSeen(lead: Lead, propertyIds: string[]): Lead {

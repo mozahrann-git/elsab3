@@ -5,8 +5,11 @@ import {
   matchAllRequests, installmentHint, estimatePlan, affordableFromPlan,
   existingMatches, leadWithRequest, leadWithSeen, leadWithClosedRequest,
   requestsFromLeads, requestFromLead, RequestMatch, findStuckLeads,
-  REQUEST_FILTERS, paymentOf, offPlanOptions, minDownAmount, OffPlanKind,
+  REQUEST_FILTERS, paymentOf,
 } from '../../services/clientRequests';
+import {
+  Project, ProjectKind, subscribeProjects, projectPlanOptions,
+} from '../../services/projectService';
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../../data/properties';
 import { thumbUrl } from '../../services/mediaStorage';
 import { formatPrice } from '../../utils/helpers';
@@ -48,10 +51,14 @@ const RequestForm: React.FC<{
   const [bMin, setBMin] = useState<number>(lead.budgetMin || 1500000);
   const [bMax, setBMax] = useState<number>(lead.budgetMax || 3500000);
 
-  /* تقسيط */
-  const [planKind, setPlanKind] = useState<OffPlanKind>('standalone_building');
-  const opts = useMemo(() => offPlanOptions(properties, planKind), [properties, planKind]);
-  const floorDown = useMemo(() => minDownAmount(opts), [opts]);
+  /* تقسيط — من المشاريع الحقيقية (قسم المشاريع)، نفس المكان
+     اللي المطابقة بتعرض منه. كان بيقرا من شقق قديمة في الموقع
+     فالخيارات مكانتش بتطابق اللي بيظهر في المطابقة. */
+  const [projects, setProjects] = useState<Project[]>([]);
+  useEffect(() => subscribeProjects(setProjects), []);
+  const [planKind, setPlanKind] = useState<ProjectKind>('building');
+  const opts = useMemo(() => projectPlanOptions(projects, planKind), [projects, planKind]);
+  const floorDown = opts.minDown;
   const [years, setYears] = useState<number>(0);
   const [down, setDown] = useState<number>(0);
   const [delivery, setDelivery] = useState('');
@@ -87,7 +94,7 @@ const RequestForm: React.FC<{
       bedrooms: beds || undefined,
       /* تحت الإنشاء بييجي نص تشطيب على طول — مفيش سؤال */
       finishing: 'نص تشطيب',
-      offPlanKind: planKind,
+      offPlanKind: planKind === 'compound' ? 'compound' : 'standalone_building',
       years: years || undefined,
       downPayment: down || undefined,
       monthly: monthly || undefined,
@@ -151,11 +158,11 @@ const RequestForm: React.FC<{
               <div>
                 <p className="text-xs font-bold text-stone-500 mb-1.5">كمبوند ولا عمارات</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {([['standalone_building', 'عمارات'], ['compound', 'كمبوند']] as [OffPlanKind, string][]).map(([k, l]) => (
+                  {([['building', 'عمارات'], ['compound', 'كمبوند']] as [ProjectKind, string][]).map(([k, l]) => (
                     <button key={k} type="button" onClick={() => setPlanKind(k)} className={chip(planKind === k)}>
                       {l}
                       <span className="block text-[10px] font-bold opacity-60 mt-0.5">
-                        {offPlanOptions(properties, k).count} متاحة
+                        {projectPlanOptions(projects, k).count} مشروع
                       </span>
                     </button>
                   ))}
@@ -164,7 +171,7 @@ const RequestForm: React.FC<{
 
               {opts.count === 0 ? (
                 <p className="text-xs font-black text-[#C2412D] bg-[#FBEDEA] rounded-2xl p-3">
-                  مفيش عندنا {planKind === 'compound' ? 'كمبوندات' : 'عمارات'} تحت الإنشاء دلوقتي —
+                  مفيش عندنا {planKind === 'compound' ? 'كمبوندات' : 'عمارات'} في قسم المشاريع دلوقتي —
                   سجّل الطلب وهيوصلك أول ما تتضاف
                 </p>
               ) : (
@@ -172,7 +179,7 @@ const RequestForm: React.FC<{
                   <div>
                     <p className="text-xs font-bold text-stone-500 mb-1.5">
                       التقسيط على كام سنة
-                      <span className="text-stone-400 font-medium"> — المتاح في {opts.count} وحدة</span>
+                      <span className="text-stone-400 font-medium"> — من أنظمة السداد في {opts.count} مشروع</span>
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {opts.years.map((y) => (
@@ -191,14 +198,14 @@ const RequestForm: React.FC<{
                       </p>
                     </div>
                     <input
-                      type="range" min={floorDown} max={Math.max(floorDown, Math.round(opts.maxPrice * 0.6))}
+                      type="range" min={floorDown} max={Math.max(floorDown + 25000, opts.maxDown * 2)}
                       step={25000} value={down}
                       onChange={(e) => setDown(Number(e.target.value))}
                       className="w-full accent-[#A07A26]"
                     />
                     <p className="text-[11px] font-bold text-[#A07A26] mt-1">
-                      أقل مقدم موجود عندنا {floorDown.toLocaleString('en-US')} ج.م
-                      ({opts.minDownPercent}٪ من أرخص وحدة) — مفيش أقل من كده
+                      أقل مقدم في أنظمة السداد عندنا {floorDown.toLocaleString('en-US')} ج.م
+                      {opts.minDownPercent ? ` (${opts.minDownPercent}٪)` : ''} — مفيش أقل من كده
                     </p>
                     {monthly > 0 && (
                       <p className="text-[11px] font-bold text-stone-500 mt-0.5">
