@@ -140,7 +140,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   viewingRequests,
 }) => {
   // Navigation Tabs matching sidebar items (Properties tab removed)
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'leaderboard' | 'requests'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'leaderboard'>('pipeline');
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeMobileStageFilter, setActiveMobileStageFilter] = useState<string>('all');
