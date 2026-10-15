@@ -52,7 +52,7 @@ import { LeaderboardTab } from './sales/LeaderboardTab';
 import { matchDetailed, briefLine, briefGaps, readBrief, payModeOf, resaleFits, projectsFit, resaleCeiling, PayMode } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
-import { humanDuration, followUpBadge } from '../utils/followUpAlerts';
+import { humanDuration, followUpBadge, followUpState } from '../utils/followUpAlerts';
 import { OwnerLinkCard } from './crm/OwnerLinkCard';
 import { QuickBriefRow } from './crm/QuickBriefRow';
 import { ProjectMatchPanel } from './crm/ProjectMatchPanel';
@@ -347,6 +347,18 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       .filter((l) => l.followUpStatus !== 'completed' && l.status !== 'closed' && l.status !== 'lost')
       .sort((a, b) => (a.nextActionAt || Infinity) - (b.nextActionAt || Infinity)),
     [scopedLeads],
+  );
+
+  /* زرار «المتأخر»: يعرض المتأخرين بس مرة واحدة. للإدارة بيمشي
+     على اختيار «كل الفريق» أو مندوب معيّن، وللسيلز على عملاؤه. */
+  const [lateOnly, setLateOnly] = useState(false);
+  const lateCount = useMemo(
+    () => followUpList.filter((l) => followUpState(l.nextActionAt, l.followUpStatus) === 'late').length,
+    [followUpList],
+  );
+  const shownFollowUps = useMemo(
+    () => (lateOnly ? followUpList.filter((l) => followUpState(l.nextActionAt, l.followUpStatus) === 'late') : followUpList),
+    [followUpList, lateOnly],
   );
 
   const followUpMatches = useMemo(() => {
@@ -1230,6 +1242,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     {visibleAgents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 )}
+                <button
+                  onClick={() => setLateOnly((v) => !v)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border ${lateOnly ? 'bg-[#C2412D] text-white border-[#C2412D]' : 'bg-[#FBEDEA] text-[#C2412D] border-[#E9B8AE]'}`}
+                >
+                  {lateOnly ? `اعرض الكل` : `المتأخر (${lateCount})`}
+                </button>
                 <button onClick={toggleCompact} className="px-3.5 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold text-[#141414]">
                   {compactView ? 'عرض مفصّل' : 'عرض مختصر'}
                 </button>
@@ -1248,7 +1266,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* Followups Cards / Table */}
             <div className="space-y-3">
-              {followUpList
+              {lateOnly && lateCount === 0 && (
+                <p className="text-xs font-bold text-[#1E7A45] bg-[#EEF5F0] rounded-2xl p-4 text-center">مفيش متابعات متأخرة</p>
+              )}
+              {shownFollowUps
                 .map((lead) => {
                 const stageObj = CRM_PIPELINE_STAGES.find((s) => s.id === lead.status) || CRM_PIPELINE_STAGES[0];
                 const tone = toneStyle(lead);
