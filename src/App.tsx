@@ -223,6 +223,8 @@ export default function App() {
   /* فشل حفظ أكشن — لازم يبان فوق أي شاشة مفتوحة (ملف العميل بيغطي التحذير العادي) */
   const [leadSaveFail, setLeadSaveFail] = useState<string>('');
   const pendingLeadsRef = useRef(new Map<string, Lead>());
+  /* جلسة السيلز اتقفلت — لازم يدخل تاني قبل ما يشتغل */
+  const [sessionExpired, setSessionExpired] = useState(false);
   // نوع العرض: بيقرر الصفحة بتعرض ريسيل ولا مشاريع تحت الإنشاء
   const [listingMode, setListingMode] = useState<'resale' | 'off_plan'>('resale');
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>(EMPTY_PROJECT_FILTER);
@@ -485,14 +487,26 @@ export default function App() {
     const unsub = subscribeToStaffAuth(async (user) => {
       setAuthKey(user && !user.isAnonymous ? user.uid : 'guest');
       setStaffAccess(user && !user.isAnonymous ? await getStaffAccess(user.email) : null);
+      /* الجلسة اتقفلت (باسوورد اتغيّر، أو المتصفح مسح الدخول) بس الشاشة
+         كانت بتفضل فاتحة من الذاكرة المحلية: السيلز يشتغل على نسخة قديمة
+         وكل أكشن يترفض «الصلاحيات رافضة» ومحدش غيره يشوفه. دلوقتي بنقفل
+         ونطلب دخول تاني. */
+      const hadSales = safeLocalStorageGet('lion_sales_logged_in') === 'true';
+      const endSales = () => {
+        if (!hadSales) return;
+        safeLocalStorageSet('lion_sales_logged_in', 'false');
+        setIsCrmOpen(false);
+        setSessionExpired(true);
+      };
       if (!user || user.isAnonymous) {
         setIsAdminLoggedIn(false);
         setIsSalesLoggedIn(false);
+        endSales();
         return;
       }
       const role = await getStaffRole(user.email);
       setIsAdminLoggedIn(role === 'admin');
-      if (role !== 'admin' && role !== 'sales') setIsSalesLoggedIn(false);
+      if (role !== 'admin' && role !== 'sales') { setIsSalesLoggedIn(false); endSales(); }
     });
     return () => unsub();
   }, []);
@@ -1177,9 +1191,10 @@ export default function App() {
   };
 
   const handleSalesLogout = () => {
-    signOutToGuest().catch(() => {});
-    setIsSalesLoggedIn(false);
+    // الأول نشيل العلامة — عشان الخروج العادي مايتفهمش إنه «الدخول انتهى»
     safeLocalStorageSet('lion_sales_logged_in', 'false');
+    setIsSalesLoggedIn(false);
+    signOutToGuest().catch(() => {});
   };
 
   const handleOpenSalesSessionFromAdmin = (agentId: string) => {
@@ -1375,7 +1390,7 @@ export default function App() {
     }).catch((err) => {
       if (pendingLeadsRef.current.get(lead.id) === lead) pendingLeadsRef.current.delete(lead.id);
       console.error('[Firebase] Error saving lead:', err);
-      setLeadSaveFail(`الأكشن على «${lead.name}» مااتحفظش — ${(err as any)?.code === 'permission-denied' ? 'الصلاحيات رافضة' : 'النت أو السيرفر'}. اكتبه تاني.`);
+      setLeadSaveFail(`الأكشن على «${lead.name}» مااتحفظش — ${(err as any)?.code === 'permission-denied' ? 'الصلاحيات رافضة — اعمل خروج وادخل بحسابك تاني' : 'النت أو السيرفر'}. اكتبه تاني.`);
       const code = (err as any)?.code || '';
       setLeadsSyncError(
         code === 'permission-denied'
@@ -2854,6 +2869,16 @@ export default function App() {
         logoUrl={customLogoUrl}
         onAddUnit={() => { setIsPartnerPortalsOpen(false); setIsResaleSubmitOpen(true); }}
       />
+
+      {sessionExpired && (
+        <div className="fixed inset-0 z-[310] bg-black/70 flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center space-y-3">
+            <p className="font-bold text-lg">دخولك انتهى</p>
+            <p className="text-sm text-[#6B665C] leading-relaxed">ادخل بحسابك تاني عشان اللي هتسجّله يتحفظ ويوصل للإدارة. اللي ظاهر قدامك دلوقتي ممكن يكون نسخة قديمة.</p>
+            <button onClick={() => { setSessionExpired(false); setIsSalesLoginOpen(true); }} className="w-full py-3 rounded-xl bg-[#141414] text-white font-bold">ادخل تاني</button>
+          </div>
+        </div>
+      )}
 
       {leadSaveFail && (
         <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[300] bg-[#9E2A1B] text-white px-4 py-3 rounded-2xl shadow-2xl text-xs sm:text-sm font-bold flex items-center gap-3 max-w-[94vw]" dir="rtl">
