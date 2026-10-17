@@ -219,6 +219,9 @@ export default function App() {
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
   /* سبب وقوف المزامنة — بيتعرض جوه غرفة العمليات لما يحصل بس */
   const [leadsSyncError, setLeadsSyncError] = useState<string>('');
+  /* فشل حفظ أكشن — لازم يبان فوق أي شاشة مفتوحة (ملف العميل بيغطي التحذير العادي) */
+  const [leadSaveFail, setLeadSaveFail] = useState<string>('');
+  const pendingLeadsRef = useRef(new Map<string, Lead>());
   // نوع العرض: بيقرر الصفحة بتعرض ريسيل ولا مشاريع تحت الإنشاء
   const [listingMode, setListingMode] = useState<'resale' | 'off_plan'>('resale');
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>(EMPTY_PROJECT_FILTER);
@@ -353,7 +356,12 @@ export default function App() {
     // 3. Subscribe to CRM Leads
     const unsubLeads = !isStaffSession ? noop : subscribeToCrmLeads((liveLeads) => {
       if (liveLeads && liveLeads.length > 0) {
-        setCrmLeads(liveLeads);
+        /* أي تعديل لسه بيتحفظ بيفضل ظاهر زي ما السيلز كتبه.
+           قبل كده أي تحديث من السيرفر (حتى على عميل تاني) كان بيوصل
+           قبل ما الحفظ يخلص، فيرجّع العميل لحالته القديمة — والسيلز
+           يشوف الأكشن "اتمسح" ويرجع يكتبه تاني. */
+        const pend = pendingLeadsRef.current;
+        setCrmLeads(pend.size ? liveLeads.map((l) => pend.get(l.id) || l) : liveLeads);
         safeLocalStorageSet('lion_crm_leads', JSON.stringify(liveLeads));
         setLeadsSyncError('');          // وصلت داتا = المزامنة رجعت
       } else {
@@ -1360,12 +1368,17 @@ export default function App() {
     }
 
     setCrmLeads((prev) => prev.map((l) => (l.id === lead.id ? lead : l)));
+    pendingLeadsRef.current.set(lead.id, lead);
     /* بنبعت اللي اتغيّر بس، والنشاط بيتدمج مع اللي على السيرفر —
        عشان لو حد تاني شغال على نفس العميل، محدش يمسح شغل التاني. */
     /* لو الحفظ فشل لازم تعرف فوراً. قبل كده كان بيفشل في صمت
        والتعديل يفضل على جهازك إنت بس. */
-    saveLeadMerged(lead, before).catch((err) => {
+    saveLeadMerged(lead, before).then(() => {
+      if (pendingLeadsRef.current.get(lead.id) === lead) pendingLeadsRef.current.delete(lead.id);
+    }).catch((err) => {
+      if (pendingLeadsRef.current.get(lead.id) === lead) pendingLeadsRef.current.delete(lead.id);
       console.error('[Firebase] Error saving lead:', err);
+      setLeadSaveFail(`الأكشن على «${lead.name}» مااتحفظش — ${(err as any)?.code === 'permission-denied' ? 'الصلاحيات رافضة' : 'النت أو السيرفر'}. اكتبه تاني.`);
       const code = (err as any)?.code || '';
       setLeadsSyncError(
         code === 'permission-denied'
@@ -2834,6 +2847,13 @@ export default function App() {
         logoUrl={customLogoUrl}
         onAddUnit={() => { setIsPartnerPortalsOpen(false); setIsResaleSubmitOpen(true); }}
       />
+
+      {leadSaveFail && (
+        <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[300] bg-[#9E2A1B] text-white px-4 py-3 rounded-2xl shadow-2xl text-xs sm:text-sm font-bold flex items-center gap-3 max-w-[94vw]" dir="rtl">
+          <span>{leadSaveFail}</span>
+          <button onClick={() => setLeadSaveFail('')} className="px-2 py-1 rounded-lg bg-white/20 shrink-0">تمام</button>
+        </div>
+      )}
 
       {/* Floating Toast Notification for Immediate User Feedback */}
       {toastMessage && (

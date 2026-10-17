@@ -235,7 +235,8 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
         <div className="space-y-4 overflow-y-auto pr-0.5 flex-1">
           
           {/* الأكشن الجاي + نقل إلى */}
-          <LeadActionPanel lead={lead} stages={STAGES} byName={agents.find((x) => x.id === lead.assignedAgentId)?.name || 'الفريق'} onUpdateLead={onUpdateLead} />
+          {/* اسم اللي عمل الأكشن فعلاً — كان بيتكتب اسم صاحب العميل حتى لو الإدارة هي اللي سجّلت */}
+          <LeadActionPanel lead={lead} stages={STAGES} byName={currentUserName || agents.find((x) => x.id === lead.assignedAgentId)?.name || 'الفريق'} onUpdateLead={onUpdateLead} />
 
           {/* تعديل الميزانية بيمر على الإدارة */}
           <BudgetChangeBox

@@ -718,12 +718,22 @@ export async function saveLeadToDb(lead: Lead): Promise<void> {
 export async function saveLeadMerged(lead: Lead, prev?: Lead | null): Promise<void> {
   await ensureAuth();
   const ref = doc(db, 'crm_leads', lead.id);
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const server = snap.exists() ? (snap.data() as Partial<Lead>) : null;
-    const patch = buildLeadPatch(lead, prev, server);
-    tx.set(ref, cleanFirestoreData(patch), { merge: true });
-  });
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const server = snap.exists() ? (snap.data() as Partial<Lead>) : null;
+      const patch = buildLeadPatch(lead, prev, server);
+      tx.set(ref, cleanFirestoreData(patch), { merge: true });
+    });
+  } catch (err: any) {
+    /* الترانزاكشن بيفشل لو النت ضعيف أو مقطوع لحظة (لازم يقرا من
+       السيرفر الأول). ساعتها الأكشن كان بيضيع ويرجع زي ما كان.
+       دلوقتي بنكتب اللي اتغيّر بس كتابة عادية — دي Firestore بيحفظها
+       ويبعتها أول ما النت يرجع. الرفض من الصلاحيات بيطلع لفوق زي ما هو. */
+    if (err?.code === 'permission-denied') throw err;
+    const patch = buildLeadPatch(lead, prev, (prev as Partial<Lead>) || null);
+    await setDoc(ref, cleanFirestoreData(patch), { merge: true });
+  }
   /* مفيش catch هنا بقصد.
 
      كان فيه catch بيبلع الغلط ويحفظ في المتصفح بدل الداتابيز. النتيجة:
