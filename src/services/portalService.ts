@@ -417,6 +417,8 @@ export interface FieldTrip {
   status: 'sent' | 'done'; createdAt: number; doneAt?: number; doneBy?: string;
   /* الأكواد اللي فيدباكها اترفض وسببه — المندوب بيشوفه في اللينك ويبعت تاني */
   redo?: Record<string, string>;
+  /* العميل اللي طالع المعاينة — الفيدباك بيتجمّع عليه */
+  clientName?: string; clientPhone?: string; leadId?: string;
 }
 export type FeedbackStage = 'submitted' | 'sara_confirmed' | 'sales_confirmed' | 'rejected';
 export interface FieldFeedback {
@@ -425,6 +427,7 @@ export interface FieldFeedback {
   text: string; voiceUrl?: string; rating: number; positives: string[]; negatives: string[];
   stage: FeedbackStage; createdAt: number; saraAt?: number; salesAt?: number; salesBy?: string;
   rejectReason?: string; rejectedAt?: number;
+  clientName?: string; clientPhone?: string; tripTime?: string;
   salesAgentId?: string; salesAgentName?: string;
 }
 
@@ -448,13 +451,19 @@ export function nextInLine(agents: FieldAgent[]) {
   const last = [...act].sort((a, b) => (b.lastAssignedAt || 0) - (a.lastAssignedAt || 0))[0];
   return { next: sorted[0], last: last.lastAssignedAt ? last : undefined };
 }
-export async function createTrip(agent: FieldAgent, units: TripUnit[], timeText: string, viewingIds: string[] = []) {
+export async function createTrip(agent: FieldAgent, units: TripUnit[], timeText: string, viewingIds: string[] = [], client: { name?: string; phone?: string; leadId?: string } = {}) {
   const id = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   await setDoc(doc(db, 'field_trips', id), cleanFirestoreData({
     id, agentId: agent.id, agentName: agent.name, agentPhone: agent.phone, units, timeText, viewingIds, status: 'sent', createdAt: Date.now(),
+    clientName: client.name || undefined, clientPhone: client.phone || undefined, leadId: client.leadId || undefined,
   }));
   await updateDoc(doc(db, 'field_agents', agent.id), { lastAssignedAt: Date.now(), viewingsCount: (agent.viewingsCount || 0) + units.length });
   return id;
+}
+/** اسم العميل لمشوار قديم اتعمل من غير اسم — بيتكتب على فيدباكه كمان */
+export async function setTripClient(tripId: string, name: string, phone: string, feedbackIds: string[]) {
+  await updateDoc(doc(db, 'field_trips', tripId), cleanFirestoreData({ clientName: name, clientPhone: phone || undefined }) as any);
+  for (const id of feedbackIds) await updateDoc(doc(db, 'field_feedback', id), cleanFirestoreData({ clientName: name, clientPhone: phone || undefined }) as any);
 }
 /** المعاينة اتعملت فعلاً — بعدها لينك الفيدباك بيتبعت للمندوب */
 export async function markTripDone(id: string) {
@@ -473,7 +482,9 @@ export async function submitFieldFeedback(trip: FieldTrip, u: TripUnit, data: { 
   const id = `ff-${trip.id}-${u.code}`.replace(/[^\w-]/g, '_');
   await setDoc(doc(db, 'field_feedback', id), cleanFirestoreData({
     id, tripId: trip.id, agentId: trip.agentId, agentName: trip.agentName, propertyId: u.propertyId, code: u.code, title: u.title,
-    brokerId: u.brokerId, salesAgentId: u.salesAgentId, salesAgentName: u.salesAgentName, ...data, stage: 'submitted', createdAt: Date.now(),
+    brokerId: u.brokerId, salesAgentId: u.salesAgentId, salesAgentName: u.salesAgentName,
+    clientName: trip.clientName, clientPhone: trip.clientPhone, tripTime: trip.timeText,
+    ...data, stage: 'submitted', createdAt: Date.now(),
   }));
 }
 export function subscribeFieldFeedback(cb: (l: FieldFeedback[]) => void) { return listen<FieldFeedback>(collection(db, 'field_feedback'), cb); }
@@ -498,6 +509,36 @@ export async function createViewingRequests(reqs: Record<string, any>[]) {
   for (const r of reqs) await setDoc(doc(db, 'viewing_requests', r.id), cleanFirestoreData(r));
 }
 export async function deleteOwnerFeedback(id: string) { await deleteDoc(doc(db, 'owner_feedback', id)); }
+/* الفيدباك متجمّع: كل عميل (مشوار) والشقق اللي طلع عليها.
+   القديم اللي مالوش اسم عميل بيتجمّع بالمشوار برضه. */
+export interface FeedbackGroup {
+  key: string; client: string; phone?: string; agentName: string; time?: string; salesName?: string;
+  items: FieldFeedback[]; latest: number;
+}
+export function groupFeedback(fbs: FieldFeedback[], trips: FieldTrip[] = []): FeedbackGroup[] {
+  const m = new Map<string, FeedbackGroup>();
+  fbs.forEach((f) => {
+    const t = trips.find((x) => x.id === f.tripId);
+    const key = f.tripId || f.id;
+    if (!m.has(key)) m.set(key, {
+      key,
+      client: f.clientName || t?.clientName || '',
+      phone: f.clientPhone || t?.clientPhone,
+      agentName: f.agentName || t?.agentName || '',
+      time: f.tripTime || t?.timeText,
+      salesName: f.salesAgentName,
+      items: [], latest: 0,
+    });
+    const g = m.get(key)!;
+    g.items.push(f);
+    g.latest = Math.max(g.latest, f.createdAt || 0);
+    if (!g.salesName && f.salesAgentName) g.salesName = f.salesAgentName;
+  });
+  return [...m.values()].map((g) => ({ ...g, items: g.items.sort((a, b) => a.code.localeCompare(b.code)) }))
+    .sort((a, b) => b.latest - a.latest);
+}
+export const groupTitle = (g: FeedbackGroup) => g.client || `عميل من غير اسم · مشوار ${g.agentName}${g.time ? ` · ${g.time}` : ''}`;
+
 export const tripRedoReason = (t: FieldTrip, code: string) => t.redo?.[String(code).replace(/[.\s]/g, '_')];
 /** السيلز بيأكد، فيتنشر للمالك ويتحسب للمندوب */
 export async function salesConfirmFeedback(f: FieldFeedback, agents: FieldAgent[]) {

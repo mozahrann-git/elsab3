@@ -5,6 +5,7 @@ import { StaffAccess, subscribeToAccounts, AccountRecord } from '../../services/
 import {
   UnitViewing, OwnerFeedback, ChangeRequest,
   subscribeAllUnitViewings, subscribeAllOwnerFeedback, subscribeAllChangeRequests,
+  FieldFeedback, FieldTrip, subscribeFieldFeedback, subscribeTrips, groupFeedback, groupTitle,
 } from '../../services/portalService';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { UnitVisit, subscribeVisits, summarize } from '../../services/visitorService';
@@ -42,6 +43,10 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
   const [changes, setChanges] = useState<ChangeRequest[]>([]);
   const [accounts, setAccounts] = useState<AccountRecord[]>([]);
   const [visits, setVisits] = useState<UnitVisit[]>([]);
+  /* فيدباك المعاينات متجمّع على العميل — اللي الأونر بيحكم بيه */
+  const [fieldFbs, setFieldFbs] = useState<FieldFeedback[]>([]);
+  const [trips, setTrips] = useState<FieldTrip[]>([]);
+  useEffect(() => { const a = subscribeFieldFeedback(setFieldFbs); const b = subscribeTrips(setTrips); return () => { a(); b(); }; }, []);
   useEffect(() => subscribeVisits(setVisits), []);
 
   useEffect(() => {
@@ -135,18 +140,46 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
       )}
 
       {tab === 'feedback' && (
-        <div className="grid gap-3 lg:grid-cols-2">
-          {!feedback.length && <p className="lg:col-span-2 text-center text-sm text-[#6B665C] py-10">مفيش فيدباك منشور لسه</p>}
-          {feedback.map((f) => (
-            <Card key={f.id}>
-              <div className="flex justify-between"><span className="font-bold">{f.propertyCode} · {f.date}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating || 0)}</span></div>
-              <p className="leading-7 text-sm">"{f.summary}"</p>
-              <div className="flex flex-wrap gap-1.5">
-                {(f.positives || []).map((x) => <Chip key={x} tone="green">+ {x}</Chip>)}
-                {(f.negatives || []).map((x) => <Chip key={x} tone="red">− {x}</Chip>)}
-              </div>
-            </Card>
-          ))}
+        <div className="space-y-4">
+          {(() => {
+            const groups = groupFeedback(fieldFbs.filter((f) => f.stage !== 'rejected'), trips);
+            if (!groups.length && !feedback.length) return <p className="text-center text-sm text-[#6B665C] py-10">مفيش فيدباك لسه</p>;
+            return groups.map((g) => (
+              <Card key={g.key}>
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <span className="font-bold">{groupTitle(g)}</span>
+                  <span className="text-xs text-[#6B665C]">{[g.salesName ? `السيلز ${g.salesName}` : '', `المندوب ${g.agentName}`, g.time].filter(Boolean).join(' · ')}</span>
+                </div>
+                <p className="text-xs text-[#6B665C]">طلع على {g.items.length} شقة: {g.items.map((x) => x.code).join('، ')}</p>
+                <div className="grid gap-2 lg:grid-cols-2">
+                  {g.items.map((f) => (
+                    <div key={f.id} className="rounded-xl bg-[#F6F4EF] p-3 space-y-1.5">
+                      <div className="flex justify-between items-center"><span className="font-bold font-mono text-sm">{f.code}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating || 0)}</span></div>
+                      {f.voiceUrl && <audio controls src={f.voiceUrl} className="w-full" />}
+                      <p className="text-sm leading-6">"{f.text}"</p>
+                      <div className="flex flex-wrap gap-1.5">{(f.positives || []).map((x) => <Chip key={x} tone="green">+ {x}</Chip>)}{(f.negatives || []).map((x) => <Chip key={x} tone="red">− {x}</Chip>)}<Chip tone={f.stage === 'sales_confirmed' ? 'green' : 'gold'}>{({ submitted: 'مستني سارة', sara_confirmed: 'مستني السيلز', sales_confirmed: 'اتأكد', rejected: 'اترفض' } as any)[f.stage] || f.stage}</Chip></div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ));
+          })()}
+          {(() => {
+            /* فيدباك قديم منشور مالوش مشوار (اتعمل قبل النظام ده) */
+            const old = feedback.filter((o) => !o.sourceFeedbackId || !fieldFbs.some((f) => `of-${f.id}` === o.id || f.id === o.sourceFeedbackId));
+            if (!old.length) return null;
+            return (
+              <Card>
+                <p className="font-bold">فيدباك قديم (قبل تجميع العملاء)</p>
+                {old.map((o) => (
+                  <div key={o.id} className="border-t border-[#F0ECE4] pt-2 space-y-1">
+                    <div className="flex justify-between"><span className="font-bold text-sm">{o.propertyCode} · {o.date}</span><span className="text-[#D9B864]">{'★'.repeat(o.rating || 0)}</span></div>
+                    <p className="text-sm">"{o.summary}"</p>
+                  </div>
+                ))}
+              </Card>
+            );
+          })()}
         </div>
       )}
 

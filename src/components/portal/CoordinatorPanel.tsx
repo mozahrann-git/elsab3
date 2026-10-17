@@ -11,7 +11,7 @@ import {
   subscribeAllUnitViewings, subscribeAllChangeRequests, subscribeFieldAgents, subscribeTrips, subscribeFieldFeedback,
   createUnitViewing, renotifyOwner, findBrokerContact, deleteUnitViewing, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
   acceptOwnerProposal, askClientAboutProposal, counterProposeToOwner, cancelViewing,
-  saraConfirmFeedback, rejectFeedback, deleteFeedback, salesConfirmFeedback, subscribeAllOwnerFeedback, deleteOwnerFeedback, OwnerFeedback, notifyBroker, revealOwnerToSara, markTripDone, cancelViewingRequest,
+  saraConfirmFeedback, rejectFeedback, deleteFeedback, salesConfirmFeedback, subscribeAllOwnerFeedback, deleteOwnerFeedback, OwnerFeedback, groupFeedback, groupTitle, setTripClient, notifyBroker, revealOwnerToSara, markTripDone, cancelViewingRequest,
 } from '../../services/portalService';
 import { subscribeToSalesAgents } from '../../services/firebaseService';
 import { SalesAgent } from '../../types';
@@ -94,7 +94,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
   );
 };
 
-type TripSeed = { code: string; label: string; at?: number; salesAgentId?: string; salesAgentName?: string; n?: number };
+type TripSeed = { code: string; label: string; at?: number; salesAgentId?: string; salesAgentName?: string; clientName?: string; clientPhone?: string; leadId?: string; n?: number };
 
 // ---------------- المعاينات ----------------
 /* المالك اقترح ميعاد تاني: سارة تقبله، أو تسأل العميل، أو تقترح ميعاد تالت. الإلغاء آخر حاجة. */
@@ -148,7 +148,7 @@ const RescheduleActions: React.FC<{ v: UnitViewing; byName: string }> = ({ v, by
   );
 };
 
-const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; byName: string; onSendToAgent: (code: string, label: string, at?: number, sales?: { salesAgentId?: string; salesAgentName?: string }) => void }> = ({ viewings, properties, isAdmin, byName, onSendToAgent }) => {
+const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; byName: string; onSendToAgent: (code: string, label: string, at?: number, sales?: { salesAgentId?: string; salesAgentName?: string; clientName?: string; clientPhone?: string; leadId?: string }) => void }> = ({ viewings, properties, isAdmin, byName, onSendToAgent }) => {
   const [code, setCode] = useState('');
   const [time, setTime] = useState<WhenValue | null>(null);
   const [note, setNote] = useState('');
@@ -239,7 +239,7 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
             {/* مؤقتاً لحد ما أرقام الملاك تتسجّل: المعاينة تتحط في مشوار
                 مع المندوب على طول، وسارة بتأكد إنها اتعملت */}
             <div className="grid grid-cols-2 gap-2">
-              <Btn tone="gold" className="!px-2 text-xs" onClick={() => onSendToAgent(r.propertyCode, r.clientPreferredTime || '', r.scheduledAtTimestamp, { salesAgentId: r.requestingAgentId, salesAgentName: r.requestingAgentName })}>
+              <Btn tone="gold" className="!px-2 text-xs" onClick={() => onSendToAgent(r.propertyCode, r.clientPreferredTime || '', r.scheduledAtTimestamp, { salesAgentId: r.requestingAgentId, salesAgentName: r.requestingAgentName, clientName: r.clientName, clientPhone: r.clientPhone, leadId: r.leadId })}>
                 <Send size={14} />حطّيه في مشوار
               </Btn>
               <Btn tone="danger" className="!px-2 text-xs" onClick={async () => {
@@ -391,6 +391,10 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
   const [sales, setSales] = useState<SalesAgent[]>([]);
   useEffect(() => subscribeToSalesAgents((l) => setSales(l.filter((a) => a.isActive !== false))), []);
   const [salesFor, setSalesFor] = useState<Record<string, { id: string; name: string }>>({});
+  /* المشوار لعميل واحد — الفيدباك بيتجمّع عليه */
+  const [clientName, setClientName] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [leadId, setLeadId] = useState('');
   const [busyTrip, setBusyTrip] = useState('');
   const { next, last } = nextInLine(agents);
   const [agentId, setAgentId] = useState('');
@@ -403,6 +407,9 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
     if (!seed) return;
     setCodes((c) => (c.includes(seed.code) ? c : [...c, seed.code]));
     if (seed.salesAgentId) setSalesFor((m) => ({ ...m, [seed.code]: { id: seed.salesAgentId!, name: seed.salesAgentName || '' } }));
+    if (seed.clientName) setClientName(seed.clientName);
+    if (seed.clientPhone) setClientPhone(seed.clientPhone);
+    if (seed.leadId) setLeadId(seed.leadId);
     if (seed.at) setTime({ at: seed.at, label: formatWhen(seed.at) });
     else if (seed.label) setTime({ at: Date.now(), label: seed.label });
   }, [seed?.code, seed?.n]);
@@ -413,7 +420,7 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
     salesAgentName: salesFor[p!.code]?.name || confirmed.find((v) => v.propertyCode === p!.code)?.salesAgentName,
   })), [codes, properties, confirmed, salesFor]);
   const add = (c: string) => { const k = c.trim().toUpperCase(); if (properties.some((p) => p.code.toUpperCase() === k) && !codes.includes(k)) setCodes((x) => [...x, properties.find((p) => p.code.toUpperCase() === k)!.code]); setCodeInput(''); };
-  const message = (a: FieldAgent) => `أهلاً ${a.name}، عندك معاينة ${time?.label || ''}:\n\n` + units.map((u, i) => `${i + 1}) كود ${u.code}\nالشقة: ${u.link}\nاللوكيشن: ${u.location}`).join('\n\n') + `\n\n— سارة · السبع للعقارات`;
+  const message = (a: FieldAgent) => `أهلاً ${a.name}، عندك معاينة ${time?.label || ''}\nالعميل: ${clientName.trim()} · ${clientPhone.trim()}\n\n` + units.map((u, i) => `${i + 1}) كود ${u.code}\nالشقة: ${u.link}\nاللوكيشن: ${u.location}`).join('\n\n') + `\n\n— سارة · السبع للعقارات`;
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -426,10 +433,14 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
 
       <Card className="lg:col-span-2">
         <p className="font-bold text-lg">مشوار معاينة جديد</p>
+        <div className="grid grid-cols-2 gap-2">
+          <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="اسم العميل" className={input} />
+          <input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="رقم العميل" dir="ltr" className={`${input} font-mono`} />
+        </div>
         {confirmed.length > 0 && (
           <div className="flex flex-wrap gap-2">
             <span className="text-xs text-[#6B665C] w-full">معاينات متأكدة:</span>
-            {confirmed.map((v) => <button key={v.id} onClick={() => { add(v.propertyCode); if (!time && v.scheduledAt) setTime({ at: v.scheduledAt, label: formatWhen(v.scheduledAt) }); }} className={`px-3 py-1.5 rounded-full text-xs font-semibold ${codes.includes(v.propertyCode) ? 'bg-[#141414] text-white' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>{v.propertyCode} · {v.brokerConfirmedTime || v.scheduledText}</button>)}
+            {confirmed.map((v) => <button key={v.id} onClick={() => { add(v.propertyCode); if (!clientName && v.leadName) setClientName(v.leadName); if (v.salesAgentId) setSalesFor((m) => ({ ...m, [v.propertyCode]: { id: v.salesAgentId!, name: v.salesAgentName || '' } })); if (!time && v.scheduledAt) setTime({ at: v.scheduledAt, label: formatWhen(v.scheduledAt) }); }} className={`px-3 py-1.5 rounded-full text-xs font-semibold ${codes.includes(v.propertyCode) ? 'bg-[#141414] text-white' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>{v.propertyCode} · {v.brokerConfirmedTime || v.scheduledText}</button>)}
           </div>
         )}
         <div className="flex gap-2"><input value={codeInput} onChange={(e) => setCodeInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add(codeInput)} placeholder="ضيف كود شقة" dir="ltr" className={`${input} font-mono`} list="codes2" /><Btn onClick={() => add(codeInput)}><Plus size={16} /></Btn></div>
@@ -458,12 +469,13 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
             </button>
           ))}
         </div>
-        <Btn tone="green" disabled={!chosen || !units.length || !time} onClick={async () => {
+        {(!clientName.trim() || clientPhone.replace(/\D/g, '').length < 10) && units.length > 0 && <p className="text-xs font-bold text-[#C2412D]">اكتبي اسم العميل ورقمه — الفيدباك بيتجمّع عليه</p>}
+        <Btn tone="green" disabled={!chosen || !units.length || !time || !clientName.trim() || clientPhone.replace(/\D/g, '').length < 10} onClick={async () => {
           const a = chosen!; const txt = message(a);
           try {
-            await createTrip(a, units, time!.label, confirmed.filter((v) => codes.includes(v.propertyCode)).map((v) => v.id));
+            await createTrip(a, units, time!.label, confirmed.filter((v) => codes.includes(v.propertyCode)).map((v) => v.id), { name: clientName.trim(), phone: clientPhone.trim(), leadId });
           } catch (e: any) { alert(`المشوار ماتحفظش — ${e?.code === 'permission-denied' ? 'الصلاحيات رافضة' : 'جرّبي تاني'}`); return; }
-          window.open(wa(a.phone, txt)); setCodes([]); setTime(null); setAgentId(''); setSalesFor({});
+          window.open(wa(a.phone, txt)); setCodes([]); setTime(null); setAgentId(''); setSalesFor({}); setClientName(''); setClientPhone(''); setLeadId('');
         }}><Send size={16} />ابعت لـ {chosen?.name || '...'} على واتساب</Btn>
       </Card>
 
@@ -494,7 +506,17 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
           return (
             <div key={t.id} className="border-t border-[#F0ECE4] pt-2 space-y-1.5">
               <div className="flex flex-wrap justify-between items-center gap-2">
-                <p className="font-bold text-sm">{t.agentName} · {t.timeText}{done ? ' · ✓ اتعملت' : ''}</p>
+                <p className="font-bold text-sm">
+                  {t.clientName || 'عميل من غير اسم'}{t.clientPhone ? ` · ${t.clientPhone}` : ''} · {t.agentName} · {t.timeText}{done ? ' · ✓ اتعملت' : ''}
+                  {!t.clientName && (
+                    <button onClick={async () => {
+                      const n = (window.prompt('اسم العميل اللي طلع المشوار ده؟') || '').trim(); if (!n) return;
+                      const ph = (window.prompt('رقمه؟ (اختياري)') || '').trim();
+                      try { await setTripClient(t.id, n, ph, mine.map((x) => x.id)); }
+                      catch (e: any) { alert(`ماتحفظش — ${String(e?.code || '').includes('permission') ? 'الصلاحيات رافضة' : 'جرّبي تاني'}`); }
+                    }} className="mr-2 text-xs font-bold text-[#A07A26] underline">اكتبي اسم العميل</button>
+                  )}
+                </p>
                 {done ? (
                   <a href={wa(t.agentPhone, `${t.agentName}، بعد المعاينة ابعت رأي العميل من هنا (تكتب أو تسجل فويس):\n${window.location.origin}/?fb=${t.id}`)} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-xl bg-[#1E7A45] text-white text-xs font-bold">ابعت لينك الفيدباك</a>
                 ) : (
@@ -563,42 +585,51 @@ const FeedbackTab: React.FC<{ fbs: FieldFeedback[]; trips: FieldTrip[]; agents: 
       {groups.map(([title, list]) => (
         <div key={title} className="space-y-3">
           <p className="font-bold">{title} ({list.length})</p>
-          <div className="grid gap-3 lg:grid-cols-2">
-            {list.map((f) => (
-              <Card key={f.id}>
-                <div className="flex justify-between"><span className="font-bold">{f.code} · {f.agentName}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating)}</span></div>
-                <p className={`text-xs font-bold ${f.salesAgentName ? 'text-[#6B665C]' : 'text-[#C2412D]'}`}>
-                  {f.salesAgentName ? `السيلز: ${f.salesAgentName}` : 'من غير سيلز — التأكيد مش هيوصل لحد'}
-                </p>
-                {f.voiceUrl && <audio controls src={f.voiceUrl} className="w-full" />}
-                {f.stage === 'submitted'
-                  ? <textarea rows={3} className={input} value={txt[f.id] ?? f.text} onChange={(e) => setTxt((s) => ({ ...s, [f.id]: e.target.value }))} placeholder="اكتبي الفيدباك من الفويس" />
-                  : <p className="leading-7">"{f.text}"</p>}
-                {f.stage === 'rejected' && f.rejectReason && <p className="text-xs font-bold text-[#C2412D]">سبب الرفض: {f.rejectReason}</p>}
-                <div className="flex flex-wrap gap-1.5">{(f.positives || []).map((x) => <Chip key={x} tone="green">+ {x}</Chip>)}{(f.negatives || []).map((x) => <Chip key={x} tone="red">− {x}</Chip>)}</div>
-                {f.stage === 'submitted' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <Btn tone="green" disabled={busy === f.id} onClick={async () => { setBusy(f.id); try { await saraConfirmFeedback(f, { text: (txt[f.id] ?? f.text).trim() }); } catch (e) { fail(e); } finally { setBusy(''); } }}>تأكيد وابعت للسيلز</Btn>
-                    <Btn tone="danger" disabled={busy === f.id} onClick={() => reject(f)}>رفض · يرجع للمندوب</Btn>
-                  </div>
-                )}
-                {f.stage === 'rejected' && (() => {
-                  const t = trips.find((x) => x.id === f.tripId);
-                  return t?.agentPhone ? (
-                    <a href={wa(t.agentPhone, `${f.agentName}، مستنيين رأي العميل في ${f.code} تاني${f.rejectReason ? `: ${f.rejectReason}` : ''}\n${linkFor(f)}`)} target="_blank" rel="noopener noreferrer"
-                      className="text-center py-2 rounded-xl bg-[#1E7A45] text-white text-xs font-bold">فكّري المندوب على واتساب</a>
-                  ) : null;
-                })()}
-                {f.stage === 'sara_confirmed' && (
-                  <p className="text-xs text-[#6B665C]">مستني {f.salesAgentName || 'السيلز'} يأكده من «فيدباك المعاينات» عنده — بعدها بيظهر للمالك.</p>
-                )}
-                {f.stage === 'sara_confirmed' && isAdmin && (
-                  <Btn tone="green" disabled={busy === f.id} onClick={async () => { setBusy(f.id); try { await salesConfirmFeedback(f, agents); } catch (e) { fail(e); } finally { setBusy(''); } }}>انشره للمالك على طول (إدارة)</Btn>
-                )}
-                <button disabled={busy === f.id} onClick={() => remove(f)} className="self-start text-xs font-bold text-[#C2412D] disabled:opacity-50">مسح الفيدباك</button>
-              </Card>
-            ))}
-          </div>
+          {groupFeedback(list, trips).map((g) => (
+            <div key={g.key} className="rounded-2xl border border-[#E8D3A6] bg-[#FBF8F1] p-3 space-y-2">
+              <div className="flex flex-wrap justify-between items-center gap-2">
+                <p className="font-bold">{groupTitle(g)}</p>
+                <span className="text-xs text-[#6B665C]">{[g.phone, g.salesName ? `السيلز ${g.salesName}` : '', g.client ? `المندوب ${g.agentName}` : '', g.client ? g.time : ''].filter(Boolean).join(' · ')}</span>
+              </div>
+              <p className="text-[11px] text-[#6B665C]">طلع على: {g.items.map((x) => x.code).join('، ')}</p>
+              <div className="grid gap-3 lg:grid-cols-2">
+                {g.items.map((f) => (
+                  <Card key={f.id}>
+                    <div className="flex justify-between"><span className="font-bold">{f.code} · {f.agentName}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating)}</span></div>
+                    <p className={`text-xs font-bold ${f.salesAgentName ? 'text-[#6B665C]' : 'text-[#C2412D]'}`}>
+                      {f.salesAgentName ? `السيلز: ${f.salesAgentName}` : 'من غير سيلز — التأكيد مش هيوصل لحد'}
+                    </p>
+                    {f.voiceUrl && <audio controls src={f.voiceUrl} className="w-full" />}
+                    {f.stage === 'submitted'
+                      ? <textarea rows={3} className={input} value={txt[f.id] ?? f.text} onChange={(e) => setTxt((s) => ({ ...s, [f.id]: e.target.value }))} placeholder="اكتبي الفيدباك من الفويس" />
+                      : <p className="leading-7">"{f.text}"</p>}
+                    {f.stage === 'rejected' && f.rejectReason && <p className="text-xs font-bold text-[#C2412D]">سبب الرفض: {f.rejectReason}</p>}
+                    <div className="flex flex-wrap gap-1.5">{(f.positives || []).map((x) => <Chip key={x} tone="green">+ {x}</Chip>)}{(f.negatives || []).map((x) => <Chip key={x} tone="red">− {x}</Chip>)}</div>
+                    {f.stage === 'submitted' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Btn tone="green" disabled={busy === f.id} onClick={async () => { setBusy(f.id); try { await saraConfirmFeedback(f, { text: (txt[f.id] ?? f.text).trim() }); } catch (e) { fail(e); } finally { setBusy(''); } }}>تأكيد وابعت للسيلز</Btn>
+                        <Btn tone="danger" disabled={busy === f.id} onClick={() => reject(f)}>رفض · يرجع للمندوب</Btn>
+                      </div>
+                    )}
+                    {f.stage === 'rejected' && (() => {
+                      const t = trips.find((x) => x.id === f.tripId);
+                      return t?.agentPhone ? (
+                        <a href={wa(t.agentPhone, `${f.agentName}، مستنيين رأي العميل في ${f.code} تاني${f.rejectReason ? `: ${f.rejectReason}` : ''}\n${linkFor(f)}`)} target="_blank" rel="noopener noreferrer"
+                          className="text-center py-2 rounded-xl bg-[#1E7A45] text-white text-xs font-bold">فكّري المندوب على واتساب</a>
+                      ) : null;
+                    })()}
+                    {f.stage === 'sara_confirmed' && (
+                      <p className="text-xs text-[#6B665C]">مستني {f.salesAgentName || 'السيلز'} يأكده من «فيدباك المعاينات» عنده — بعدها بيظهر للمالك.</p>
+                    )}
+                    {f.stage === 'sara_confirmed' && isAdmin && (
+                      <Btn tone="green" disabled={busy === f.id} onClick={async () => { setBusy(f.id); try { await salesConfirmFeedback(f, agents); } catch (e) { fail(e); } finally { setBusy(''); } }}>انشره للمالك على طول (إدارة)</Btn>
+                    )}
+                    <button disabled={busy === f.id} onClick={() => remove(f)} className="self-start text-xs font-bold text-[#C2412D] disabled:opacity-50">مسح الفيدباك</button>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ))}
 

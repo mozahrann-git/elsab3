@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { FieldFeedback, FieldAgent, BrokerFeedback, subscribeFieldFeedback, subscribeFieldAgents, salesConfirmFeedback, subscribeBrokerFeedbackForSales } from '../../services/portalService';
+import { FieldFeedback, FieldAgent, BrokerFeedback, subscribeFieldFeedback, subscribeFieldAgents, salesConfirmFeedback, subscribeBrokerFeedbackForSales, groupFeedback, groupTitle } from '../../services/portalService';
 
 /* السيلز بيأكد الفيدباك اللي سارة راجعته، فيتنشر للمالك */
 export const SalesFeedbackInbox: React.FC<{ isOpen: boolean; onClose: () => void; agentId?: string | null; isAdmin?: boolean }> = ({ isOpen, onClose, agentId, isAdmin }) => {
@@ -50,13 +50,23 @@ export const SalesFeedbackInbox: React.FC<{ isOpen: boolean; onClose: () => void
               ))}
             </div>
           )}
-          {list.map((f) => (
-            <section key={f.id} className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">
-              <div className="flex justify-between"><span className="font-bold">{f.code} · خرج {f.agentName}{isAdmin && f.salesAgentName ? ` · للسيلز ${f.salesAgentName}` : ''}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating)}</span></div>
-              {f.voiceUrl && <audio controls src={f.voiceUrl} className="w-full" />}
-              <p className="leading-7">"{f.text}"</p>
-              <button onClick={() => salesConfirmFeedback(f, agents)} className="w-full rounded-xl py-3 bg-[#1E7A45] text-white font-bold">تأكيد ونشر للمالك</button>
-            </section>
+          {/* كل عميل والشقق اللي طلع عليها — مش كله في بعضه */}
+          {groupFeedback(list).map((g) => (
+            <div key={g.key} className="rounded-2xl border border-[#E8D3A6] bg-[#FBF8F1] p-3 space-y-2">
+              <div className="flex flex-wrap justify-between items-center gap-1">
+                <p className="font-bold">{groupTitle(g)}</p>
+                <span className="text-xs text-[#6B665C]">{[g.phone, isAdmin && g.salesName ? `للسيلز ${g.salesName}` : ''].filter(Boolean).join(' · ')}</span>
+              </div>
+              <p className="text-[11px] text-[#6B665C]">طلع على: {g.items.map((x) => x.code).join('، ')} · المندوب {g.agentName}</p>
+              {g.items.map((f) => (
+                <section key={f.id} className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">
+                  <div className="flex justify-between"><span className="font-bold font-mono">{f.code}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating)}</span></div>
+                  {f.voiceUrl && <audio controls src={f.voiceUrl} className="w-full" />}
+                  <p className="leading-7">"{f.text}"</p>
+                  <button onClick={() => salesConfirmFeedback(f, agents)} className="w-full rounded-xl py-3 bg-[#1E7A45] text-white font-bold">تأكيد ونشر للمالك</button>
+                </section>
+              ))}
+            </div>
           ))}
         </div>
       </div>
