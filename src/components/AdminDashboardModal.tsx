@@ -684,7 +684,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       if (valid.length > 0) {
         setFormData((prev) => {
           // If previous images are just placeholders or empty, replace them; otherwise append
-          const hasCustom = prev.images.some(img => !DEFAULT_ARCH_PHOTOS.includes(img) && img.trim());
+          const hasCustom = prev.images.some(img => !DEFAULT_ARCH_PHOTOS.includes(img) && String(img || '').trim());
           const nextImages = hasCustom ? [...prev.images, ...valid] : valid;
           return { ...prev, images: nextImages };
         });
@@ -754,6 +754,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const resetForm = () => {
     setFormData({
+      /* الكود كان ناقص هنا — بعد أول حفظ الخانة بتبقى undefined
+         والشاشة كلها بتقع («reading 'trim'») ومحدش يقدر يضيف شقة تانية */
+      code: '',
+      licensedException: false,
       title: '',
       neighborhood: HADABA_WOSTA_NEIGHBORHOODS[0],
       propertyType: 'apartment',
@@ -783,7 +787,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setEditingPropertyId(prop.id);
     setFormData({
       code: prop.code || '',
-      title: prop.title,
+      title: prop.title || '',
       neighborhood: prop.neighborhood,
       propertyType: prop.propertyType,
       finishing: prop.finishing,
@@ -791,11 +795,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       area: prop.area,
       bedrooms: prop.bedrooms,
       bathrooms: prop.bathrooms,
-      floor: prop.floor,
+      floor: prop.floor || '',
       licensedException: (prop as any).licensedException === true,
-      view: prop.view,
-      featuresText: prop.features.join('\n'),
-      description: prop.description,
+      view: prop.view || '',
+      featuresText: (prop.features || []).join('\n'),
+      description: prop.description || '',
       ownerName: prop.ownerName || '',
       ownerPhone: prop.ownerPhone || '',
       hasElevator: prop.hasElevator ?? true,
@@ -811,13 +815,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const handleSaveProperty = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim()) {
+    if (!String(formData.title || '').trim()) {
       showToast('يرجى كتابة عنوان الشقة ومواصفاتها');
       return;
     }
     /* الكود هو هوية الشقة في كل حتة — من غيره أو لو مكرر، بتتلخبط
        المطابقة وطلبات المعاينة والمشاوير. */
-    const codeNow = formData.code.trim().toUpperCase();
+    const codeNow = String(formData.code || '').trim().toUpperCase();
     if (!codeNow) {
       showToast('اكتب كود الشقة الأول');
       return;
@@ -827,18 +831,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       return;
     }
 
-    const cleanedImages = formData.images
-      .map((img) => img.trim())
+    const cleanedImages = (formData.images || [])
+      .map((img) => String(img || '').trim())
       .filter((img) => img.length > 0);
 
-    const cleanedVideo = formData.videoUrl.trim() || undefined;
+    const cleanedVideo = String(formData.videoUrl || '').trim() || undefined;
 
     if (cleanedImages.length === 0 && !cleanedVideo) {
       showToast('يرجى إضافة صورة واحدة أو فيديو للشقة على الأقل');
       return;
     }
 
-    const featuresList = formData.featuresText
+    const featuresList = String(formData.featuresText || '')
       .split('\n')
       .map(f => f.trim())
       .filter(f => f.length > 0);
@@ -850,7 +854,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       const updated: Property = {
         ...existing,
         id: editingPropertyId,
-        code: formData.code.trim().toUpperCase() || existing?.code || '',
+        code: String(formData.code || '').trim().toUpperCase() || existing?.code || '',
         title: formData.title,
         neighborhood: formData.neighborhood,
         propertyType: formData.propertyType,
@@ -865,7 +869,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         licensedException: formData.licensedException,
         view: formData.view,
         features: featuresList,
-        description: formData.description.trim() || existing?.description || '',
+        description: String(formData.description || '').trim() || existing?.description || '',
         ownerName: formData.ownerName,
         ownerPhone: formData.ownerPhone,
         hasElevator: formData.hasElevator,
@@ -880,7 +884,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       onUpdateProperty(updated);
       showToast('تم تحديث بيانات الشقة بنجاح');
     } else {
-      const newCode = formData.code.trim().toUpperCase();
+      const newCode = String(formData.code || '').trim().toUpperCase();
       const newProp: Property = {
         id: `prop-${Date.now()}`,
         code: newCode,
@@ -902,7 +906,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         paymentMethod: 'cash_or_facilities',
         createdAt: new Date().toISOString().split('T')[0],
         features: featuresList,
-        description: formData.description.trim() || `${formData.title} - مساحة ${formData.area}م² بالهضبة الوسطى (${formData.neighborhood})، ${formData.bedrooms} غرف و${formData.bathrooms} حمام.`,
+        description: String(formData.description || '').trim() || `${formData.title} - مساحة ${formData.area}م² بالهضبة الوسطى (${formData.neighborhood})، ${formData.bedrooms} غرف و${formData.bathrooms} حمام.`,
         ownerName: formData.ownerName,
         ownerPhone: formData.ownerPhone,
         hasElevator: formData.hasElevator,
@@ -1836,7 +1840,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </div>
                   </div>
 
-                  {formData.videoUrl.trim() && (
+                  {String(formData.videoUrl || '').trim() && (
                     <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -2060,7 +2064,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-stone-900 text-xs font-mono focus:outline-none focus:border-stone-900"
                     />
                     {(() => {
-                      const c = formData.code.trim().toUpperCase();
+                      const c = String(formData.code || '').trim().toUpperCase();
                       const clash = c && properties.some((p) => p.id !== editingPropertyId && String(p.code || '').trim().toUpperCase() === c);
                       return clash
                         ? <p className="text-[11px] font-bold text-rose-600 mt-1">الكود ده مستخدم في شقة تانية</p>
