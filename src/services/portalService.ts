@@ -493,6 +493,7 @@ export async function deleteFeedback(f: FieldFeedback) {
   if (f.stage === 'sales_confirmed') await deleteDoc(doc(db, 'owner_feedback', `of-${f.id}`)).catch(() => {});
   await deleteDoc(doc(db, 'field_feedback', f.id));
 }
+export async function deleteOwnerFeedback(id: string) { await deleteDoc(doc(db, 'owner_feedback', id)); }
 export const tripRedoReason = (t: FieldTrip, code: string) => t.redo?.[String(code).replace(/[.\s]/g, '_')];
 /** السيلز بيأكد، فيتنشر للمالك ويتحسب للمندوب */
 export async function salesConfirmFeedback(f: FieldFeedback, agents: FieldAgent[]) {

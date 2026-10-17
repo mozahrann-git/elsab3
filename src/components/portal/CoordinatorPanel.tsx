@@ -11,7 +11,7 @@ import {
   subscribeAllUnitViewings, subscribeAllChangeRequests, subscribeFieldAgents, subscribeTrips, subscribeFieldFeedback,
   createUnitViewing, renotifyOwner, findBrokerContact, deleteUnitViewing, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
   acceptOwnerProposal, askClientAboutProposal, counterProposeToOwner, cancelViewing,
-  saraConfirmFeedback, rejectFeedback, deleteFeedback, notifyBroker, revealOwnerToSara, markTripDone, cancelViewingRequest,
+  saraConfirmFeedback, rejectFeedback, deleteFeedback, salesConfirmFeedback, subscribeAllOwnerFeedback, deleteOwnerFeedback, OwnerFeedback, notifyBroker, revealOwnerToSara, markTripDone, cancelViewingRequest,
 } from '../../services/portalService';
 import { subscribeToSalesAgents } from '../../services/firebaseService';
 import { SalesAgent } from '../../types';
@@ -86,7 +86,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} isAdmin={isAdmin} byName={name} onSendToAgent={(code, label, at, sales) => { setTripSeed({ code, label, at, ...sales, n: Date.now() }); setTab('agents'); }} />}
       {tab === 'agents' && <AgentsTab agents={agents} trips={trips} fbs={fbs} viewings={viewings} properties={properties} isAdmin={isAdmin} seed={tripSeed} />}
       {tab === 'rollcall' && <MorningRollCall agents={agents} />}
-      {tab === 'feedback' && <FeedbackTab fbs={fbs} trips={trips} />}
+      {tab === 'feedback' && <FeedbackTab fbs={fbs} trips={trips} agents={agents} isAdmin={isAdmin} />}
       {tab === 'changes' && <ChangesTab changes={changes} />}
       {tab === 'excel' && isAdmin && <OwnersExcelTab properties={properties} />}
       {tab === 'units' && <UnitsTab submissions={submissions} properties={properties} byName={name || 'الإدارة'} onApprove={onApproveSubmission} onReject={onRejectSubmission} onUpdateSubmission={onUpdateSubmission} />}
@@ -525,8 +525,11 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
 };
 
 // ---------------- الفيدباك ----------------
-const FeedbackTab: React.FC<{ fbs: FieldFeedback[]; trips: FieldTrip[] }> = ({ fbs, trips }) => {
+const FeedbackTab: React.FC<{ fbs: FieldFeedback[]; trips: FieldTrip[]; agents: FieldAgent[]; isAdmin: boolean }> = ({ fbs, trips, agents, isAdmin }) => {
   const [txt, setTxt] = useState<Record<string, string>>({});
+  /* اللي ظاهر للمالك فعلاً — الإدارة بتقدر تشيل منه */
+  const [published, setPublished] = useState<OwnerFeedback[]>([]);
+  useEffect(() => (isAdmin ? subscribeAllOwnerFeedback(setPublished) : undefined), [isAdmin]);
   const [busy, setBusy] = useState('');
   const groups: [string, FieldFeedback[]][] = [
     ['وصل من المندوب · راجعيه', fbs.filter((f) => f.stage === 'submitted')],
@@ -586,12 +589,38 @@ const FeedbackTab: React.FC<{ fbs: FieldFeedback[]; trips: FieldTrip[] }> = ({ f
                       className="text-center py-2 rounded-xl bg-[#1E7A45] text-white text-xs font-bold">فكّري المندوب على واتساب</a>
                   ) : null;
                 })()}
+                {f.stage === 'sara_confirmed' && (
+                  <p className="text-xs text-[#6B665C]">مستني {f.salesAgentName || 'السيلز'} يأكده من «فيدباك المعاينات» عنده — بعدها بيظهر للمالك.</p>
+                )}
+                {f.stage === 'sara_confirmed' && isAdmin && (
+                  <Btn tone="green" disabled={busy === f.id} onClick={async () => { setBusy(f.id); try { await salesConfirmFeedback(f, agents); } catch (e) { fail(e); } finally { setBusy(''); } }}>انشره للمالك على طول (إدارة)</Btn>
+                )}
                 <button disabled={busy === f.id} onClick={() => remove(f)} className="self-start text-xs font-bold text-[#C2412D] disabled:opacity-50">مسح الفيدباك</button>
               </Card>
             ))}
           </div>
         </div>
       ))}
+
+      {isAdmin && (
+        <div className="space-y-3">
+          <p className="font-bold">ظاهر عند الملاك والأونر دلوقتي ({published.length})</p>
+          <p className="text-xs text-[#6B665C]">ده اللي المالك والأونر شايفينه. المسح من هنا بيشيله من عندهم.</p>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {published.map((o) => (
+              <Card key={o.id}>
+                <div className="flex justify-between"><span className="font-bold">{o.propertyCode} · {o.date}</span><span className="text-[#D9B864]">{'★'.repeat(o.rating || 0)}</span></div>
+                <p className="leading-7 text-sm">"{o.summary}"</p>
+                <button disabled={busy === o.id} onClick={async () => {
+                  if (!window.confirm(`تشيلي فيدباك ${o.propertyCode} من عند المالك والأونر؟`)) return;
+                  setBusy(o.id);
+                  try { await deleteOwnerFeedback(o.id); } catch (e) { fail(e); } finally { setBusy(''); }
+                }} className="self-start text-xs font-bold text-[#C2412D] disabled:opacity-50">شيله من عند المالك</button>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
