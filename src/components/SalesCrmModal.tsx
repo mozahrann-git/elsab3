@@ -51,6 +51,8 @@ import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
 import { DailyTab } from './sales/DailyTab';
 import { DailyAdminBoard } from './sales/DailyAdminBoard';
+import { ActionsLog, actionsOn } from './crm/ActionsLog';
+import { cairoDay } from '../services/dailyTasks';
 import { matchDetailed, briefLine, briefGaps, readBrief, payModeOf, resaleFits, projectsFit, resaleCeiling, PayMode } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
@@ -439,7 +441,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     const t = new Date(l.createdAt || l.lastContactDate || 0).getTime();
     return t >= startOfToday.getTime();
   }).length;
-  const todayDone = scopedLeads.filter((l) => (l.activity || []).some((a: any) => a.at >= startOfToday.getTime())).length;
+  /* عدد الأكشن نفسه — كان بيعدّ العملاء اللي اتعمل عليهم حاجة،
+     فعميل اتعمل عليه ٥ أكشن كان بيتحسب ١ */
+  const todayDone = useMemo(() => actionsOn(scopedLeads, cairoDay()).length, [scopedLeads]);
+  const [actionsLogOpen, setActionsLogOpen] = useState(false);
   /* المهام جاية من إعدادات الأدمن، والعدّادات بتبدأ من الصفر كل يوم */
   /* الإدارة لما تدوس على حد في قايمة الفريق، المفروض تشوف نقطه هو ومهامه هو */
   const shownAgent = (viewAgentId !== 'all' ? agents.find((a) => a.id === viewAgentId) : null) || currentAgent;
@@ -921,12 +926,21 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* عدّاد النهارده */}
             <div className="grid grid-cols-3 gap-2">
-              {[['ريكويست جديد النهارده', todayNewLeads, '#1F4E9C'], ['أكشن اتسجّل النهارده', todayDone, '#141414'], [viewingsLabel, todayViewings, '#1E7A45']].map(([t, v, c]) => (
-                <div key={t as string} className="rounded-2xl bg-white border border-[#ECE8DF] p-3 text-center">
-                  <p className="text-2xl font-readex font-bold" style={{ color: c as string }}>{v as number}</p>
-                  <p className="text-[11px] text-[#6B665C]">{t as string}</p>
-                </div>
-              ))}
+              {[['ريكويست جديد النهارده', todayNewLeads, '#1F4E9C'], ['أكشن اتسجّل النهارده', todayDone, '#141414'], [viewingsLabel, todayViewings, '#1E7A45']].map(([t, v, c]) => {
+                const isActions = t === 'أكشن اتسجّل النهارده' && (isAdmin || isLead);
+                const body = (
+                  <>
+                    <p className="text-2xl font-readex font-bold" style={{ color: c as string }}>{v as number}</p>
+                    <p className="text-[11px] text-[#6B665C]">{t as string}</p>
+                    {isActions && <p className="text-[10px] font-bold text-[#A07A26] mt-0.5">مين وإيه ← دوس</p>}
+                  </>
+                );
+                return isActions ? (
+                  <button key={t as string} onClick={() => setActionsLogOpen(true)} className="rounded-2xl bg-white border border-[#E8D3A6] p-3 text-center hover:bg-[#FBF8F1]">{body}</button>
+                ) : (
+                  <div key={t as string} className="rounded-2xl bg-white border border-[#ECE8DF] p-3 text-center">{body}</div>
+                );
+              })}
             </div>
 
             {isAdmin && canEdit && leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved).length > 0 && (
@@ -2039,6 +2053,23 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {actionsLogOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={() => setActionsLogOpen(false)}>
+          <div className="bg-white w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white z-10 px-4 py-3 border-b border-[#ECE8DF] flex items-center justify-between">
+              <p className="font-bold text-sm">سجل الأكشن اليومي{viewAgentId !== 'all' ? ` · عملاء ${agents.find((a) => a.id === viewAgentId)?.name || ''}` : ''}</p>
+              <button onClick={() => setActionsLogOpen(false)} className="p-1.5 rounded-lg hover:bg-[#F6F4EF]"><X size={16} /></button>
+            </div>
+            <div className="p-4">
+              <ActionsLog
+                leads={scopedLeads}
+                onOpenLead={(id) => { const l = leads.find((x) => x.id === id); if (l) { setActionsLogOpen(false); setSelectedLeadForDetails(l); } }}
+              />
+            </div>
           </div>
         </div>
       )}

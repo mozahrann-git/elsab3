@@ -86,6 +86,13 @@ const weekdayOf = (day: string) => {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();   // 0 الأحد … 5 الجمعة 6 السبت
 };
 
+/** اليوم بالتقويم بتوقيت القاهرة (من غير قفلة ٧ ولا ترحيل الجمعة) */
+export function cairoDay(t = Date.now()): string {
+  const c = cairoParts(t);
+  return `${c.y}-${pad(c.m)}-${pad(c.d)}`;
+}
+export const shiftDay = (day: string, n: number) => addDays(day, n);
+
 /** يوم الشغل اللي اللحظة دي بتتحسب عليه */
 export function workDay(t = Date.now(), closeHour = 19): string {
   const c = cairoParts(t);

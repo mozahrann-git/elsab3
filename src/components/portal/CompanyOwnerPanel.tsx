@@ -9,6 +9,8 @@ import {
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { UnitVisit, subscribeVisits, summarize } from '../../services/visitorService';
 import { formatWhen } from '../common/WhenPicker';
+import { ActionsLog, actionsOn } from '../crm/ActionsLog';
+import { cairoDay } from '../../services/dailyTasks';
 
 /*
   لوحة أونر شركة السبع: بيشوف كل حاجة، ومبيعدّلش في حاجة.
@@ -151,6 +153,11 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
       {tab === 'crm' && (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="lg:col-span-2">
+            <p className="font-bold">سجل الأكشن اليومي</p>
+            <p className="text-xs text-[#6B665C]">كام أكشن اتسجّل كل يوم، ومن مين، وتفاصيله. دوس على أي اسم يفتح أكشناته.</p>
+            <ActionsLog leads={leads} />
+          </Card>
+          <Card className="lg:col-span-2">
             <p className="font-bold">داشبورد فريق المبيعات</p>
             {agents.map((a) => {
               const mine = leads.filter((l) => l.assignedAgentId === a.id);
@@ -161,7 +168,7 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
                     <Chip tone="grey">{mine.length} عميل</Chip>
                     <Chip tone="green">{mine.filter((l) => l.status === 'closed').length} صفقة</Chip>
                     <Chip tone="blue">{viewings.filter((v) => v.salesAgentId === a.id).length} معاينة</Chip>
-                    <Chip tone="gold">{mine.filter((l) => (l.activity || []).some((x: any) => x.at >= today)).length} أكشن النهارده</Chip>
+                    <Chip tone="gold">{actionsOn(leads, cairoDay()).filter((r) => r.by === a.name).length} أكشن النهارده</Chip>
                     <Chip tone="red">{mine.filter((l) => l.nextActionAt && l.nextActionAt < Date.now() && l.followUpStatus !== 'completed').length} متأخرة</Chip>
                   </span>
                 </div>
