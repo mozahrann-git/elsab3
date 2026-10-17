@@ -42,6 +42,7 @@ import {
 import { CampaignLeadsModal } from './crm/CampaignLeadsModal';
 import { saveDraft, loadDraft, clearDraft } from '../utils/uiSession';
 import { LionLogo } from './LionLogo';
+import { UnitPreview } from './crm/UnitPreview';
 import { formatPrice, formatNumber, generateCallLink, generateWhatsAppLink, waLink } from '../utils/helpers';
 import { SpinWheelModal } from './SpinWheelModal';
 import { LeadDetailsModal } from './LeadDetailsModal';
@@ -434,18 +435,29 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
      سواء السيلز نقلهم بإيده أو المعاينة اتقفلت من التنسيق.
      كان بيعدّ طلبات المعاينة اللي اتعملت في بوابة الملاك بس — فالعميل
      اللي السيلز نقله لـ«تمت المعاينة» ماكانش بيتحسب. */
-  const todayViewings = useMemo(() => {
+  const todayViewingRows = useMemo(() => {
     const today = cairoDay();
-    return scopedLeads.filter((l) => (l.activity || []).some((a) =>
-      typeof a.at === 'number' && cairoDay(a.at) === today && /تمت المعاينة/.test(a.outcome || ''))).length;
+    const out: { lead: Lead; at: number; by: string; comment: string }[] = [];
+    scopedLeads.forEach((l) => (l.activity || []).forEach((a) => {
+      if (typeof a.at === 'number' && cairoDay(a.at) === today && /تمت المعاينة/.test(a.outcome || ''))
+        out.push({ lead: l, at: a.at, by: (a.by || '').trim(), comment: a.comment || '' });
+    }));
+    /* عميل واحد = معاينة واحدة في العدّاد، بآخر تسجيل ليه */
+    const m = new Map<string, typeof out[number]>();
+    out.sort((x, y) => x.at - y.at).forEach((r) => m.set(r.lead.id, r));
+    return [...m.values()].sort((x, y) => y.at - x.at);
   }, [scopedLeads]);
+  const todayViewings = todayViewingRows.length;
   const viewingsLabel = viewAgentId !== 'all'
     ? `معاينات ${agents.find((a) => a.id === viewAgentId)?.name || ''} النهارده`
     : (isAdmin || isLead) ? 'معاينات الفريق النهارده' : 'معايناتك النهارده';
-  const todayNewLeads = scopedLeads.filter((l) => {
+  const todayNewRows = scopedLeads.filter((l) => {
     const t = new Date(l.createdAt || l.lastContactDate || 0).getTime();
     return t >= startOfToday.getTime();
-  }).length;
+  }).sort((a, b) => new Date(b.createdAt || b.lastContactDate || 0).getTime() - new Date(a.createdAt || a.lastContactDate || 0).getTime());
+  const todayNewLeads = todayNewRows.length;
+  /* أي عدّاد من التلاتة بيتداس عليه ويفتح اللي وراه */
+  const [counterOpen, setCounterOpen] = useState<null | 'new' | 'viewings'>(null);
   /* عدد الأكشن نفسه — كان بيعدّ العملاء اللي اتعمل عليهم حاجة،
      فعميل اتعمل عليه ٥ أكشن كان بيتحسب ١ */
   const todayDone = useMemo(() => actionsOn(scopedLeads, cairoDay()).length, [scopedLeads]);
@@ -936,21 +948,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* عدّاد النهارده */}
             <div className="grid grid-cols-3 gap-2">
-              {[['ريكويست جديد النهارده', todayNewLeads, '#1F4E9C'], ['أكشن اتسجّل النهارده', todayDone, '#141414'], [viewingsLabel, todayViewings, '#1E7A45']].map(([t, v, c]) => {
-                const isActions = t === 'أكشن اتسجّل النهارده' && (isAdmin || isLead);
-                const body = (
-                  <>
-                    <p className="text-2xl font-readex font-bold" style={{ color: c as string }}>{v as number}</p>
-                    <p className="text-[11px] text-[#6B665C]">{t as string}</p>
-                    {isActions && <p className="text-[10px] font-bold text-[#A07A26] mt-0.5">مين وإيه ← دوس</p>}
-                  </>
-                );
-                return isActions ? (
-                  <button key={t as string} onClick={() => setActionsLogOpen(true)} className="rounded-2xl bg-white border border-[#E8D3A6] p-3 text-center hover:bg-[#FBF8F1]">{body}</button>
-                ) : (
-                  <div key={t as string} className="rounded-2xl bg-white border border-[#ECE8DF] p-3 text-center">{body}</div>
-                );
-              })}
+              {([['ريكويست جديد النهارده', todayNewLeads, '#1F4E9C', 'new'], ['أكشن اتسجّل النهارده', todayDone, '#141414', 'actions'], [viewingsLabel, todayViewings, '#1E7A45', 'viewings']] as [string, number, string, 'new' | 'actions' | 'viewings'][]).map(([t, v, c, k]) => (
+                <button
+                  key={k}
+                  onClick={() => (k === 'actions' ? setActionsLogOpen(true) : setCounterOpen(k))}
+                  className="rounded-2xl bg-white border border-[#E8D3A6] p-3 text-center hover:bg-[#FBF8F1]"
+                >
+                  <p className="text-2xl font-readex font-bold" style={{ color: c }}>{v}</p>
+                  <p className="text-[11px] text-[#6B665C]">{t}</p>
+                  <p className="text-[10px] font-bold text-[#A07A26] mt-0.5">التفاصيل ← دوس</p>
+                </button>
+              ))}
             </div>
 
             {isAdmin && canEdit && leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved).length > 0 && (
@@ -2067,6 +2075,45 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         </div>
       )}
 
+      {counterOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={() => setCounterOpen(null)}>
+          <div className="bg-white w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white z-10 px-4 py-3 border-b border-[#ECE8DF] flex items-center justify-between">
+              <p className="font-bold text-sm">
+                {counterOpen === 'new' ? `ريكويست جديد النهارده · ${todayNewLeads}` : `${viewingsLabel} · ${todayViewings}`}
+              </p>
+              <button onClick={() => setCounterOpen(null)} className="p-1.5 rounded-lg hover:bg-[#F6F4EF]"><X size={16} /></button>
+            </div>
+            <div className="p-4 space-y-2">
+              {counterOpen === 'new' && (todayNewRows.length ? todayNewRows.map((l) => (
+                <button key={l.id} onClick={() => { setCounterOpen(null); setSelectedLeadForDetails(l); }} className="w-full text-right border border-[#ECE8DF] rounded-xl p-3 hover:bg-[#FBF8F1] space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm">{l.name || 'من غير اسم'}</span>
+                    <span className="text-[11px] text-[#8C877D]">{new Date(l.createdAt || l.lastContactDate || 0).toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' })}</span>
+                  </div>
+                  <p className="text-xs text-[#6B665C] font-mono" dir="ltr">{l.phone}</p>
+                  <p className="text-[11px] text-[#8C877D]">
+                    {[CRM_PIPELINE_STAGES.find((c) => c.id === l.status)?.label, ({ facebook_group: 'جروب فيسبوك', website_whatsapp: 'واتساب الموقع', cold_call: 'مكالمة باردة', referral: 'ترشيح', direct: 'مباشر', campaign: 'حملة' } as Record<string, string>)[l.source] || '', (isAdmin || isLead) && l.assignedAgentName ? `مع ${l.assignedAgentName}` : ''].filter(Boolean).join(' · ')}
+                  </p>
+                </button>
+              )) : <p className="text-xs text-[#8C877D] bg-[#F6F4EF] rounded-xl p-3">مفيش عملاء جداد اتسجّلوا النهارده.</p>)}
+
+              {counterOpen === 'viewings' && (todayViewingRows.length ? todayViewingRows.map((r) => (
+                <button key={r.lead.id} onClick={() => { setCounterOpen(null); setSelectedLeadForDetails(r.lead); }} className="w-full text-right border border-[#ECE8DF] rounded-xl p-3 hover:bg-[#FBF8F1] space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm">{r.lead.name || 'من غير اسم'}</span>
+                    <span className="text-[11px] text-[#8C877D]">{new Date(r.at).toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' })}</span>
+                  </div>
+                  <p className="text-xs text-[#6B665C] font-mono" dir="ltr">{r.lead.phone}</p>
+                  {r.comment && <p className="text-xs text-[#3d3a35]">«{r.comment}»</p>}
+                  <p className="text-[11px] text-[#8C877D]">{[r.by ? `سجّلها ${r.by}` : '', (isAdmin || isLead) && r.lead.assignedAgentName ? `العميل مع ${r.lead.assignedAgentName}` : ''].filter(Boolean).join(' · ')}</p>
+                </button>
+              )) : <p className="text-xs text-[#8C877D] bg-[#F6F4EF] rounded-xl p-3">مفيش معاينات اتسجّلت النهارده.</p>)}
+            </div>
+          </div>
+        </div>
+      )}
+
       {actionsLogOpen && (
         <div className="fixed inset-0 z-[120] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={() => setActionsLogOpen(false)}>
           <div className="bg-white w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -2115,65 +2162,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         />
       )}
 
-      {/* PROPERTY DETAILS PREVIEW MODAL */}
+      {/* معاينة الشقة: كل الصور والفيديو والتفاصيل ومقارنة السعر بالحي */}
       {previewProperty && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-          <div 
-            className="bg-white rounded-3xl p-5 sm:p-6 max-w-lg w-full text-right space-y-4 shadow-2xl border border-[#ECE8DF] max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-[#ECE8DF] pb-3">
-              <span className="font-mono text-xs font-bold text-[#A07A26] bg-[#FAF4E5] px-2.5 py-1 rounded-lg">
-                #{previewProperty.code}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPreviewProperty(null)}
-                className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="aspect-video rounded-2xl overflow-hidden border border-[#ECE8DF]">
-              <img 
-                src={previewProperty.images[0]} 
-                alt={previewProperty.title}
-                className="w-full h-full object-cover" 
-              />
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[#141414] font-readex">{previewProperty.title}</h3>
-              <p className="text-xs text-[#6B665C]">{previewProperty.neighborhood}</p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="p-2.5 bg-[#F6F4EF] rounded-xl border border-[#ECE8DF]">
-                <span className="text-[#6B665C] text-[10px] block">المساحة</span>
-                <strong className="font-bold text-[#141414] font-mono">{previewProperty.area} م²</strong>
-              </div>
-              <div className="p-2.5 bg-[#F6F4EF] rounded-xl border border-[#ECE8DF]">
-                <span className="text-[#6B665C] text-[10px] block">الغرف</span>
-                <strong className="font-bold text-[#141414]">{previewProperty.bedrooms} غرف</strong>
-              </div>
-              <div className="p-2.5 bg-[#F6F4EF] rounded-xl border border-[#ECE8DF]">
-                <span className="text-[#6B665C] text-[10px] block">السعر</span>
-                <strong className="font-bold text-[#141414]">{formatPrice(previewProperty.price)}</strong>
-              </div>
-            </div>
-
-            <div className="pt-2 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPreviewProperty(null)}
-                className="px-5 py-2.5 bg-[#141414] text-white font-bold rounded-xl text-xs cursor-pointer"
-              >
-                إغلاق
-              </button>
-            </div>
-          </div>
-        </div>
+        <UnitPreview
+          property={previewProperty}
+          properties={properties}
+          onClose={() => setPreviewProperty(null)}
+          onAd={() => { setAdShareProp(previewProperty); setPreviewProperty(null); }}
+        />
       )}
 
       {/* SPIN WHEEL MODAL */}
