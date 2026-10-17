@@ -450,7 +450,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const shownAgent = (viewAgentId !== 'all' ? agents.find((a) => a.id === viewAgentId) : null) || currentAgent;
 
   const viewingSomeoneElse = !!shownAgent && shownAgent.id !== currentAgent?.id;
-  const banner: CrmBanner = board.banner || { active: true, title: 'طلب عاجل من الإدارة: عميل كاش جاد', subtitle: 'دور أرضي بحديقة أو دور أول · الحي الثاني أو الثالث · حتى 4 مليون', bonus: 'بونص 1,500 ج.م', showMatching: true };
+  /* الطلب العاجل بيظهر بس لو الإدارة كتبته وفعّلته. كان فيه طلب
+     تجريبي مكتوب في الكود ("عميل كاش جاد · بونص 1,500") بيظهر لكل
+     السيلز طول ما الإدارة ماحفظتش طلب — يعني كان ظاهر من غير ما حد يطلبه. */
+  const banner: CrmBanner = board.banner || { active: false, title: '', subtitle: '', bonus: '', showMatching: true };
   const deleteRequests = isAdmin && canEdit ? leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved) : [];
   const [moveComment, setMoveComment] = useState('');
   const [moveNext, setMoveNext] = useState<WhenValue | null>(null);
@@ -982,9 +985,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
             )}
             {isAdmin && editBoard !== 'banner' && (
-              <button onClick={() => { setDraftBoard({ banner }); setEditBoard('banner'); }} className="self-start text-xs font-bold text-[#A07A26]">✎ تعديل الطلب العاجل</button>
+              <button onClick={() => { setDraftBoard({ banner: banner.title?.trim() ? banner : { ...banner, active: true } }); setEditBoard('banner'); }} className="self-start text-xs font-bold text-[#A07A26]">✎ تعديل الطلب العاجل</button>
             )}
-            {banner.active !== false && (
+            {banner.active !== false && !!banner.title?.trim() && (
             <div className="bg-white border-2 border-[#E9DFCA] rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shadow-2xs">
               <div className="flex items-start sm:items-center gap-2.5 sm:gap-3">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 mt-1 sm:mt-0 animate-ping" />
