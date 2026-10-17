@@ -9,7 +9,33 @@ const NEG = ['السعر', 'الدور', 'التشطيب', 'الشارع', 'ال
 export const FieldFeedbackPage: React.FC<{ tripId: string; onClose: () => void }> = ({ tripId, onClose }) => {
   const [trip, setTrip] = useState<FieldTrip | null | undefined>(undefined);
   const [sent, setSent] = useState<Record<string, boolean>>({});
-  useEffect(() => { getTrip(tripId).then(setTrip).catch(() => setTrip(null)); }, [tripId]);
+  const [why, setWhy] = useState('');
+  /* اللينك بيتفتح غالباً من جوه واتساب، والمتصفح ده ساعات بيقول
+     "مفيش نت" في أول ثانية. كان أي غلط = "اللينك مش شغال" على طول.
+     دلوقتي بنحاول ٣ مرات، ولو فشل بنقول السبب الحقيقي. */
+  useEffect(() => {
+    let alive = true;
+    const id = String(tripId || '').trim().replace(/[^\w-]/g, '');
+    (async () => {
+      let last: any = null;
+      for (let i = 0; i < 3; i++) {
+        try {
+          const t = await getTrip(id);
+          if (!alive) return;
+          if (t) { setTrip(t); return; }
+          setWhy('المشوار ده مش موجود — ممكن يكون اتمسح. اطلب لينك جديد من سارة.');
+          setTrip(null); return;
+        } catch (e) { last = e; await new Promise((r) => setTimeout(r, 1500)); }
+      }
+      if (!alive) return;
+      const c = String(last?.code || '');
+      setWhy(c.includes('permission') ? 'السيستم رافض يفتح اللينك (صلاحيات). بلّغ سارة.'
+        : c.includes('unavailable') || c.includes('offline') ? 'النت ضعيف — افتح اللينك تاني من Chrome.'
+        : `اللينك مافتحش (${c || 'خطأ'}). بلّغ سارة.`);
+      setTrip(null);
+    })();
+    return () => { alive = false; };
+  }, [tripId]);
 
   return (
     <div className="fixed inset-0 z-[90] bg-[#F6F4EF] overflow-y-auto" dir="rtl" style={{ fontFamily: "'IBM Plex Sans Arabic', Tahoma, sans-serif" }}>
@@ -20,7 +46,7 @@ export const FieldFeedbackPage: React.FC<{ tripId: string; onClose: () => void }
           {trip && <p className="text-sm text-[#CFCBC2] mt-1">أهلاً {trip.agentName} · {trip.timeText}</p>}
         </header>
         {trip === undefined && <p className="text-center py-10">جاري التحميل...</p>}
-        {trip === null && <p className="text-center py-10">اللينك ده مش شغال. كلّم سارة.</p>}
+        {trip === null && <p className="text-center py-10 leading-7">{why || 'اللينك ده مش شغال. كلّم سارة.'}</p>}
         {trip && trip.units.map((u) => sent[u.code]
           ? <div key={u.code} className="rounded-2xl bg-[#EEF5F0] text-[#1E7A45] p-5 font-bold text-center">✓ اتبعت رأي {u.code}، شكراً</div>
           : <UnitForm key={u.code} trip={trip} u={u} onSent={() => setSent((s) => ({ ...s, [u.code]: true }))} />)}
@@ -56,7 +82,7 @@ const UnitForm: React.FC<{ trip: FieldTrip; u: TripUnit; onSent: () => void }> =
       </div>
       <VoiceRecorder folder="field_feedback" id={`${trip.id}-${u.code}`} onDone={setVoice} />
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="أو اكتب رأيه هنا" className="w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-base" />
-      <button disabled={!ok || busy} onClick={async () => { setBusy(true); try { await submitFieldFeedback(trip, u, { text: text.trim() || '(فويس)', voiceUrl: voice || undefined, rating, positives: pos, negatives: neg }); onSent(); } finally { setBusy(false); } }}
+      <button disabled={!ok || busy} onClick={async () => { setBusy(true); try { await submitFieldFeedback(trip, u, { text: text.trim() || '(فويس)', voiceUrl: voice || undefined, rating, positives: pos, negatives: neg }); onSent(); } catch (e: any) { alert(`الرأي ماتبعتش — ${String(e?.code || '').includes('permission') ? 'السيستم رافض، بلّغ سارة' : 'النت ضعيف، جرّب تاني'}`); } finally { setBusy(false); } }}
         className="w-full rounded-2xl py-4 bg-[#A07A26] text-white text-lg font-bold disabled:opacity-40">{busy ? 'جاري الإرسال...' : 'ابعت'}</button>
     </section>
   );
