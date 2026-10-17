@@ -13,7 +13,7 @@ import {
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { INITIAL_SALES_AGENTS, INITIAL_BADGES, INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { INITIAL_PRICE_MAP_DATA, INITIAL_CLOSED_DEALS } from '../data/marketPriceData';
-import { saveClosedDealToDb, deleteClosedDealFromDb } from '../services/firebaseService';
+import { saveClosedDealToDb, deleteClosedDealFromDb, subscribeToAccounts, AccountRecord } from '../services/firebaseService';
 import { DEFAULT_BROKERS } from '../data/brokerData';
 import { DuplicatesPanel } from './admin/DuplicatesPanel';
 import { LeadDuplicatesPanel } from './admin/LeadDuplicatesPanel';
@@ -365,6 +365,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setBrokersState(externalBrokersList);
     }
   }, [externalBrokersList]);
+
+  /* البروكرز الحقيقيين = حسابات «بروكر» في الحسابات (staff_access).
+     التبويب ده كان بيقرا قايمة قديمة منفصلة (brokers) مالهاش علاقة
+     بالحسابات اللي بتعملها، فكان بيقول «٠ بروكر» وهم موجودين. */
+  const [brokerAccounts, setBrokerAccounts] = useState<AccountRecord[]>([]);
+  React.useEffect(() => subscribeToAccounts((list) => setBrokerAccounts(list.filter((a) => a.role === 'broker'))), []);
+  const [openBroker, setOpenBroker] = useState('');
 
   const syncBrokers = (updated: BrokerProfile[]) => {
     setBrokersState(updated);
@@ -1246,7 +1253,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
                 activeTab === 'brokers' ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600'
               }`}>
-                {brokersState.length}
+                {brokerAccounts.length}
               </span>
             </button>
 
@@ -2694,204 +2701,80 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {/* ================================================================ */}
           {/* TAB: BROKERS & PARTNER OFFICES OVERSIGHT (إدارة ورقابة البروكرز)  */}
           {/* ================================================================ */}
-          {activeTab === 'brokers' && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              
-              {/* Header & Quick Action */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#ECE8DF]">
-                <div>
-                  <h3 className="text-sm sm:text-base font-black text-stone-900 flex items-center gap-2">
-                    <Briefcase size={18} className="text-[#A07A26]" />
-                    <span>إدارة ورقابة شبكة الوسطاء والمكاتب الشريكة ({brokersState.length})</span>
-                  </h3>
-                  <p className="text-xs text-stone-500 mt-0.5 font-medium">
-                    مراقبة حصرية ومحكمة: كل بروكر يطلع على شققه فقط ببريد وكلمة سر خاصة به، مع صلاحية تفقد منصته والتحكم في حساباته
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleOpenAddBroker}
-                    className="px-4 py-2.5 bg-[#A07A26] hover:bg-[#8A671F] text-white rounded-2xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                  >
-                    <PlusCircle size={15} />
-                    <span>إضافة وسيط / مكتب جديد</span>
+          {activeTab === 'brokers' && (() => {
+            const rows = brokerAccounts.map((a) => {
+              const bid = String(a.brokerId || '').trim();
+              const units = bid ? properties.filter((p) => p.brokerId === bid) : [];
+              return { a, bid, units };
+            }).sort((x, y) => y.units.length - x.units.length);
+            const totalUnits = rows.reduce((n, r) => n + r.units.length, 0);
+            return (
+              <div className="space-y-4" dir="rtl">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-black flex items-center gap-2"><Briefcase size={18} className="text-[#A07A26]" /> البروكرز ({rows.length})</h3>
+                    <p className="text-xs text-stone-500 mt-0.5">من حسابات «بروكر» — كل بروكر بيشوف الشقق اللي عليها رقمه بس</p>
+                  </div>
+                  <button onClick={() => setIsAccountsOpen(true)} className="px-4 py-2.5 bg-[#A07A26] text-white rounded-2xl text-xs font-bold flex items-center gap-1.5">
+                    <PlusCircle size={15} /> إضافة بروكر (من الحسابات)
                   </button>
                 </div>
-              </div>
 
-              {/* Statistics Overview Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#ECE8DF] space-y-1 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-                  <span className="text-stone-400 text-xs font-medium">إجمالي الوسطاء والمكاتب</span>
-                  <div className="text-2xl font-black font-mono text-stone-900">
-                    {brokersState.length}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-2xl p-4 border border-[#ECE8DF]">
+                    <p className="text-stone-400 text-xs">عدد البروكرز</p>
+                    <p className="text-2xl font-black font-mono">{rows.length}</p>
                   </div>
-                  <p className="text-[11px] text-stone-500">شركاء معتمدون بالهضبة</p>
+                  <div className="bg-white rounded-2xl p-4 border border-[#ECE8DF]">
+                    <p className="text-stone-400 text-xs">شقق عليها بروكر</p>
+                    <p className="text-2xl font-black font-mono text-[#A07A26]">{totalUnits}</p>
+                  </div>
                 </div>
 
-                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#ECE8DF] space-y-1 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-                  <span className="text-stone-400 text-xs font-medium">الشقق الموزعة على البروكرز</span>
-                  <div className="text-2xl font-black font-mono text-[#A07A26]">
-                    {brokersState.reduce((sum, b) => sum + (b.assignedPropertyIds?.length || 0), 0)} شقة
-                  </div>
-                  <p className="text-[11px] text-stone-500">محافظ خاصة ومعزولة</p>
-                </div>
+                {!rows.length && (
+                  <p className="text-sm bg-[#F6F4EF] rounded-2xl p-4 text-stone-600">مفيش حسابات بدور «بروكر». اعمل الحساب من زرار «الحسابات» واختار الدور بروكر.</p>
+                )}
 
-                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#ECE8DF] space-y-1 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-                  <span className="text-stone-400 text-xs font-medium">الوسطاء النشطون حالياً</span>
-                  <div className="text-2xl font-black font-mono text-emerald-700">
-                    {brokersState.filter(b => b.isActive !== false).length}
-                  </div>
-                  <p className="text-[11px] text-emerald-600">جاهزون للمعاينة الفورية</p>
-                </div>
-
-                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#ECE8DF] space-y-1 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-                  <span className="text-stone-400 text-xs font-medium">متوسط سرعة التنسيق</span>
-                  <div className="text-2xl font-black font-mono text-blue-700">
-                    8 دقائق
-                  </div>
-                  <p className="text-[11px] text-blue-600">التزام بمعايير السبع</p>
-                </div>
-              </div>
-
-              {/* Brokers List */}
-              <div className="space-y-4">
-                {brokersState.map((broker) => {
-                  const assignedCount = broker.assignedPropertyIds?.length || 0;
-                  const isSuspended = broker.isActive === false;
-
-                  return (
-                    <div
-                      key={broker.id}
-                      className={`bg-white rounded-3xl p-5 sm:p-6 border transition-all shadow-[0_2px_12px_rgba(0,0,0,0.03)] ${
-                        isSuspended ? 'border-rose-300 bg-rose-50/20' : 'border-[#ECE8DF] hover:border-[#D9B864]/60'
-                      }`}
-                    >
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        
-                        {/* Broker Core Info */}
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#FAF4E5] to-[#EFE7D2] border border-[#E9DFCA] flex items-center justify-center text-[#A07A26] font-black text-base shrink-0">
-                            {broker.name.slice(0, 1)}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="text-base font-black text-stone-900">{broker.name}</h4>
-                              <span className="text-xs text-stone-500 font-bold">({broker.companyName || 'وسيط مستقل'})</span>
-                              <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full ${
-                                isSuspended ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              }`}>
-                                {isSuspended ? 'حساب موقوف بقرار إداري' : 'وسيط نشط ومعتمد'}
-                              </span>
-                            </div>
-
-                            {/* Credentials bar (Email & Password for Admin oversight) */}
-                            <div className="flex items-center gap-3 text-xs text-stone-600 mt-2 flex-wrap">
-                              <div className="flex items-center gap-1 bg-stone-50 px-2.5 py-1 rounded-xl border border-stone-200/80">
-                                <Mail size={12} className="text-stone-400" />
-                                <span className="font-mono font-bold text-stone-900">{broker.email}</span>
-                              </div>
-
-                              <div className="flex items-center gap-1 bg-stone-50 px-2.5 py-1 rounded-xl border border-stone-200/80">
-                                <Key size={12} className="text-amber-600" />
-                                <span className="text-stone-400">كلمة السر:</span>
-                                <span className="font-mono font-bold text-stone-900">{broker.password || 'broker123'}</span>
-                              </div>
-
-                              <div className="flex items-center gap-1 bg-stone-50 px-2.5 py-1 rounded-xl border border-stone-200/80">
-                                <Phone size={12} className="text-emerald-600" />
-                                <span className="font-mono">{broker.phone}</span>
-                              </div>
-
-                              <div className="flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200 text-amber-900 font-bold">
-                                <span>نسبة العمولة:</span>
-                                <span className="font-mono">{broker.commissionRate || 50}%</span>
-                              </div>
-                            </div>
-
-                            {/* Assigned Properties Preview */}
-                            <div className="mt-3 flex items-center gap-2 flex-wrap">
-                              <span className="text-xs text-stone-500 font-bold">الشقق المسندة له ({assignedCount}):</span>
-                              {assignedCount === 0 ? (
-                                <span className="text-xs text-stone-400 italic">لم يتم إسناد شقق بعد</span>
-                              ) : (
-                                broker.assignedPropertyIds?.slice(0, 6).map(code => (
-                                  <span key={code} className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-lg bg-stone-100 text-stone-800 border border-stone-200">
-                                    {code}
+                <div className="space-y-2">
+                  {rows.map(({ a, bid, units }) => {
+                    const isOpen = openBroker === a.email;
+                    return (
+                      <div key={a.email} className="bg-white border border-[#ECE8DF] rounded-2xl overflow-hidden">
+                        <button onClick={() => setOpenBroker(isOpen ? '' : a.email)} className="w-full flex flex-wrap items-center justify-between gap-2 p-4 text-right">
+                          <span>
+                            <span className="font-bold text-sm block">{a.name || bid || a.email}</span>
+                            <span className="text-[11px] text-stone-500 font-mono" dir="ltr">{a.email}</span>
+                          </span>
+                          <span className="flex flex-wrap gap-1.5 text-[11px]">
+                            <span className={`px-2 py-1 rounded-lg font-bold ${units.length ? 'bg-[#FBF8F1] text-[#6E5418]' : 'bg-[#F6F4EF] text-stone-500'}`}>{units.length} شقة</span>
+                            {a.phone && <span className="px-2 py-1 rounded-lg bg-[#F6F4EF]" dir="ltr">{a.phone}</span>}
+                            {a.commission && <span className="px-2 py-1 rounded-lg bg-[#F6F4EF]">عمولة {a.commission}%</span>}
+                            {!bid && <span className="px-2 py-1 rounded-lg bg-[#FBEDEA] text-[#C2412D] font-bold">من غير رقم بروكر</span>}
+                          </span>
+                        </button>
+                        {isOpen && (
+                          <div className="border-t border-[#F0ECE4] p-4 space-y-2 bg-[#FDFCF9]">
+                            <p className="text-[11px] text-stone-500">رقم البروكر: <span className="font-mono">{bid || '—'}</span></p>
+                            {units.length ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {units.map((p) => (
+                                  <span key={p.id} className="text-xs bg-white border border-[#ECE8DF] rounded-lg px-2 py-1">
+                                    <b className="font-mono">{p.code}</b> · {p.neighborhood} · {p.area}م² · {formatPrice(p.price)}
                                   </span>
-                                ))
-                              )}
-                              {assignedCount > 6 && (
-                                <span className="text-[10px] text-stone-500 font-bold">
-                                  +{assignedCount - 6} شقق أخرى
-                                </span>
-                              )}
-                            </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-stone-500">مفيش شقق عليها رقمه لسه — الشقق بتتربط بالبروكر لما هو يضيفها من بوابته.</p>
+                            )}
                           </div>
-                        </div>
-
-                        {/* Actions Toolbar */}
-                        <div className="flex items-center gap-2 flex-wrap shrink-0">
-                          
-                          {/* CRITICAL FEATURE: INSPECT PLATFORM AS THIS BROKER */}
-                          {onInspectBroker && (
-                            <button
-                              onClick={() => onInspectBroker(broker.id)}
-                              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                              title="معاينة شاشة ومنصة هذا البروكر كما يراها هو تماماً"
-                            >
-                              <Eye size={14} />
-                              <span>معاينة منصته (Inspect View)</span>
-                            </button>
-                          )}
-
-                          {/* ASSIGN PROPERTIES MODAL BUTTON */}
-                          <button
-                            onClick={() => setAssigningBroker(broker)}
-                            className="px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-stone-200"
-                          >
-                            <Building size={13} />
-                            <span>توزيع الشقق المسندة</span>
-                          </button>
-
-                          {/* TOGGLE ACTIVE / SUSPEND */}
-                          <button
-                            onClick={() => handleToggleBrokerActive(broker.id)}
-                            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                              isSuspended 
-                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
-                                : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
-                            }`}
-                          >
-                            {isSuspended ? 'تفعيل الحساب' : 'تجميد الحساب'}
-                          </button>
-
-                          {/* EDIT BROKER */}
-                          <button
-                            onClick={() => handleOpenEditBroker(broker)}
-                            className="p-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 transition-colors cursor-pointer"
-                            title="تعديل بيانات البروكر"
-                          >
-                            <Edit3 size={15} />
-                          </button>
-
-                          {/* DELETE BROKER */}
-                          <button
-                            onClick={() => handleDeleteBroker(broker.id)}
-                            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
-                            title="حذف البروكر"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ================================================================ */}
           {/* TAB 5: REAL ANALYTICS & METRICS                                  */}
