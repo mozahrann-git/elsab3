@@ -47,6 +47,8 @@ const RequestForm: React.FC<{
   /* مشترك */
   const [beds, setBeds] = useState<number>(prev?.bedrooms || lead.preferredBedrooms || 0);
   const [note, setNote] = useState(prev?.note || '');
+  /* مهم ولا محيّر — إجباري. بيتحسب في المهام اليومية والإدارة بتراجعه */
+  const [priority, setPriority] = useState<'important' | 'undecided' | ''>((prev as any)?.priority || '');
   const [reasons, setReasons] = useState<string[]>(prev?.rejectionReasons || []);
 
   /* كاش */
@@ -113,7 +115,7 @@ const RequestForm: React.FC<{
   }, [projects, planKind, years, down, monthly]);
 
   const draft = useMemo(() => {
-    const base = requestFromLead(lead, agentName, kind, { note: note.trim() });
+    const base = { ...requestFromLead(lead, agentName, kind, { note: note.trim() }), priority: priority || undefined };
     if (kind === 'cash') {
       return {
         ...base,
@@ -138,13 +140,14 @@ const RequestForm: React.FC<{
       rejectionReasons: reasons,
     };
   }, [lead, agentName, kind, hoods, beds, finishing, bMin, bMax,
-      planKind, years, down, monthly, delivery, note, reasons]);
+      planKind, years, down, monthly, delivery, note, reasons, priority]);
 
 
   const tooLow = kind === 'installment' && floorDown > 0 && down < floorDown;
 
   const save = async () => {
     if (tooLow) { setErr(`أقل مقدم موجود عندنا ${floorDown.toLocaleString('en-US')} ج.م`); return; }
+    if (!priority) { setErr('اختار الطلب مهم ولا محيّر'); return; }
     setBusy(true); setErr('');
     try {
       /* الحفظ بيمشي على نفس مسار تحديث ملف العميل اللي شغال
@@ -176,6 +179,23 @@ const RequestForm: React.FC<{
         </div>
 
         <div className="p-5 space-y-4">
+          <div>
+            <p className="text-xs font-bold text-stone-500 mb-1.5">الطلب ده</p>
+            <div className="grid grid-cols-2 gap-2">
+              {([['important', 'مهم', 'عارف عايز إيه وجاهز'], ['undecided', 'محيّر', 'لسه مش متأكد']] as const).map(([k, l, h]) => (
+                <button key={k} type="button" onClick={() => { setPriority(k); setErr(''); }}
+                  className={`rounded-2xl py-2.5 font-black text-sm border ${
+                    priority === k
+                      ? (k === 'important' ? 'bg-[#1E7A45] text-white border-[#1E7A45]' : 'bg-[#A07A26] text-white border-[#A07A26]')
+                      : 'bg-white border-[#E4DFD4] text-stone-600'
+                  }`}>
+                  {l}
+                  <span className={`block text-[10px] font-bold mt-0.5 ${priority === k ? 'text-white/70' : 'text-stone-400'}`}>{h}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <p className="text-xs font-bold text-stone-500 mb-1.5">كاش ولا تقسيط</p>
             <div className="grid grid-cols-2 gap-2">

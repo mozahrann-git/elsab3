@@ -790,7 +790,11 @@ export interface ClientRequest {
      عشان نقدر نعدّهم ونعرف إيه اللي بيضيّع الصفقات */
   rejectionReasons?: string[];
   status: 'open' | 'closed';
+  /* مهم ولا محيّر — السيلز بيصنّفه وهو بيكتبه، والإدارة بتراجع */
+  priority?: 'important' | 'undecided';
   createdAt: number;
+  /* أول مرة الطلب اتسجّل — التعديل بعد كده مابيتحسبش طلب جديد في المهام */
+  firstAt?: number;
   closedAt?: number;
   /* الشقق اللي السيلز شافها خلاص — عشان ما يتنبّهش عليها تاني */
   seenPropertyIds?: string[];

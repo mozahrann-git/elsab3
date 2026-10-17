@@ -464,9 +464,12 @@ export function leadWithRequest(lead: Lead, r: ClientRequest): Lead {
           }
         : {};
 
+  /* أول تسجيل بيفضل محفوظ — عشان التعديل مايتحسبش طلب جديد في المهام اليومية */
+  const prevReq = (lead as any).clientRequest as ClientRequest | undefined;
+  const firstAt = prevReq ? (prevReq.firstAt || prevReq.createdAt || r.createdAt) : (r.firstAt || r.createdAt);
   return {
     ...lead,
-    clientRequest: r,
+    clientRequest: { ...r, firstAt },
     discovery,
     ...budgetPart,
     preferredBedrooms: r.bedrooms || lead.preferredBedrooms,

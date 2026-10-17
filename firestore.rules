@@ -288,6 +288,34 @@ service cloud.firestore {
                     && request.resource.data.stage == 'submitted';
     }
 
+    // ---------- المهام اليومية للسيلز ----------
+    /* أرقام المكالمات: الإدارة بترفعها وبتوزعها، والسيلز بيسجّل
+       النتيجة بس — مايقدرش يغيّر الرقم ولا مين متوزع عليه */
+    match /call_list/{id} {
+      allow read: if isStaff() || isBoss();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (isStaff() && onlyKeys(['status', 'attempts', 'lastAt', 'lastDay', 'lastBy', 'lastNote', 'leadId']));
+    }
+    /* عدّاد يوم كل سيلز. الإجازة الإدارة بس اللي تحطها */
+    match /sales_daily/{id} {
+      allow read: if isStaff() || isBoss();
+      allow create: if isStaff() && id == request.resource.data.agentId + '_' + request.resource.data.day
+        && (isAdmin() || request.resource.data.get('off', false) == false);
+      allow update: if isStaff() && id == request.resource.data.agentId + '_' + request.resource.data.day
+        && (isAdmin() || request.resource.data.get('off', false) == resource.data.get('off', false));
+      allow delete: if isAdmin();
+    }
+    /* سكرين شوت الإعلانات: السيلز بيرفع، والإدارة بتقبل أو ترفض.
+       المرفوض السيلز يقدر يرفعه تاني */
+    match /ad_posts/{id} {
+      allow read: if isStaff() || isBoss();
+      allow create: if isStaff() && request.resource.data.status == 'pending';
+      allow update: if isAdmin()
+        || (isStaff() && resource.data.status == 'rejected' && request.resource.data.status == 'pending');
+      allow delete: if isAdmin();
+    }
+
     // ---------- قديم ----------
     match /brokers/{id} {
       allow read: if isBoss();

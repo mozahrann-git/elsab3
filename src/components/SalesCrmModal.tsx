@@ -49,6 +49,8 @@ import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
+import { DailyTab } from './sales/DailyTab';
+import { DailyAdminBoard } from './sales/DailyAdminBoard';
 import { matchDetailed, briefLine, briefGaps, readBrief, payModeOf, resaleFits, projectsFit, resaleCeiling, PayMode } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
@@ -140,7 +142,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   viewingRequests,
 }) => {
   // Navigation Tabs matching sidebar items (Properties tab removed)
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'followups' | 'matching' | 'leaderboard'>('pipeline');
+  /* السيلز بيفتح على «يومي» — مهامه قدامه أول حاجة. الإدارة على المسار. */
+  const [activeTab, setActiveTab] = useState<'daily' | 'pipeline' | 'followups' | 'matching' | 'content' | 'leaderboard'>(isAdmin ? 'pipeline' : 'daily');
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeMobileStageFilter, setActiveMobileStageFilter] = useState<string>('all');
@@ -590,6 +593,23 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           <nav className={`p-3 space-y-1.5 ${isMobileMenuOpen ? 'block' : 'hidden lg:block'}`}>
             <button
               onClick={() => {
+                setActiveTab('daily');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full p-2.5 rounded-xl text-right flex items-center justify-between text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'daily'
+                  ? 'bg-[#A07A26] text-white shadow-xs'
+                  : 'text-stone-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 size={16} />
+                <span>{isAdmin ? 'مهام الفريق' : 'مهامي النهارده'}</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
                 setActiveTab('pipeline');
                 setIsMobileMenuOpen(false);
               }}
@@ -799,6 +819,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {/* Mobile / Tablet Horizontal Navigation Tabs */}
         <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 no-scrollbar shrink-0 border-b border-[#ECE8DF]">
           {[
+            { id: 'daily', label: isAdmin ? 'مهام الفريق' : 'يومي' },
             { id: 'pipeline', label: 'مسار العملاء' },
             { id: 'followups', label: 'المتابعات' },
             { id: 'matching', label: 'المطابقة الذكية' },
@@ -1781,6 +1802,20 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {/* ========================================================= */}
         {/* TAB 5: LEADERBOARD */}
         {/* ========================================================= */}
+        {activeTab === 'daily' && (
+          <div className="pt-1">
+            {isAdmin ? (
+              <DailyAdminBoard agents={agents} leads={leads} viewingRequests={viewingRequests} adminName={actorName} />
+            ) : (
+              <DailyTab
+                properties={properties} leads={leads} currentAgent={currentSalesAgent}
+                viewingRequests={viewingRequests} onAddLead={onAddLead}
+                onGo={(t) => setActiveTab(t)}
+              />
+            )}
+          </div>
+        )}
+
         {activeTab === 'content' && (
           <div className="p-4 sm:p-5">
             <ContentTab properties={properties} agents={agents} currentAgent={currentAgent} isAdmin={isAdmin} />

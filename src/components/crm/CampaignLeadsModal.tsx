@@ -25,7 +25,7 @@ function toEnglishDigits(t: string): string {
 }
 
 /** بيطلّع اسم ورقم من أي سطر: "أحمد 01012345678" أو "01012345678 - أحمد" أو مفصولين بتاب/فاصلة */
-function parseLine(line: string): Parsed | null {
+export function parseLine(line: string): Parsed | null {
   // الأول بنحوّل الأرقام العربية لإنجليزي، وبنشيل علامات الاتجاه اللي الواتساب بيحطها
   const clean = toEnglishDigits(line.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')).trim();
   if (!clean) return null;
