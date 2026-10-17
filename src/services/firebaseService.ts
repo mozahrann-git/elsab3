@@ -1281,37 +1281,58 @@ export async function saveAccount(rec: AccountRecord, previousPassword?: string)
       if (!previousPassword) {
         throw new Error('الحساب موجود في Firebase ومش معانا باسووردُه القديم. امسحه من Authentication واعمله تاني من هنا.');
       }
-      const cred = await signInWithEmailAndPassword(sAuth, email, previousPassword);
+      let cred;
+      try {
+        cred = await signInWithEmailAndPassword(sAuth, email, previousPassword);
+      } catch (e: any) {
+        const c = e?.code || '';
+        if (c.includes('wrong-password') || c.includes('invalid-credential') || c.includes('invalid-login')) {
+          /* الباسوورد المحفوظ عندنا مش هو الحقيقي — الغلط ده كان بيطلع
+             رسالة إنجليزي مالهاش معنى، والباسوورد مايتغيّرش */
+          throw new Error('الباسوورد القديم المحفوظ عندنا للحساب ده مش هو اللي شغال فعلاً (اتغيّر من برّه أو قبل ما نحفظه). الحل: صاحب الحساب يدخل ويغيّره بنفسه من «غيّر الباسوورد»، أو امسح الحساب من Firebase ← Authentication واعمله تاني من هنا.');
+        }
+        if (c.includes('too-many-requests')) throw new Error('محاولات كتير على الحساب ده — استنى ربع ساعة وجرّب تاني');
+        if (c.includes('network')) throw new Error('النت قاطع — جرّب تاني');
+        throw e;
+      }
       await updatePassword(cred.user, password);
     } finally {
       await signOut(sAuth).catch(() => {});
     }
   }
 
+  const authChanged = !!password && password !== (previousPassword || '');
   const codes = Array.isArray(rec.propertyCodes)
     ? rec.propertyCodes
     : (rec.propertyCodes || '').split(',').map((c) => c.trim()).filter(Boolean);
-  await setDoc(doc(db, 'staff_access', email), cleanFirestoreData({
-    role: rec.role,
-    name: rec.name || '',
-    password: password || previousPassword || '',
-    /* البق اللي كان بيخلي كل البروكرز شخص واحد:
-       لو الخانة اتسابت فاضية، كان بيتحفظ brokerId = '' لكل بروكر.
-       فحسين '' ومصطفى '' — والفلتر p.brokerId === access.brokerId بيطابقهم،
-       فمصطفى بيفتح بوابته ويلاقي وحدات حسين.
-       دلوقتي لو فاضية، بناخد اسم المستخدم من الإيميل — ودي فريدة بطبيعتها
-       لأن الإيميل نفسه هو مفتاح المستند. مستحيل يطلع فاضي تاني. */
-    brokerId: rec.role === 'broker'
-      ? (String(rec.brokerId || '').trim() || email.split('@')[0])
-      : '',
-    propertyCodes: rec.role === 'owner' ? codes : [],
-    /* حق تعديل الشقق — للسيلز بس. أي دور تاني بيترجع false
-       عشان ما تفضلش شغالة لو الحساب اتحوّل لدور تاني. */
-    canEditProperties: rec.role === 'sales' ? rec.canEditProperties === true : false,
-    phone: rec.phone || '',
-    ...(rec.commission ? { commission: rec.commission } : {}),
-    updatedAt: new Date().toISOString(),
-  }), { merge: true });
+  try {
+    await setDoc(doc(db, 'staff_access', email), cleanFirestoreData({
+      role: rec.role,
+      name: rec.name || '',
+      password: password || previousPassword || '',
+      /* البق اللي كان بيخلي كل البروكرز شخص واحد:
+         لو الخانة اتسابت فاضية، كان بيتحفظ brokerId = '' لكل بروكر.
+         فحسين '' ومصطفى '' — والفلتر p.brokerId === access.brokerId بيطابقهم،
+         فمصطفى بيفتح بوابته ويلاقي وحدات حسين.
+         دلوقتي لو فاضية، بناخد اسم المستخدم من الإيميل — ودي فريدة بطبيعتها
+         لأن الإيميل نفسه هو مفتاح المستند. مستحيل يطلع فاضي تاني. */
+      brokerId: rec.role === 'broker'
+        ? (String(rec.brokerId || '').trim() || email.split('@')[0])
+        : '',
+      propertyCodes: rec.role === 'owner' ? codes : [],
+      /* حق تعديل الشقق — للسيلز بس. أي دور تاني بيترجع false
+         عشان ما تفضلش شغالة لو الحساب اتحوّل لدور تاني. */
+      canEditProperties: rec.role === 'sales' ? rec.canEditProperties === true : false,
+      phone: rec.phone || '',
+      ...(rec.commission ? { commission: rec.commission } : {}),
+      updatedAt: new Date().toISOString(),
+    }), { merge: true });
+  } catch (e: any) {
+    /* الباسوورد اتغيّر في الدخول بس ماتحفظش عندنا — لازم الأدمن يعرف،
+       وإلا المرة الجاية هيحاول بالقديم ويفشل */
+    if (authChanged) throw new Error(`الباسوورد اتغيّر وصاحب الحساب يقدر يدخل بيه، بس ماتحفظش في قايمة الحسابات (${e?.code || e?.message || ''}). اكتبه عندك.`);
+    throw e;
+  }
 }
 
 /** إيقاف الحساب (مش بيمسحه من Firebase، بس بيشيل صلاحياته) */
@@ -1326,12 +1347,21 @@ export async function changeMyPassword(currentPassword: string, newPassword: str
   if (newPassword.trim().length < 6) throw new Error('الباسوورد الجديد لازم 6 حروف أو أكتر');
   try {
     await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword.trim()));
-  } catch {
+  } catch (e: any) {
+    const c = e?.code || '';
+    if (c.includes('too-many-requests')) throw new Error('محاولات كتير — استنى ربع ساعة وجرّب تاني');
+    if (c.includes('network')) throw new Error('النت قاطع — جرّب تاني');
     throw new Error('الباسوورد الحالي غلط');
   }
   await updatePassword(user, newPassword.trim());
   // نحدّث النسخة اللي الأدمن بيشوفها
-  await updateDoc(doc(db, 'staff_access', user.email.toLowerCase()), { password: newPassword.trim(), updatedAt: new Date().toISOString() }).catch(() => {});
+  /* كان بيفشل في صمت — فالإدارة تفضل شايفة القديم، ولما تيجي تغيّر
+     الباسوورد بعد كده يطلع خطأ لأنها بتجرّب بالقديم */
+  try {
+    await updateDoc(doc(db, 'staff_access', user.email.toLowerCase()), { password: newPassword.trim(), updatedAt: new Date().toISOString() });
+  } catch (e: any) {
+    throw new Error(`الباسوورد اتغيّر وتقدر تدخل بيه، بس الإدارة مش هتشوفه متحدّث (${e?.code || 'خطأ'}). بلّغ الإدارة بالجديد.`);
+  }
 }
 
 /* ---------- مسح الحسابات والليدات ---------- */
