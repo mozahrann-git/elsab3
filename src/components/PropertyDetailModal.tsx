@@ -37,6 +37,8 @@ interface PropertyDetailModalProps {
   onTrackClick: (propertyId: string, type: 'whatsapp' | 'call' | 'views' | 'favorites') => void;
   onEditProperty?: (property: Property) => void;
   onOpenSalesToolkit?: (property: Property) => void;
+  /* موظف (أدمن/سيلز): بيشوف تنبيه الدور وشريط المشاركة */
+  isStaff?: boolean;
   onRequestViewing?: (property: Property, preferredTime: string) => void;
   initialMediaMode?: 'photos' | 'video';
 }
@@ -51,6 +53,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   onTrackClick,
   onEditProperty,
   onOpenSalesToolkit,
+  isStaff,
   onRequestViewing,
   initialMediaMode = 'photos'
 }) => {
@@ -438,10 +441,10 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             </div>
 
             {/* الدور المخالف — بيتقال جوّه الشقة قبل "عن الوحدة" */}
-            <FloorNotice property={property} forStaff={!!onEditProperty || !!onOpenSalesToolkit} />
+            <FloorNotice property={property} forStaff={!!onEditProperty || !!onOpenSalesToolkit || !!isStaff} />
 
             {/* المشاركة للفريق — العميل العادي عنده زرار الواتساب تحت */}
-            {(!!onEditProperty || !!onOpenSalesToolkit) && (
+            {(!!onEditProperty || !!onOpenSalesToolkit || !!isStaff) && (
               <ShareBar
                 text={propertyText(property)}
                 images={(property.images || []).filter(Boolean)}

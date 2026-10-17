@@ -69,7 +69,6 @@ import { AdminLoginModal } from './components/AdminLoginModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { SalesCrmModal } from './components/SalesCrmModal';
 import { SalesLoginModal } from './components/SalesLoginModal';
-import { SalesAffiliateModal } from './components/SalesAffiliateModal';
 import { ClientShowcaseView } from './components/ClientShowcaseView';
 import { ClientAuthModal } from './components/ClientAuthModal';
 import { ClientNotificationModal } from './components/ClientNotificationModal';
@@ -2378,7 +2377,6 @@ export default function App() {
                   onTrackClick={handleTrackClick}
                   layoutMode={cardLayout}
                   onEditProperty={isAdminLoggedIn ? handleDirectEditProperty : undefined}
-                  onOpenSalesToolkit={(isAdminLoggedIn || isSalesLoggedIn) ? ((p) => setSalesToolkitProperty(p)) : undefined}
                 />
               ))}
             </div>
@@ -2467,7 +2465,7 @@ export default function App() {
         onToggleComparison={toggleComparison}
         onTrackClick={handleTrackClick}
         onEditProperty={isAdminLoggedIn ? handleDirectEditProperty : undefined}
-        onOpenSalesToolkit={(isAdminLoggedIn || isSalesLoggedIn) ? ((p) => setSalesToolkitProperty(p)) : undefined}
+        isStaff={isAdminLoggedIn || isSalesLoggedIn || !!staffAccess}
         onRequestViewing={handleRequestViewing}
       />
 
@@ -2642,7 +2640,6 @@ export default function App() {
         emergencyAlerts={emergencyAlerts}
         onSendEmergencyAlert={handleSendEmergencyAlert}
         onSelectProperty={(prop) => setSelectedProperty(prop)}
-        onOpenAffiliateModal={(prop) => setSalesToolkitProperty(prop)}
         viewingRequests={allViewingRequests}
       />
 
@@ -2662,34 +2659,7 @@ export default function App() {
         }}
       />
 
-      {/* 10. Sales Affiliate & Sarah WhatsApp Coordination Modal */}
-      {salesToolkitProperty && (
-        <SalesAffiliateModal
-          isOpen={!!salesToolkitProperty}
-          onClose={() => setSalesToolkitProperty(null)}
-          property={salesToolkitProperty}
-          currentAgent={currentAgent}
-          leads={crmLeads}
-          onUpdateLead={handleUpdateLead}
-          onRecordAction={handleRecordAgentAction}
-          onAddLead={handleAddLead}
-          onAddLeadsBulk={handleAddLeadsBulk}
-          openLeadId={pendingLeadId}
-          onOpenLeadHandled={() => setPendingLeadId(null)}
-          customLogoUrl={customLogoUrl}
-          bannerPhotoUrl={bannerPhotoUrl}
-          /* زرار لوحة الإدارة في أدوات السيلز كان بيظهر لأي حد
-             فاتح الأدوات — يعني كل السيلز. البروب نفسه بيتبعت
-             بس لو الحساب فعلاً مصرّح له، فالزرار مابقاش موجود
-             أصلاً عند اللي مالوش صلاحية. */
-          onOpenAdmin={canManageProperties ? () => setIsAdminDashboardOpen(true) : undefined}
-          onOpenCrm={() => setIsCrmOpen(true)}
-          onOpenSalesLogin={() => {
-            setSalesToolkitProperty(null);
-            setIsSalesLoginOpen(true);
-          }}
-        />
-      )}
+      {/* أدوات المستشار العقاري اتشالت — نصوصها والتحميل بقوا في بوب أب الشقة جوه الـCRM، وطلب المعاينة من ملف العميل */}
 
       {/* 11. Client Registration & Preferences Modal (Smart Unified Login) */}
       {activePortal === 'owner' && staffAccess && (

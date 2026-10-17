@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Phone, MessageCircle, PhoneCall, ClipboardList, Megaphone, CalendarCheck, Eye, Video,
-  X, Upload, Copy, Check, Loader2, AlertTriangle, ChevronLeft, ChevronRight, ImageIcon,
+  X, Upload, Copy, Check, Loader2, AlertTriangle, ChevronLeft, ChevronRight, ImageIcon, Download,
 } from 'lucide-react';
 import { Lead, Property, SalesAgent, ViewingRequest } from '../../types';
 import {
@@ -14,6 +14,8 @@ import {
 import { Project, subscribeProjects } from '../../services/projectService';
 import { ContentSlot, subscribeSlots, weekKey } from '../../services/salesToolsService';
 import { uploadFile, thumbUrl } from '../../services/mediaStorage';
+import { downloadFile, downloadAll } from '../../utils/shareKit';
+import { AD_VARIANTS, adText as adTextFor, dailyAdText } from '../../utils/adTexts';
 import { generateCallLink, waLink } from '../../utils/helpers';
 
 /*
@@ -183,7 +185,7 @@ export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, vie
       <div ref={adsRef}>
         {section === 'ads' && (
           <AdsPanel
-            agentId={agentId} agentName={agentName} day={day} week={week} settings={settings}
+            agentId={agentId} agentName={agentName} agentPhone={currentAgent?.phone} day={day} week={week} settings={settings}
             properties={properties} projects={projects} myAds={myAds} onClose={() => setSection(null)}
           />
         )}
@@ -339,12 +341,12 @@ const InterestedForm: React.FC<{
 /* ============================================================
    الإعلانات
    ============================================================ */
-type AdUnit = { code: string; kind: AdKind; title: string; image?: string; prop?: Property; project?: Project };
+export type AdUnit = { code: string; kind: AdKind; title: string; image?: string; prop?: Property; project?: Project };
 
 const AdsPanel: React.FC<{
-  agentId: string; agentName: string; day: string; week: string; settings: DailySettings;
+  agentId: string; agentName: string; agentPhone?: string; day: string; week: string; settings: DailySettings;
   properties: Property[]; projects: Project[]; myAds: AdPost[]; onClose: () => void;
-}> = ({ agentId, agentName, day, week, settings, properties, projects, myAds, onClose }) => {
+}> = ({ agentId, agentName, agentPhone, day, week, settings, properties, projects, myAds, onClose }) => {
   const [kind, setKind] = useState<AdKind>('resale');
   const [openUnit, setOpenUnit] = useState<AdUnit | null>(null);
 
@@ -417,26 +419,14 @@ const AdsPanel: React.FC<{
       </div>
 
       {openUnit && (
-        <UnitAdPopup unit={openUnit} existing={adOf(openUnit.code)} agentId={agentId} agentName={agentName} day={day} onClose={() => setOpenUnit(null)} />
+        <UnitAdPopup unit={openUnit} existing={adOf(openUnit.code)} agentId={agentId} agentName={agentName} agentPhone={agentPhone} day={day} onClose={() => setOpenUnit(null)} />
       )}
     </div>
   );
 };
 
-function adText(u: AdUnit): string {
-  if (u.prop) {
-    const p = u.prop as any;
-    return [
-      `🏠 شقة ${p.area}م² · ${p.neighborhood}`,
-      `${p.bedrooms} غرف · ${p.bathrooms || ''} حمام · ${p.floor || ''}`.replace(/ · ·/g, ' ·').trim(),
-      p.finishingLabel ? `التشطيب: ${p.finishingLabel}` : '',
-      p.view ? `الفيو: ${p.view}` : '',
-      `السعر: ${Number(p.price || 0).toLocaleString('en-US')} ج.م`,
-      p.description ? `\n${String(p.description).slice(0, 400)}` : '',
-      `\nكود: ${p.code}`,
-    ].filter(Boolean).join('\n');
-  }
-  const pr = u.project!;
+/* نص المشروع (تحت الإنشاء) — نصوص الشقق من adTexts */
+function projectAdText(pr: Project): string {
   const plan = (pr.plans || [])[0];
   return [
     `🏗️ ${pr.kind === 'compound' ? 'كمبوند' : 'عمارة'} ${pr.name} · ${pr.neighborhood}`,
@@ -448,11 +438,39 @@ function adText(u: AdUnit): string {
   ].filter(Boolean).join('\n');
 }
 
-const UnitAdPopup: React.FC<{
-  unit: AdUnit; existing?: AdPost; agentId: string; agentName: string; day: string; onClose: () => void;
-}> = ({ unit, existing, agentId, agentName, day, onClose }) => {
-  const images: string[] = (unit.prop?.images || unit.project?.images || []).filter(Boolean);
+type Media = { url: string; kind: 'image' | 'video' };
+const isDirectVideo = (u: string) => /cloudinary|\.mp4|\.mov|\.webm/i.test(u) && !/youtu/i.test(u);
+
+/*
+  بوب أب الشقة: الصور والفيديو (كل واحد بزرار تحميل)، ونصوص الإعلانات
+  (نفس صيغ أدوات المستشار + إعلان اليوم المتجدد)، ورفع سكرين شوت.
+  mode="share" = من غير رفع سكرين شوت (من المطابقة مثلاً).
+*/
+export const UnitAdPopup: React.FC<{
+  unit: AdUnit; existing?: AdPost; agentId: string; agentName: string; agentPhone?: string; day?: string;
+  mode?: 'task' | 'share'; onClose: () => void;
+}> = ({ unit, existing, agentId, agentName, agentPhone, day = '', mode = 'task', onClose }) => {
+  const media: Media[] = useMemo(() => {
+    const imgs = (unit.prop?.images || unit.project?.images || []).filter(Boolean).map((url) => ({ url, kind: 'image' as const }));
+    const v = String(unit.prop?.videoUrl || (unit.project as any)?.videoUrl || '').trim();
+    return v ? [{ url: v, kind: 'video' as const }, ...imgs] : imgs;
+  }, [unit]);
   const [i, setI] = useState(0);
+  const cur = media[i];
+  const [dl, setDl] = useState('');
+  const agent = { id: agentId, name: agentName, phone: agentPhone || '' };
+
+  const texts = useMemo(() => {
+    if (unit.prop) {
+      const d = dailyAdText(unit.prop, agent);
+      return [{ id: 'daily', label: d.label, text: d.text, tip: d.tip }, ...AD_VARIANTS.map((v) => ({ id: v.id, label: v.label, text: adTextFor(unit.prop!, agent, v.id), tip: '' }))];
+    }
+    return [{ id: 'project', label: 'إعلان المشروع', text: projectAdText(unit.project!), tip: '' }];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unit, agentId, agentName, agentPhone]);
+  const [ti, setTi] = useState(0);
+  const text = texts[ti]?.text || '';
+
   const [copied, setCopied] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [postUrl, setPostUrl] = useState('');
@@ -460,12 +478,23 @@ const UnitAdPopup: React.FC<{
   const [pct, setPct] = useState(0);
   const [err, setErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
-  const text = adText(unit);
   const locked = existing && existing.status !== 'rejected';
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }
     catch { setErr('النسخ ماشتغلش — علّم على النص وانسخه بإيدك'); }
+  };
+  const download = async (m: Media, idx: number) => {
+    if (m.kind === 'video' && !isDirectVideo(m.url)) { window.open(m.url, '_blank'); return; }
+    setDl(String(idx));
+    try { await downloadFile(m.url, `${unit.code}-${m.kind === 'video' ? 'video.mp4' : `${idx}.jpg`}`); }
+    catch { window.open(m.url, '_blank'); }
+    finally { setDl(''); }
+  };
+  const downloadPics = async () => {
+    setDl('all');
+    try { await downloadAll(media.filter((m) => m.kind === 'image').map((m) => m.url), unit.code, (d, t) => setDl(`all:${d}/${t}`)); }
+    finally { setDl(''); }
   };
 
   const send = async () => {
@@ -479,6 +508,7 @@ const UnitAdPopup: React.FC<{
   };
 
   const d: any = unit.prop || {};
+  const imgCount = media.filter((m) => m.kind === 'image').length;
   return createPortal(
     <div className="fixed inset-0 z-[130] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={onClose}>
       <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -488,26 +518,42 @@ const UnitAdPopup: React.FC<{
         </div>
 
         <div className="relative bg-[#141414] aspect-[4/3]">
-          {images.length ? (
-            <>
-              <img src={thumbUrl(images[i], 900)} alt="" className="w-full h-full object-contain" />
-              {images.length > 1 && (
-                <>
-                  <button onClick={() => setI((i + 1) % images.length)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80"><ChevronRight size={18} /></button>
-                  <button onClick={() => setI((i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80"><ChevronLeft size={18} /></button>
-                  <span className="absolute bottom-2 left-2 text-[10px] font-bold bg-black/60 text-white px-2 py-0.5 rounded-full">{i + 1}/{images.length}</span>
-                </>
-              )}
-            </>
+          {cur ? (
+            cur.kind === 'video' ? (
+              isDirectVideo(cur.url)
+                ? <video src={cur.url} controls playsInline className="w-full h-full object-contain" />
+                : <div className="w-full h-full flex items-center justify-center"><a href={cur.url} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-xl bg-white text-sm font-bold">افتح الفيديو</a></div>
+            ) : <img src={thumbUrl(cur.url, 900)} alt="" className="w-full h-full object-contain" />
           ) : <div className="w-full h-full flex items-center justify-center text-[#8C877D] text-xs">مفيش صور</div>}
+          {cur && (
+            <button onClick={() => download(cur, i + 1)} disabled={!!dl}
+              className="absolute top-2 left-2 px-3 py-1.5 rounded-full bg-white/90 text-xs font-bold flex items-center gap-1 disabled:opacity-60">
+              <Download size={13} />{dl === String(i + 1) ? 'بينزّل…' : cur.kind === 'video' ? 'نزّل الفيديو' : 'نزّل الصورة'}
+            </button>
+          )}
+          {media.length > 1 && (
+            <>
+              <button onClick={() => setI((i + 1) % media.length)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80"><ChevronRight size={18} /></button>
+              <button onClick={() => setI((i - 1 + media.length) % media.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80"><ChevronLeft size={18} /></button>
+              <span className="absolute bottom-2 left-2 text-[10px] font-bold bg-black/60 text-white px-2 py-0.5 rounded-full">{i + 1}/{media.length}</span>
+            </>
+          )}
         </div>
-        {images.length > 1 && (
+        {media.length > 1 && (
           <div className="flex gap-1.5 overflow-x-auto p-2">
-            {images.map((im, k) => (
-              <button key={k} onClick={() => setI(k)} className={`w-14 h-14 shrink-0 rounded-lg overflow-hidden border-2 ${k === i ? 'border-[#A07A26]' : 'border-transparent'}`}>
-                <img src={thumbUrl(im, 120)} alt="" className="w-full h-full object-cover" loading="lazy" />
+            {media.map((m, k) => (
+              <button key={k} onClick={() => setI(k)} className={`w-14 h-14 shrink-0 rounded-lg overflow-hidden border-2 bg-[#141414] ${k === i ? 'border-[#A07A26]' : 'border-transparent'}`}>
+                {m.kind === 'video' ? <span className="w-full h-full flex items-center justify-center text-white"><Video size={18} /></span>
+                  : <img src={thumbUrl(m.url, 120)} alt="" className="w-full h-full object-cover" loading="lazy" />}
               </button>
             ))}
+          </div>
+        )}
+        {imgCount > 1 && (
+          <div className="px-4">
+            <button onClick={downloadPics} disabled={!!dl} className="w-full py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-60">
+              <Download size={13} />{dl.startsWith('all') ? `بينزّل ${dl.split(':')[1] || ''}` : `نزّل كل الصور (${imgCount})`}
+            </button>
           </div>
         )}
 
@@ -520,20 +566,31 @@ const UnitAdPopup: React.FC<{
             </div>
           )}
 
-          <div className="bg-[#F6F4EF] rounded-xl p-3">
-            <pre className="whitespace-pre-wrap text-xs font-sans leading-relaxed">{text}</pre>
-            <button onClick={copy} className="mt-2 w-full py-2 rounded-lg bg-white border border-[#ECE8DF] text-xs font-bold flex items-center justify-center gap-1.5">
-              {copied ? <><Check size={13} className="text-[#1E7A45]" />اتنسخ</> : <><Copy size={13} />انسخ نص الإعلان</>}
-            </button>
+          <div className="space-y-2">
+            {texts.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {texts.map((t, k) => (
+                  <button key={t.id} onClick={() => { setTi(k); setCopied(false); }}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap border ${k === ti ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>{t.label}</button>
+                ))}
+              </div>
+            )}
+            {texts[ti]?.tip && <p className="text-[11px] text-[#A07A26] font-bold">{texts[ti].tip}</p>}
+            <div className="bg-[#F6F4EF] rounded-xl p-3">
+              <pre className="whitespace-pre-wrap text-xs font-sans leading-relaxed max-h-64 overflow-y-auto">{text}</pre>
+              <button onClick={copy} className="mt-2 w-full py-2 rounded-lg bg-white border border-[#ECE8DF] text-xs font-bold flex items-center justify-center gap-1.5">
+                {copied ? <><Check size={13} className="text-[#1E7A45]" />اتنسخ</> : <><Copy size={13} />انسخ النص</>}
+              </button>
+            </div>
           </div>
 
-          {existing && (
+          {mode === 'task' && existing && (
             <div className={`rounded-xl p-3 text-xs font-bold ${existing.status === 'approved' ? 'bg-[#EEF5F0] text-[#1E7A45]' : existing.status === 'pending' ? 'bg-[#FBF1E4] text-[#A07A26]' : 'bg-[#FBEDEA] text-[#C2412D]'}`}>
               {existing.status === 'approved' ? 'الإعلان ده اتقبل ✓' : existing.status === 'pending' ? 'رفعت السكرين شوت — مستني مراجعة الإدارة' : `اترفض: ${existing.reason || 'من غير سبب'} — ارفع سكرين شوت تاني`}
             </div>
           )}
 
-          {!locked && (
+          {mode === 'task' && !locked && (
             <div className="space-y-2">
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] || null); setErr(''); }} />
               <button onClick={() => fileRef.current?.click()} className="w-full py-3 rounded-xl border-2 border-dashed border-[#D9CFB8] text-xs font-bold flex items-center justify-center gap-1.5">
@@ -541,12 +598,12 @@ const UnitAdPopup: React.FC<{
               </button>
               <input value={postUrl} onChange={(e) => setPostUrl(e.target.value)} placeholder="لينك البوست (اختياري)" dir="ltr"
                 className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-xs" />
-              {err && <p className="text-xs font-bold text-[#C2412D]">{err}</p>}
               <button disabled={busy || !file} onClick={send} className="w-full py-3 rounded-xl bg-[#A07A26] text-white font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-2">
                 {busy ? <><Loader2 size={15} className="animate-spin" />بيرفع {pct ? `${Math.round(pct)}%` : ''}</> : 'نشرته — ابعت للمراجعة'}
               </button>
             </div>
           )}
+          {err && <p className="text-xs font-bold text-[#C2412D]">{err}</p>}
         </div>
       </div>
     </div>,

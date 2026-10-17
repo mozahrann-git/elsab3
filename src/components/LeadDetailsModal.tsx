@@ -1,4 +1,5 @@
 import { LeadActionPanel } from './LeadActionPanel';
+import { ViewingRequestForm } from './crm/ViewingRequestForm';
 import { WhenPicker, formatWhen, relTime } from './common/WhenPicker';
 import React, { useState } from 'react';
 import { Lead, Property, SalesAgent, LeadStatus } from '../types';
@@ -69,6 +70,8 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   const [visitError, setVisitError] = useState('');
   const [visitLoc, setVisitLoc] = useState(lead.visitLocation || 'الهضبة الوسطى - المقطم');
   const [isEditingSchedule, setIsEditingSchedule] = useState(false);
+  /* طلب المعاينة بقى فورم واحد لسارة: أكتر من كود، واليوم والساعة من قايمة */
+  const [showVR, setShowVR] = useState(false);
 
   if (!isOpen) return null;
 
@@ -222,7 +225,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
           </a>
 
           <button
-            onClick={() => setIsEditingSchedule(true)}
+            onClick={() => setShowVR(true)}
             className="p-2.5 bg-[#FAF4E5] border border-[#E9DFCA] hover:bg-[#F3EAD5] text-[#A07A26] rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer"
           >
             <Calendar size={14} />
@@ -234,6 +237,10 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
         {/* Scrollable Information Body */}
         <div className="space-y-4 overflow-y-auto pr-0.5 flex-1">
           
+          {showVR && (
+            <ViewingRequestForm lead={lead} properties={properties} byName={currentUserName || lead.assignedAgentName || 'السيلز'}
+              onUpdateLead={onUpdateLead} onClose={() => setShowVR(false)} />
+          )}
           {/* الأكشن الجاي + نقل إلى */}
           {/* اسم اللي عمل الأكشن فعلاً — كان بيتكتب اسم صاحب العميل حتى لو الإدارة هي اللي سجّلت */}
           <LeadActionPanel lead={lead} stages={STAGES} byName={currentUserName || agents.find((x) => x.id === lead.assignedAgentId)?.name || 'الفريق'} onUpdateLead={onUpdateLead} />
@@ -293,7 +300,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                 </div>
                 {!isEditingSchedule && (
                   <button 
-                    onClick={() => setIsEditingSchedule(true)}
+                    onClick={() => setShowVR(true)}
                     className="text-xs text-[#A07A26] hover:underline font-bold cursor-pointer"
                   >
                     تعديل الميعاد

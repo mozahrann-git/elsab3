@@ -49,7 +49,7 @@ import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { WhenPicker, WhenValue, BudgetRange } from './common/WhenPicker';
 import { ContentTab } from './sales/ContentTab';
 import { LeaderboardTab } from './sales/LeaderboardTab';
-import { DailyTab } from './sales/DailyTab';
+import { DailyTab, UnitAdPopup } from './sales/DailyTab';
 import { DailyAdminBoard } from './sales/DailyAdminBoard';
 import { ActionsLog, actionsOn } from './crm/ActionsLog';
 import { cairoDay } from '../services/dailyTasks';
@@ -450,6 +450,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
      فعميل اتعمل عليه ٥ أكشن كان بيتحسب ١ */
   const todayDone = useMemo(() => actionsOn(scopedLeads, cairoDay()).length, [scopedLeads]);
   const [actionsLogOpen, setActionsLogOpen] = useState(false);
+  /* «إعلان» من المطابقة: بوب أب الشقة (صور وفيديو بتحميل + نصوص الإعلانات) */
+  const [adShareProp, setAdShareProp] = useState<Property | null>(null);
   /* المهام جاية من إعدادات الأدمن، والعدّادات بتبدأ من الصفر كل يوم */
   /* الإدارة لما تدوس على حد في قايمة الفريق، المفروض تشوف نقطه هو ومهامه هو */
   const shownAgent = (viewAgentId !== 'all' ? agents.find((a) => a.id === viewAgentId) : null) || currentAgent;
@@ -1791,7 +1793,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     {/* 2. Ad Button (Amber/Orange) */}
                     <button
                       type="button"
-                      onClick={() => onOpenAffiliateModal && onOpenAffiliateModal(prop)}
+                      onClick={() => setAdShareProp(prop)}
                       className="py-2 sm:py-2.5 px-2.5 bg-[#F59E0B] hover:bg-[#D97706] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-98"
                     >
                       <Share2 size={14} />
@@ -2080,6 +2082,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {adShareProp && (
+        <UnitAdPopup
+          mode="share"
+          unit={{ code: adShareProp.code, kind: 'resale', title: `${adShareProp.neighborhood} · ${adShareProp.area}م² · ${adShareProp.bedrooms} غرف`, image: adShareProp.images?.[0], prop: adShareProp }}
+          agentId={currentSalesAgent?.id || ''} agentName={currentSalesAgent?.name || 'السبع للعقارات'} agentPhone={currentSalesAgent?.phone}
+          onClose={() => setAdShareProp(null)}
+        />
       )}
 
       {/* LEAD DETAILS FULL VIEW MODAL */}

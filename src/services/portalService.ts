@@ -493,6 +493,10 @@ export async function deleteFeedback(f: FieldFeedback) {
   if (f.stage === 'sales_confirmed') await deleteDoc(doc(db, 'owner_feedback', `of-${f.id}`)).catch(() => {});
   await deleteDoc(doc(db, 'field_feedback', f.id));
 }
+/** طلبات معاينة لسارة — طلب لكل كود. الغلط بيطلع لفوق (مش بيتحفظ في المتصفح وخلاص) */
+export async function createViewingRequests(reqs: Record<string, any>[]) {
+  for (const r of reqs) await setDoc(doc(db, 'viewing_requests', r.id), cleanFirestoreData(r));
+}
 export async function deleteOwnerFeedback(id: string) { await deleteDoc(doc(db, 'owner_feedback', id)); }
 export const tripRedoReason = (t: FieldTrip, code: string) => t.redo?.[String(code).replace(/[.\s]/g, '_')];
 /** السيلز بيأكد، فيتنشر للمالك ويتحسب للمندوب */
