@@ -38,7 +38,8 @@ import {
   Lock, 
   LogOut, 
   RefreshCw, 
-  Layers, 
+  Layers,
+  ChevronDown, 
   Clock, 
   Sparkles,
   ExternalLink,
@@ -372,6 +373,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [brokerAccounts, setBrokerAccounts] = useState<AccountRecord[]>([]);
   React.useEffect(() => subscribeToAccounts((list) => setBrokerAccounts(list.filter((a) => a.role === 'broker'))), []);
   const [openBroker, setOpenBroker] = useState('');
+  /* عروض الملاك متقسمة: مستنية / اتقبلت / اترفضت — كلها مقفولة لحد ما تفتحها */
+  const [subGroupOpen, setSubGroupOpen] = useState('');
+  /* اللي بعت العرض بروكر؟ — برقم البروكر على الطلب، أو إيميل/رقم حساب بروكر.
+     الطلبات القديمة اتبعتت من غير رقم البروكر فكانت كلها بتتكتب «المالك». */
+  const digits = (x?: string) => String(x || '').replace(/\D/g, '').slice(-10);
+  const submitterBroker = (sub: OwnerSubmission): AccountRecord | null => {
+    const em = String(sub.ownerEmail || '').trim().toLowerCase();
+    const ph = digits(sub.ownerPhone || sub.phone);
+    return brokerAccounts.find((b) =>
+      (sub.brokerId && String(b.brokerId || '').trim() === sub.brokerId) ||
+      (em && b.email.toLowerCase() === em) ||
+      (ph.length >= 10 && digits(b.phone) === ph)
+    ) || (sub.brokerId ? { email: '', role: 'broker', name: sub.ownerName, brokerId: sub.brokerId } : null);
+  };
 
   const syncBrokers = (updated: BrokerProfile[]) => {
     setBrokersState(updated);
@@ -2349,7 +2364,24 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {ownerSubmissions.map((sub) => (
+                  {([['pending', 'لسه مستنية مراجعة', 'text-amber-800 bg-amber-50 border-amber-200'], ['approved', 'اتقبلت واتنشرت', 'text-emerald-800 bg-emerald-50 border-emerald-200'], ['rejected', 'اترفضت', 'text-rose-800 bg-rose-50 border-rose-200']] as const).map(([st, label, tone]) => {
+                    const list = ownerSubmissions
+                      .filter((x) => (x.status || 'pending') === st)
+                      .sort((x, y) => (y.submittedAtMs || Date.parse(y.submittedAt) || 0) - (x.submittedAtMs || Date.parse(x.submittedAt) || 0));
+                    const isOpen = subGroupOpen === st;
+                    return (
+                    <div key={st} className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                      <button onClick={() => setSubGroupOpen(isOpen ? '' : st)} className="w-full flex items-center justify-between gap-2 p-4 text-right">
+                        <span className="font-bold text-sm flex items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-full border text-xs ${tone}`}>{list.length}</span>
+                          {label}
+                        </span>
+                        <ChevronDown size={16} className={`text-[#A07A26] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isOpen && (
+                      <div className="p-3 pt-0 space-y-3">
+                      {!list.length && <p className="text-xs text-stone-500 bg-stone-50 rounded-xl p-3">مفيش حاجة هنا.</p>}
+                      {list.map((sub) => (
                     <div
                       key={sub.id}
                       className="bg-white border border-stone-200 rounded-2xl p-5 space-y-3 shadow-2xs"
@@ -2359,9 +2391,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <span className="px-2.5 py-0.5 bg-stone-100 text-stone-800 font-mono font-bold rounded-md border border-stone-200">
                             {sub.neighborhood}
                           </span>
-                          <span className="text-stone-900 font-bold">
-                            المالك: {sub.ownerName}
-                          </span>
+                          {(() => {
+                            const br = submitterBroker(sub);
+                            return br ? (
+                              <span className="text-stone-900 font-bold">
+                                <span className="px-2 py-0.5 rounded-md bg-[#FAF4E5] text-[#A07A26] border border-[#E9DFCA] ml-1">بروكر</span>
+                                {br.name || sub.ownerName}
+                                {sub.realOwnerName && <span className="text-stone-500 font-medium"> · المالك الحقيقي: {sub.realOwnerName}</span>}
+                              </span>
+                            ) : (
+                              <span className="text-stone-900 font-bold">المالك: {sub.ownerName}</span>
+                            );
+                          })()}
                           <span className="text-stone-500 font-mono" dir="ltr">
                             {sub.ownerPhone}
                           </span>
@@ -2579,6 +2620,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </div>
                     </div>
                   ))}
+                      </div>
+                      )}
+                    </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
