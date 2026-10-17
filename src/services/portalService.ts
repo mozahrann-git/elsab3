@@ -414,7 +414,7 @@ export interface FieldTrip {
   id: string;                       // نفس الـ id هو التوكن في لينك الفيدباك
   agentId: string; agentName: string; agentPhone: string;
   units: TripUnit[]; timeText: string; viewingIds?: string[];
-  status: 'sent' | 'done'; createdAt: number;
+  status: 'sent' | 'done'; createdAt: number; doneAt?: number; doneBy?: string;
 }
 export type FeedbackStage = 'submitted' | 'sara_confirmed' | 'sales_confirmed' | 'rejected';
 export interface FieldFeedback {
@@ -452,6 +452,14 @@ export async function createTrip(agent: FieldAgent, units: TripUnit[], timeText:
   }));
   await updateDoc(doc(db, 'field_agents', agent.id), { lastAssignedAt: Date.now(), viewingsCount: (agent.viewingsCount || 0) + units.length });
   return id;
+}
+/** المعاينة اتعملت فعلاً — بعدها لينك الفيدباك بيتبعت للمندوب */
+export async function markTripDone(id: string) {
+  await updateDoc(doc(db, 'field_trips', id), { status: 'done', doneAt: Date.now(), doneBy: me() });
+}
+/** مسح طلب معاينة من السيلز (بيتعلّم ملغي — مش بيتمسح، عشان رحلة العميل) */
+export async function cancelViewingRequest(id: string, reason: string) {
+  await updateDoc(doc(db, 'viewing_requests', id), { status: 'cancelled', cancellationReason: 'other', cancellationNote: reason, cancelledAt: Date.now() });
 }
 export function subscribeTrips(cb: (l: FieldTrip[]) => void) { return listen<FieldTrip>(collection(db, 'field_trips'), cb); }
 export async function getTrip(id: string): Promise<FieldTrip | null> {

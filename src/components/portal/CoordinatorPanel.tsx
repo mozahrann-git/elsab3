@@ -11,8 +11,10 @@ import {
   subscribeAllUnitViewings, subscribeAllChangeRequests, subscribeFieldAgents, subscribeTrips, subscribeFieldFeedback,
   createUnitViewing, renotifyOwner, findBrokerContact, deleteUnitViewing, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
   acceptOwnerProposal, askClientAboutProposal, counterProposeToOwner, cancelViewing,
-  saraConfirmFeedback, rejectFeedback, notifyBroker, revealOwnerToSara,
+  saraConfirmFeedback, rejectFeedback, notifyBroker, revealOwnerToSara, markTripDone, cancelViewingRequest,
 } from '../../services/portalService';
+import { subscribeToSalesAgents } from '../../services/firebaseService';
+import { SalesAgent } from '../../types';
 import { brokerEscalation, minsText, MAX_SLOTS } from '../../services/brokerEscalation';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { waLink } from '../../utils/helpers';
@@ -46,7 +48,7 @@ const mapLink = (p: Property) => {
 
 export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, submissions, logoUrl, onApproveSubmission, onRejectSubmission, onUpdateSubmission, onClose, onLogout }) => {
   const [tab, setTab] = useState('viewings');
-  const [tripSeed, setTripSeed] = useState<{ code: string; label: string; at?: number } | null>(null);
+  const [tripSeed, setTripSeed] = useState<TripSeed | null>(null);
   const [viewings, setViewings] = useState<UnitViewing[]>([]);
   const [changes, setChanges] = useState<ChangeRequest[]>([]);
   const [agents, setAgents] = useState<FieldAgent[]>([]);
@@ -81,7 +83,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       active={tab} onTab={setTab} onClose={onClose}
       footer={<button onClick={onLogout} className="w-full px-4 py-3 rounded-xl text-sm text-[#F0776A] hover:bg-white/10 text-right flex items-center gap-2"><LogOut size={16} />خروج</button>}
     >
-      {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} isAdmin={isAdmin} byName={name} onSendToAgent={(code, label, at) => { setTripSeed({ code, label, at }); setTab('agents'); }} />}
+      {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} isAdmin={isAdmin} byName={name} onSendToAgent={(code, label, at, sales) => { setTripSeed({ code, label, at, ...sales, n: Date.now() }); setTab('agents'); }} />}
       {tab === 'agents' && <AgentsTab agents={agents} trips={trips} fbs={fbs} viewings={viewings} properties={properties} isAdmin={isAdmin} seed={tripSeed} />}
       {tab === 'rollcall' && <MorningRollCall agents={agents} />}
       {tab === 'feedback' && <FeedbackTab fbs={fbs} />}
@@ -91,6 +93,8 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
     </PortalShell>
   );
 };
+
+type TripSeed = { code: string; label: string; at?: number; salesAgentId?: string; salesAgentName?: string; n?: number };
 
 // ---------------- المعاينات ----------------
 /* المالك اقترح ميعاد تاني: سارة تقبله، أو تسأل العميل، أو تقترح ميعاد تالت. الإلغاء آخر حاجة. */
@@ -144,7 +148,7 @@ const RescheduleActions: React.FC<{ v: UnitViewing; byName: string }> = ({ v, by
   );
 };
 
-const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; byName: string; onSendToAgent: (code: string, label: string, at?: number) => void }> = ({ viewings, properties, isAdmin, byName, onSendToAgent }) => {
+const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; byName: string; onSendToAgent: (code: string, label: string, at?: number, sales?: { salesAgentId?: string; salesAgentName?: string }) => void }> = ({ viewings, properties, isAdmin, byName, onSendToAgent }) => {
   const [code, setCode] = useState('');
   const [time, setTime] = useState<WhenValue | null>(null);
   const [note, setNote] = useState('');
@@ -232,6 +236,19 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
               {r.propertyTitle} · السيلز: <b>{r.requestingAgentName || '—'}</b> · المالك: <b>{owners[r.propertyId] || '—'}</b>
             </p>
             <Btn onClick={() => { setFromReq(r); setCode(r.propertyCode); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>كلّمي المالك وحددي الميعاد</Btn>
+            {/* مؤقتاً لحد ما أرقام الملاك تتسجّل: المعاينة تتحط في مشوار
+                مع المندوب على طول، وسارة بتأكد إنها اتعملت */}
+            <div className="grid grid-cols-2 gap-2">
+              <Btn tone="gold" className="!px-2 text-xs" onClick={() => onSendToAgent(r.propertyCode, r.clientPreferredTime || '', r.scheduledAtTimestamp, { salesAgentId: r.requestingAgentId, salesAgentName: r.requestingAgentName })}>
+                <Send size={14} />حطّيه في مشوار
+              </Btn>
+              <Btn tone="danger" className="!px-2 text-xs" onClick={async () => {
+                const why = window.prompt(`تمسحي طلب ${r.propertyCode}؟ اكتبي السبب (السيلز هيشوفه)`, 'طلب قديم');
+                if (!why || !why.trim()) return;
+                try { await cancelViewingRequest(r.id, why.trim()); }
+                catch (e: any) { alert(`المسح مانجحش — ${e?.code === 'permission-denied' ? 'الصلاحيات رافضة' : 'جرّبي تاني'}`); }
+              }}>امسح الطلب</Btn>
+            </div>
           </Card>
         ))}
         {active.length === 0 && <p className="text-center text-sm text-[#6B665C] py-10">مفيش معاينات مفتوحة</p>}
@@ -367,7 +384,14 @@ const BrokerScoreCard: React.FC<{ viewings: UnitViewing[]; brokers: Record<strin
 };
 
 // ---------------- المندوبين والمشاوير ----------------
-const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: FieldFeedback[]; viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; seed?: { code: string; label: string; at?: number } | null }> = ({ agents, trips, fbs, viewings, properties, isAdmin, seed }) => {
+const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: FieldFeedback[]; viewings: UnitViewing[]; properties: Property[]; isAdmin: boolean; seed?: TripSeed | null }> = ({ agents, trips, fbs, viewings, properties, isAdmin, seed }) => {
+  /* السيلز صاحب العميل لكل كود — عشان الفيدباك يرجعله هو.
+     من غير ده المشوار اللي بيتعمل بالأكواد على طول كان الفيدباك
+     بتاعه مالوش سيلز، فمش بيوصل لحد. */
+  const [sales, setSales] = useState<SalesAgent[]>([]);
+  useEffect(() => subscribeToSalesAgents((l) => setSales(l.filter((a) => a.isActive !== false))), []);
+  const [salesFor, setSalesFor] = useState<Record<string, { id: string; name: string }>>({});
+  const [busyTrip, setBusyTrip] = useState('');
   const { next, last } = nextInLine(agents);
   const [agentId, setAgentId] = useState('');
   const [codes, setCodes] = useState<string[]>([]);
@@ -378,15 +402,16 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
   useEffect(() => {
     if (!seed) return;
     setCodes((c) => (c.includes(seed.code) ? c : [...c, seed.code]));
+    if (seed.salesAgentId) setSalesFor((m) => ({ ...m, [seed.code]: { id: seed.salesAgentId!, name: seed.salesAgentName || '' } }));
     if (seed.at) setTime({ at: seed.at, label: formatWhen(seed.at) });
     else if (seed.label) setTime({ at: Date.now(), label: seed.label });
-  }, [seed?.code]);
+  }, [seed?.code, seed?.n]);
   const chosen = agents.find((a) => a.id === (agentId || next?.id));
   const units: TripUnit[] = useMemo(() => codes.map((c) => properties.find((p) => p.code === c)).filter(Boolean).map((p) => ({
     propertyId: p!.id, code: p!.code, title: p!.title, link: `${window.location.origin}/?property=${p!.code}`, location: mapLink(p!), brokerId: p!.brokerId,
-    salesAgentId: confirmed.find((v) => v.propertyCode === p!.code)?.salesAgentId,
-    salesAgentName: confirmed.find((v) => v.propertyCode === p!.code)?.salesAgentName,
-  })), [codes, properties, confirmed]);
+    salesAgentId: salesFor[p!.code]?.id || confirmed.find((v) => v.propertyCode === p!.code)?.salesAgentId,
+    salesAgentName: salesFor[p!.code]?.name || confirmed.find((v) => v.propertyCode === p!.code)?.salesAgentName,
+  })), [codes, properties, confirmed, salesFor]);
   const add = (c: string) => { const k = c.trim().toUpperCase(); if (properties.some((p) => p.code.toUpperCase() === k) && !codes.includes(k)) setCodes((x) => [...x, properties.find((p) => p.code.toUpperCase() === k)!.code]); setCodeInput(''); };
   const message = (a: FieldAgent) => `أهلاً ${a.name}، عندك معاينة ${time?.label || ''}:\n\n` + units.map((u, i) => `${i + 1}) كود ${u.code}\nالشقة: ${u.link}\nاللوكيشن: ${u.location}`).join('\n\n') + `\n\n— سارة · السبع للعقارات`;
 
@@ -409,7 +434,20 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
         )}
         <div className="flex gap-2"><input value={codeInput} onChange={(e) => setCodeInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add(codeInput)} placeholder="ضيف كود شقة" dir="ltr" className={`${input} font-mono`} list="codes2" /><Btn onClick={() => add(codeInput)}><Plus size={16} /></Btn></div>
         <datalist id="codes2">{properties.map((x) => <option key={x.id} value={x.code} />)}</datalist>
-        {units.length > 0 && <div className="flex flex-wrap gap-2">{units.map((u) => <button key={u.code} onClick={() => setCodes((x) => x.filter((c) => c !== u.code))} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#141414] text-white">{u.code} ✕</button>)}</div>}
+        {units.length > 0 && (
+          <div className="space-y-2">
+            {units.map((u) => (
+              <div key={u.code} className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => setCodes((x) => x.filter((c) => c !== u.code))} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#141414] text-white shrink-0">{u.code} ✕</button>
+                <select value={u.salesAgentId || ''} onChange={(e) => { const a = sales.find((x) => x.id === e.target.value); setSalesFor((m) => ({ ...m, [u.code]: a ? { id: a.id, name: a.name } : { id: '', name: '' } })); }}
+                  className={`flex-1 min-w-[140px] rounded-xl border p-2 text-xs ${u.salesAgentId ? 'bg-white border-[#ECE8DF]' : 'bg-[#FBEDEA] border-[#E9B8AE]'}`}>
+                  <option value="">السيلز صاحب العميل؟ (الفيدباك يروحله)</option>
+                  {sales.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
         <WhenPicker value={time} onChange={setTime} quick={false} label="ميعاد المشوار" />
         <p className="text-sm font-bold">مين هيطلع؟</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -422,8 +460,10 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
         </div>
         <Btn tone="green" disabled={!chosen || !units.length || !time} onClick={async () => {
           const a = chosen!; const txt = message(a);
-          await createTrip(a, units, time!.label, confirmed.filter((v) => codes.includes(v.propertyCode)).map((v) => v.id));
-          window.open(wa(a.phone, txt)); setCodes([]); setTime(null); setAgentId('');
+          try {
+            await createTrip(a, units, time!.label, confirmed.filter((v) => codes.includes(v.propertyCode)).map((v) => v.id));
+          } catch (e: any) { alert(`المشوار ماتحفظش — ${e?.code === 'permission-denied' ? 'الصلاحيات رافضة' : 'جرّبي تاني'}`); return; }
+          window.open(wa(a.phone, txt)); setCodes([]); setTime(null); setAgentId(''); setSalesFor({});
         }}><Send size={16} />ابعت لـ {chosen?.name || '...'} على واتساب</Btn>
       </Card>
 
@@ -446,13 +486,35 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
       </Card>
 
       <Card className="lg:col-span-3">
-        <p className="font-bold">آخر المشاوير</p>
-        {trips.slice(0, 12).map((t) => {
-          const got = fbs.filter((f) => f.tripId === t.id).length;
+        <p className="font-bold">المعاينات وفيدباكها</p>
+        <p className="text-xs text-[#6B665C]">أكّدي إن المعاينة اتعملت ← ابعتي لينك الفيدباك للمندوب ← الفيدباك بيوصل تبويب «الفيدباك» تراجعيه وتبعتيه للسيلز.</p>
+        {trips.slice(0, 20).map((t) => {
+          const mine = fbs.filter((f) => f.tripId === t.id);
+          const done = t.status === 'done';
           return (
-            <div key={t.id} className="border-t border-[#F0ECE4] pt-2 flex flex-wrap justify-between items-center gap-2">
-              <div><p className="font-bold text-sm">{t.agentName} · {t.timeText}</p><p className="text-xs text-[#6B665C]">{t.units.map((u) => u.code).join('، ')} · فيدباك {got}/{t.units.length}</p></div>
-              <a href={wa(t.agentPhone, `${t.agentName}، بعد المعاينة ابعت رأي العميل من هنا (تكتب أو تسجل فويس):\n${window.location.origin}/?fb=${t.id}`)} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-xl bg-[#1E7A45] text-white text-xs font-bold">ابعت لينك الفيدباك</a>
+            <div key={t.id} className="border-t border-[#F0ECE4] pt-2 space-y-1.5">
+              <div className="flex flex-wrap justify-between items-center gap-2">
+                <p className="font-bold text-sm">{t.agentName} · {t.timeText}{done ? ' · ✓ اتعملت' : ''}</p>
+                {done ? (
+                  <a href={wa(t.agentPhone, `${t.agentName}، بعد المعاينة ابعت رأي العميل من هنا (تكتب أو تسجل فويس):\n${window.location.origin}/?fb=${t.id}`)} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-xl bg-[#1E7A45] text-white text-xs font-bold">ابعت لينك الفيدباك</a>
+                ) : (
+                  <button disabled={busyTrip === t.id} onClick={async () => {
+                    if (!window.confirm(`المعاينة (${t.units.map((u) => u.code).join('، ')}) اتعملت فعلاً؟`)) return;
+                    setBusyTrip(t.id);
+                    try { await markTripDone(t.id); }
+                    catch (e: any) { alert(`ماتحفظش — ${e?.code === 'permission-denied' ? 'الصلاحيات رافضة' : 'جرّبي تاني'}`); }
+                    finally { setBusyTrip(''); }
+                  }} className="px-3 py-2 rounded-xl bg-[#141414] text-white text-xs font-bold disabled:opacity-50">المعاينة اتعملت ✓</button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {t.units.map((u) => {
+                  const f = mine.find((x) => x.code === u.code);
+                  const st = !f ? (done ? 'مستني الفيدباك' : 'لسه') : f.stage === 'submitted' ? 'وصل · راجعيه' : f.stage === 'sara_confirmed' ? 'اتبعت للسيلز' : f.stage === 'sales_confirmed' ? 'اتنشر للمالك' : 'اترفض';
+                  const tone = !f ? 'grey' : f.stage === 'submitted' ? 'gold' : f.stage === 'rejected' ? 'red' : 'green';
+                  return <Chip key={u.code} tone={tone as any}>{u.code} · {u.salesAgentName || 'من غير سيلز'} · {st}</Chip>;
+                })}
+              </div>
             </div>
           );
         })}
@@ -479,6 +541,9 @@ const FeedbackTab: React.FC<{ fbs: FieldFeedback[] }> = ({ fbs }) => {
             {list.map((f) => (
               <Card key={f.id}>
                 <div className="flex justify-between"><span className="font-bold">{f.code} · {f.agentName}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating)}</span></div>
+                <p className={`text-xs font-bold ${f.salesAgentName ? 'text-[#6B665C]' : 'text-[#C2412D]'}`}>
+                  {f.salesAgentName ? `السيلز: ${f.salesAgentName}` : 'من غير سيلز — التأكيد مش هيوصل لحد'}
+                </p>
                 {f.voiceUrl && <audio controls src={f.voiceUrl} className="w-full" />}
                 {f.stage === 'submitted'
                   ? <textarea rows={3} className={input} value={txt[f.id] ?? f.text} onChange={(e) => setTxt((s) => ({ ...s, [f.id]: e.target.value }))} placeholder="اكتبي الفيدباك من الفويس" />
