@@ -462,6 +462,26 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
      فعميل اتعمل عليه ٥ أكشن كان بيتحسب ١ */
   const todayDone = useMemo(() => actionsOn(scopedLeads, cairoDay()).length, [scopedLeads]);
   const [actionsLogOpen, setActionsLogOpen] = useState(false);
+  /* متابعات الفريق: مقفولة، ولما تتفتح السيلز مرتّبين بالأنشط */
+  const [teamOpen, setTeamOpen] = useState(false);
+  const rankedAgents = useMemo(() => {
+    const today = cairoDay();
+    const weekAgo = Date.now() - 7 * 864e5;
+    return visibleAgents.map((a) => {
+      const mineL = leads.filter((l) => l.assignedAgentId === a.id);
+      let t = 0, w = 0;
+      mineL.forEach((l) => (l.activity || []).forEach((x) => {
+        if (typeof x.at !== 'number') return;
+        if (cairoDay(x.at) === today) t++;
+        if (x.at >= weekAgo) w++;
+      }));
+      return {
+        a, mine: mineL.length, today: t, week: w,
+        late: mineL.filter((l) => l.nextActionAt && l.nextActionAt < Date.now() && l.followUpStatus !== 'completed').length,
+        snoozes: mineL.reduce((n, l: any) => n + (l.snoozeCount || 0), 0),
+      };
+    }).sort((x, y) => y.today - x.today || y.week - x.week || y.mine - x.mine);
+  }, [visibleAgents, leads]);
   /* «إعلان» من المطابقة: بوب أب الشقة (صور وفيديو بتحميل + نصوص الإعلانات) */
   const [adShareProp, setAdShareProp] = useState<Property | null>(null);
   /* المهام جاية من إعدادات الأدمن، والعدّادات بتبدأ من الصفر كل يوم */
@@ -906,43 +926,54 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             {/* Urgent Broadcast Banner */}
             {(isAdmin || isLead) && (
               <div className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-bold text-sm">متابعات الفريق</p>
-                  {viewAgentId !== 'all' && (
-                    <button
-                      onClick={() => setViewAgentId('all')}
-                      className="px-3 py-1.5 rounded-xl bg-[#141414] text-white text-[11px] font-bold active:scale-95 transition"
-                    >
-                      ✕ بتشوف {agents.find((a) => a.id === viewAgentId)?.name || ''} · رجوع لكل الفريق
-                    </button>
-                  )}
-                </div>
-                <p className="text-[11px] text-[#8C877D]">دوس على أي حد عشان تشوف عملاءه ونقطه وإنجازه النهارده</p>
+                {/* مقفولة افتراضياً — بتتفتح وتختار السيلز، ومرتّبين بالأنشط */}
+                <button
+                  onClick={() => setTeamOpen((o) => !o)}
+                  className="w-full flex items-center justify-between gap-2 text-right"
+                  aria-expanded={teamOpen}
+                >
+                  <span className="font-bold text-sm">
+                    متابعات الفريق
+                    <span className="font-medium text-[#8C877D]"> · {viewAgentId !== 'all' ? `بتشوف ${agents.find((a) => a.id === viewAgentId)?.name || ''}` : 'كل الفريق'}</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {viewAgentId !== 'all' && (
+                      <span
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); setViewAgentId('all'); }}
+                        className="px-2.5 py-1 rounded-lg bg-[#141414] text-white text-[11px] font-bold"
+                      >
+                        ✕ كل الفريق
+                      </span>
+                    )}
+                    <ChevronDown size={16} className={`text-[#A07A26] transition-transform ${teamOpen ? 'rotate-180' : ''}`} />
+                  </span>
+                </button>
 
-                {/* اللي إنت دايس عليه: نقطه هو ومهامه هو واللي عمله النهارده */}
-                {visibleAgents.map((a) => {
-                  const mine = leads.filter((l) => l.assignedAgentId === a.id);
-                  const late = mine.filter((l) => l.nextActionAt && l.nextActionAt < Date.now() && l.followUpStatus !== 'completed').length;
-                  const snoozes = mine.reduce((n, l: any) => n + (l.snoozeCount || 0), 0);
-                  return (
-                    <button
-                      key={a.id}
-                      onClick={() => setViewAgentId(viewAgentId === a.id ? 'all' : a.id)}
-                      aria-pressed={viewAgentId === a.id}
-                      className={`w-full flex flex-wrap justify-between items-center gap-2 border-t border-[#F0ECE4] pt-2 px-2 -mx-2 rounded-xl text-right transition active:scale-[0.99] hover:bg-[#F6F4EF] ${viewAgentId === a.id ? 'bg-[#141414] text-white hover:bg-[#141414]' : viewAgentId !== 'all' ? 'opacity-50' : ''}`}
-                    >
-                      <span className="font-bold text-sm flex items-center gap-1.5">
-                        <ChevronLeft size={14} className={viewAgentId === a.id ? 'text-[#D9B864]' : 'text-[#A07A26]'} />
-                        {a.name}
-                      </span>
-                      <span className="flex gap-2 text-[11px]">
-                        <span className="px-2 py-1 rounded-lg bg-[#F6F4EF]">{mine.length} عميل</span>
-                        <span className={`px-2 py-1 rounded-lg ${late ? 'bg-[#FBEDEA] text-[#C2412D] font-bold' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>{late} متأخرة</span>
-                        <span className="px-2 py-1 rounded-lg bg-[#FBF8F1] text-[#6E5418]">{snoozes} تأجيل</span>
-                      </span>
-                    </button>
-                  );
-                })}
+                {teamOpen && (
+                  <>
+                    <p className="text-[11px] text-[#8C877D]">مرتّبين بالأنشط (أكشن النهارده، وبعدين آخر ٧ أيام). دوس على أي حد عشان تشوف عملاءه.</p>
+                    {rankedAgents.map(({ a, mine, late, snoozes, today, week }) => (
+                      <button
+                        key={a.id}
+                        onClick={() => { setViewAgentId(viewAgentId === a.id ? 'all' : a.id); setTeamOpen(false); }}
+                        aria-pressed={viewAgentId === a.id}
+                        className={`w-full flex flex-wrap justify-between items-center gap-2 border-t border-[#F0ECE4] pt-2 px-2 -mx-2 rounded-xl text-right transition active:scale-[0.99] hover:bg-[#F6F4EF] ${viewAgentId === a.id ? 'bg-[#141414] text-white hover:bg-[#141414]' : ''} ${!mine && !week ? 'opacity-50' : ''}`}
+                      >
+                        <span className="font-bold text-sm flex items-center gap-1.5">
+                          <ChevronLeft size={14} className={viewAgentId === a.id ? 'text-[#D9B864]' : 'text-[#A07A26]'} />
+                          {a.name}
+                        </span>
+                        <span className="flex flex-wrap gap-1.5 text-[11px]">
+                          <span className={`px-2 py-1 rounded-lg font-bold ${today ? 'bg-[#141414] text-white' : 'bg-[#F6F4EF] text-[#8C877D]'}`}>{today} أكشن النهارده</span>
+                          <span className="px-2 py-1 rounded-lg bg-[#F6F4EF]">{mine} عميل</span>
+                          <span className={`px-2 py-1 rounded-lg ${late ? 'bg-[#FBEDEA] text-[#C2412D] font-bold' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>{late} متأخرة</span>
+                          <span className="px-2 py-1 rounded-lg bg-[#FBF8F1] text-[#6E5418]">{snoozes} تأجيل</span>
+                        </span>
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             )}
 
