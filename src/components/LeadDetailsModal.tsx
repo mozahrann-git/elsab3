@@ -130,7 +130,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       followUpStatus: 'pending',
       followUpNote: `معاينة تحت التنسيق${prop ? ` على ${prop.code}` : ''} — ${visitDate}`,
       activity: [{
-        at: Date.now(), by: lead.assignedAgentName || 'السيلز',
+        at: Date.now(), by: currentUserName || lead.assignedAgentName || 'السيلز',
         outcome: `طلب معاينة${prop ? ` · ${prop.code}` : ''}`, comment: `${visitDate} · ${visitLoc}`,
         ...(visitAt ? { nextAt: visitAt } : {})
       }, ...((lead.activity as any[]) || [])].slice(0, 80)

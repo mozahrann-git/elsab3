@@ -134,6 +134,7 @@ import {
   saveSalesAgentToDb,
   seedSalesAgentsToDb,
   subscribeToCrmLeads,
+  addLeadToDb,
   saveLeadToDb,
   saveLeadMerged,
   updateLeadInDb,
@@ -913,14 +914,10 @@ export default function App() {
           ]
         };
 
-        updateLeadInDb(l.id, {
-          status: 'visit_done',
-          fieldViewingComment: outcomeFeedback,
-          fieldViewingOutcome: viewingOutcome,
-          fieldViewingBrokerName: req.brokerName || 'البروكر المسؤول',
-          fieldViewingRecordedAt: recordedTime,
-          notes: updatedLead.notes
-        }).catch(() => {});
+        saveLeadMerged(updatedLead, l).catch((err) => {
+          console.error('[Firebase] field viewing save failed:', err);
+          setLeadSaveFail(`نتيجة معاينة «${l.name}» مااتحفظتش — جرّب تاني.`);
+        });
 
         return updatedLead;
       })
@@ -1458,7 +1455,11 @@ export default function App() {
       source: newLead.campaignName || newLead.source,
     });
     setCrmLeads((prev) => [newLead, ...prev]);
-    saveLeadToDb(newLead).catch(err => console.error('[Firebase] Error adding lead:', err));
+    addLeadToDb(newLead).catch((err) => {
+      console.error('[Firebase] Error adding lead:', err);
+      setCrmLeads((prev) => prev.filter((l) => l.id !== newLead.id));
+      setLeadSaveFail(`العميل «${newLead.name}» مااتضافش — ${(err as any)?.code === 'permission-denied' ? 'الصلاحيات رافضة' : 'النت أو السيرفر'}. ضيفه تاني.`);
+    });
   };
 
   /* توزيع ليدات الكامبين دفعة واحدة */
@@ -1468,8 +1469,14 @@ export default function App() {
       source: l.campaignName || 'كامبين',
     }));
     setCrmLeads((prev) => [...newLeads, ...prev]);
+    let failed = 0;
     newLeads.forEach((l) => {
-      saveLeadToDb(l).catch(err => console.error('[Firebase] Error adding campaign lead:', err));
+      addLeadToDb(l).catch((err) => {
+        console.error('[Firebase] Error adding campaign lead:', err);
+        failed += 1;
+        setCrmLeads((prev) => prev.filter((x) => x.id !== l.id));
+        setLeadSaveFail(`${failed} عميل من التوزيع مااتضافوش — وزّعهم تاني.`);
+      });
     });
   };
 

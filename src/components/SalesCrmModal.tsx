@@ -418,7 +418,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const removeFromFollowUps = (lead: Lead) => onUpdateLead({ ...lead, nextActionAt: null, followUpStatus: 'completed', followUpUrgency: 'upcoming' } as Lead);
   const adminDeleteLead = async (lead: Lead) => {
     if (!window.confirm(`تمسح ${lead.name} نهائياً من الـ CRM؟`)) return;
-    await deleteLeadFromDb(lead.id).catch(() => {});
+    try { await deleteLeadFromDb(lead.id); }
+    catch (e: any) { window.alert(`المسح مانجحش — ${e?.code === 'permission-denied' ? 'الصلاحيات رافضة' : 'النت أو السيرفر'}`); return; }
     onDeleteLead?.(lead.id);
   };
   /* مكالمة الاكتشاف اتشالت. الطلب بيتسجّل من المطابقة

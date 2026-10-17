@@ -687,6 +687,13 @@ export function subscribeToCrmLeads(
   }, onError, '');
 }
 
+/** إضافة عميل جديد — الغلط بيطلع لفوق. saveLeadToDb كانت بتبلعه وتحفظ
+    في المتصفح، فالعميل يبان عند السيلز وماوصلش للسيرفر خالص. */
+export async function addLeadToDb(lead: Lead): Promise<void> {
+  await ensureAuth();
+  await setDoc(doc(db, 'crm_leads', lead.id), cleanFirestoreData(lead), { merge: true });
+}
+
 export async function saveLeadToDb(lead: Lead): Promise<void> {
   try {
     await ensureAuth();

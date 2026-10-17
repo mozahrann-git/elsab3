@@ -58,7 +58,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
      على currentAgent.name زي ما حصل في أدوات المستشار بالظبط. */
   const myName = currentAgent?.name
     || agents.find((a) => a.id === myId)?.name
-    || 'السبع للعقارات';
+    || 'الإدارة';
   const [filterType, setFilterType] = useState<'all' | 'urgent' | 'today' | 'upcoming'>('all');
   const [rawScope, setRawScope] = useState<'my_leads' | 'all_team'>('my_leads');
   /* حتى لو الحالة اتغيّرت بأي طريقة، السيلز بيفضل على عملاءه هو */
