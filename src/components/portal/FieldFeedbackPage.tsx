@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getTrip, submitFieldFeedback, FieldTrip, TripUnit } from '../../services/portalService';
+import { getTrip, submitFieldFeedback, FieldTrip, TripUnit, tripRedoReason } from '../../services/portalService';
 import { VoiceRecorder } from './VoiceRecorder';
 
 /* صفحة بسيطة للمندوب من لينك الواتساب: يكتب أو يسجل فويس لكل شقة */
@@ -65,9 +65,11 @@ const UnitForm: React.FC<{ trip: FieldTrip; u: TripUnit; onSent: () => void }> =
   const [busy, setBusy] = useState(false);
   const tog = (l: string[], set: (x: string[]) => void, v: string) => set(l.includes(v) ? l.filter((x) => x !== v) : [...l, v]);
   const ok = rating > 0 && (text.trim() || voice);
+  const redo = tripRedoReason(trip, u.code);
   return (
-    <section className="bg-white border border-[#ECE8DF] rounded-2xl p-5 space-y-4">
+    <section className={`bg-white border rounded-2xl p-5 space-y-4 ${redo ? 'border-[#C2412D]' : 'border-[#ECE8DF]'}`}>
       <div className="flex justify-between items-center"><span className="font-mono text-sm bg-[#141414] text-white px-2 py-1 rounded-md">{u.code}</span><span className="text-sm text-[#6B665C]">{u.title}</span></div>
+      {redo && <p className="rounded-xl bg-[#FBEDEA] text-[#9E2A1B] text-sm font-bold p-3">سارة رجّعت الرأي ده: {redo} — ابعته تاني</p>}
       <div>
         <p className="font-bold mb-2">العميل عجبته قد إيه؟</p>
         <div className="flex gap-2">{[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" onClick={() => setRating(n)} className="flex-1 text-3xl py-2 rounded-xl bg-[#F6F4EF]" style={{ color: n <= rating ? '#D9B864' : '#E4DFD4' }}>★</button>)}</div>
@@ -82,7 +84,7 @@ const UnitForm: React.FC<{ trip: FieldTrip; u: TripUnit; onSent: () => void }> =
       </div>
       <VoiceRecorder folder="field_feedback" id={`${trip.id}-${u.code}`} onDone={setVoice} />
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="أو اكتب رأيه هنا" className="w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-base" />
-      <button disabled={!ok || busy} onClick={async () => { setBusy(true); try { await submitFieldFeedback(trip, u, { text: text.trim() || '(فويس)', voiceUrl: voice || undefined, rating, positives: pos, negatives: neg }); onSent(); } catch (e: any) { alert(`الرأي ماتبعتش — ${String(e?.code || '').includes('permission') ? 'السيستم رافض، بلّغ سارة' : 'النت ضعيف، جرّب تاني'}`); } finally { setBusy(false); } }}
+      <button disabled={!ok || busy} onClick={async () => { setBusy(true); try { await submitFieldFeedback(trip, u, { text: text.trim() || '(فويس)', voiceUrl: voice || undefined, rating, positives: pos, negatives: neg }); onSent(); } catch (e: any) { alert(`الرأي ماتبعتش — ${String(e?.code || '').includes('permission') ? 'رأيك في الكود ده اتبعت قبل كده ومستني سارة تراجعه' : 'النت ضعيف، جرّب تاني'}`); } finally { setBusy(false); } }}
         className="w-full rounded-2xl py-4 bg-[#A07A26] text-white text-lg font-bold disabled:opacity-40">{busy ? 'جاري الإرسال...' : 'ابعت'}</button>
     </section>
   );

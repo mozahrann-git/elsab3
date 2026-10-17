@@ -286,6 +286,11 @@ service cloud.firestore {
                           && get(/databases/$(database)/documents/sales_agents/$(resource.data.salesAgentId)).data.email.lower() == staffEmail();
       allow create: if exists(/databases/$(database)/documents/field_trips/$(request.resource.data.tripId))
                     && request.resource.data.stage == 'submitted';
+      /* الفيدباك اللي اترفض المندوب يبعته تاني من نفس اللينك */
+      allow update: if resource.data.stage == 'rejected'
+                    && request.resource.data.stage == 'submitted'
+                    && request.resource.data.tripId == resource.data.tripId;
+      allow delete: if isOps();
     }
 
     // ---------- المهام اليومية للسيلز ----------

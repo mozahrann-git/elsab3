@@ -8,7 +8,7 @@
   change_requests/{id} طلب تعديل سعر/صور/إيقاف من المالك أو البروكر
 */
 import {
-  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, arrayUnion, getDoc, getDocs,
+  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, arrayUnion, getDoc, getDocs, deleteField,
 } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { db, auth, cleanFirestoreData, savePropertyPrivateOwner } from './firebaseService';
@@ -415,6 +415,8 @@ export interface FieldTrip {
   agentId: string; agentName: string; agentPhone: string;
   units: TripUnit[]; timeText: string; viewingIds?: string[];
   status: 'sent' | 'done'; createdAt: number; doneAt?: number; doneBy?: string;
+  /* الأكواد اللي فيدباكها اترفض وسببه — المندوب بيشوفه في اللينك ويبعت تاني */
+  redo?: Record<string, string>;
 }
 export type FeedbackStage = 'submitted' | 'sara_confirmed' | 'sales_confirmed' | 'rejected';
 export interface FieldFeedback {
@@ -422,6 +424,7 @@ export interface FieldFeedback {
   propertyId: string; code: string; title: string; brokerId?: string;
   text: string; voiceUrl?: string; rating: number; positives: string[]; negatives: string[];
   stage: FeedbackStage; createdAt: number; saraAt?: number; salesAt?: number; salesBy?: string;
+  rejectReason?: string; rejectedAt?: number;
   salesAgentId?: string; salesAgentName?: string;
 }
 
@@ -474,10 +477,23 @@ export async function submitFieldFeedback(trip: FieldTrip, u: TripUnit, data: { 
   }));
 }
 export function subscribeFieldFeedback(cb: (l: FieldFeedback[]) => void) { return listen<FieldFeedback>(collection(db, 'field_feedback'), cb); }
+const redoKey = (code: string) => `redo.${String(code).replace(/[.\s]/g, '_')}`;
 export async function saraConfirmFeedback(f: FieldFeedback, edits: Partial<FieldFeedback>) {
   await updateDoc(doc(db, 'field_feedback', f.id), cleanFirestoreData({ ...edits, stage: 'sara_confirmed', saraAt: Date.now() }));
+  // لو كان مرفوض قبل كده واتبعت تاني، سبب الرفض يتشال من اللينك
+  await updateDoc(doc(db, 'field_trips', f.tripId), { [redoKey(f.code)]: deleteField() }).catch(() => {});
 }
-export async function rejectFeedback(f: FieldFeedback) { await updateDoc(doc(db, 'field_feedback', f.id), { stage: 'rejected' }); }
+/** رفض الفيدباك بسبب — بيرجع للمندوب في نفس اللينك يبعته تاني */
+export async function rejectFeedback(f: FieldFeedback, reason = '') {
+  await updateDoc(doc(db, 'field_feedback', f.id), cleanFirestoreData({ stage: 'rejected', rejectReason: reason || undefined, rejectedAt: Date.now() }));
+  await updateDoc(doc(db, 'field_trips', f.tripId), { [redoKey(f.code)]: reason || 'محتاج يتبعت تاني' });
+}
+/** مسح فيدباك نهائياً — ولو كان اتنشر للمالك بيتشال من عنده كمان */
+export async function deleteFeedback(f: FieldFeedback) {
+  if (f.stage === 'sales_confirmed') await deleteDoc(doc(db, 'owner_feedback', `of-${f.id}`)).catch(() => {});
+  await deleteDoc(doc(db, 'field_feedback', f.id));
+}
+export const tripRedoReason = (t: FieldTrip, code: string) => t.redo?.[String(code).replace(/[.\s]/g, '_')];
 /** السيلز بيأكد، فيتنشر للمالك ويتحسب للمندوب */
 export async function salesConfirmFeedback(f: FieldFeedback, agents: FieldAgent[]) {
   await updateDoc(doc(db, 'field_feedback', f.id), { stage: 'sales_confirmed', salesAt: Date.now(), salesBy: me() });

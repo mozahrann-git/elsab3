@@ -11,7 +11,7 @@ import {
   subscribeAllUnitViewings, subscribeAllChangeRequests, subscribeFieldAgents, subscribeTrips, subscribeFieldFeedback,
   createUnitViewing, renotifyOwner, findBrokerContact, deleteUnitViewing, setViewingStatus, resolveChangeRequest, saveFieldAgent, nextInLine, createTrip,
   acceptOwnerProposal, askClientAboutProposal, counterProposeToOwner, cancelViewing,
-  saraConfirmFeedback, rejectFeedback, notifyBroker, revealOwnerToSara, markTripDone, cancelViewingRequest,
+  saraConfirmFeedback, rejectFeedback, deleteFeedback, notifyBroker, revealOwnerToSara, markTripDone, cancelViewingRequest,
 } from '../../services/portalService';
 import { subscribeToSalesAgents } from '../../services/firebaseService';
 import { SalesAgent } from '../../types';
@@ -86,7 +86,7 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       {tab === 'viewings' && <ViewingsTab viewings={viewings} properties={properties} isAdmin={isAdmin} byName={name} onSendToAgent={(code, label, at, sales) => { setTripSeed({ code, label, at, ...sales, n: Date.now() }); setTab('agents'); }} />}
       {tab === 'agents' && <AgentsTab agents={agents} trips={trips} fbs={fbs} viewings={viewings} properties={properties} isAdmin={isAdmin} seed={tripSeed} />}
       {tab === 'rollcall' && <MorningRollCall agents={agents} />}
-      {tab === 'feedback' && <FeedbackTab fbs={fbs} />}
+      {tab === 'feedback' && <FeedbackTab fbs={fbs} trips={trips} />}
       {tab === 'changes' && <ChangesTab changes={changes} />}
       {tab === 'excel' && isAdmin && <OwnersExcelTab properties={properties} />}
       {tab === 'units' && <UnitsTab submissions={submissions} properties={properties} byName={name || 'الإدارة'} onApprove={onApproveSubmission} onReject={onRejectSubmission} onUpdateSubmission={onUpdateSubmission} />}
@@ -525,13 +525,36 @@ const AgentsTab: React.FC<{ agents: FieldAgent[]; trips: FieldTrip[]; fbs: Field
 };
 
 // ---------------- الفيدباك ----------------
-const FeedbackTab: React.FC<{ fbs: FieldFeedback[] }> = ({ fbs }) => {
+const FeedbackTab: React.FC<{ fbs: FieldFeedback[]; trips: FieldTrip[] }> = ({ fbs, trips }) => {
   const [txt, setTxt] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState('');
   const groups: [string, FieldFeedback[]][] = [
     ['وصل من المندوب · راجعيه', fbs.filter((f) => f.stage === 'submitted')],
+    ['اترفض · مستني المندوب يبعته تاني', fbs.filter((f) => f.stage === 'rejected')],
     ['مستني تأكيد السيلز', fbs.filter((f) => f.stage === 'sara_confirmed')],
     ['اتنشر للمالك', fbs.filter((f) => f.stage === 'sales_confirmed').slice(0, 10)],
   ];
+  const fail = (e: any) => alert(`ماتمّش — ${String(e?.code || '').includes('permission') ? 'الصلاحيات رافضة' : 'جرّبي تاني'}`);
+  const linkFor = (f: FieldFeedback) => `${window.location.origin}/?fb=${f.tripId}`;
+
+  /* الرفض بيرجّع الكود للمندوب في نفس اللينك ومعاه السبب،
+     وبيفتح واتساب برسالة جاهزة ليه */
+  const reject = async (f: FieldFeedback) => {
+    const reason = (window.prompt(`ليه بترفضي فيدباك ${f.code}؟ (المندوب هيشوف السبب)`, 'الفويس مش واضح — سجّله تاني') || '').trim();
+    if (!reason) return;
+    setBusy(f.id);
+    try {
+      await rejectFeedback(f, reason);
+      const t = trips.find((x) => x.id === f.tripId);
+      if (t?.agentPhone) window.open(wa(t.agentPhone, `${f.agentName}، رأي العميل في ${f.code} محتاج يتبعت تاني: ${reason}\nمن نفس اللينك:\n${linkFor(f)}`), '_blank');
+    } catch (e) { fail(e); } finally { setBusy(''); }
+  };
+  const remove = async (f: FieldFeedback) => {
+    if (!window.confirm(`تمسحي فيدباك ${f.code} (${f.agentName}) نهائياً؟${f.stage === 'sales_confirmed' ? ' هيتشال من عند المالك كمان.' : ''}`)) return;
+    setBusy(f.id);
+    try { await deleteFeedback(f); } catch (e) { fail(e); } finally { setBusy(''); }
+  };
+
   return (
     <div className="space-y-6">
       {groups.map(([title, list]) => (
@@ -548,13 +571,22 @@ const FeedbackTab: React.FC<{ fbs: FieldFeedback[] }> = ({ fbs }) => {
                 {f.stage === 'submitted'
                   ? <textarea rows={3} className={input} value={txt[f.id] ?? f.text} onChange={(e) => setTxt((s) => ({ ...s, [f.id]: e.target.value }))} placeholder="اكتبي الفيدباك من الفويس" />
                   : <p className="leading-7">"{f.text}"</p>}
+                {f.stage === 'rejected' && f.rejectReason && <p className="text-xs font-bold text-[#C2412D]">سبب الرفض: {f.rejectReason}</p>}
                 <div className="flex flex-wrap gap-1.5">{(f.positives || []).map((x) => <Chip key={x} tone="green">+ {x}</Chip>)}{(f.negatives || []).map((x) => <Chip key={x} tone="red">− {x}</Chip>)}</div>
                 {f.stage === 'submitted' && (
                   <div className="grid grid-cols-2 gap-2">
-                    <Btn tone="green" onClick={() => saraConfirmFeedback(f, { text: (txt[f.id] ?? f.text).trim() })}>تأكيد وابعت للسيلز</Btn>
-                    <Btn tone="danger" onClick={() => rejectFeedback(f)}>رفض</Btn>
+                    <Btn tone="green" disabled={busy === f.id} onClick={async () => { setBusy(f.id); try { await saraConfirmFeedback(f, { text: (txt[f.id] ?? f.text).trim() }); } catch (e) { fail(e); } finally { setBusy(''); } }}>تأكيد وابعت للسيلز</Btn>
+                    <Btn tone="danger" disabled={busy === f.id} onClick={() => reject(f)}>رفض · يرجع للمندوب</Btn>
                   </div>
                 )}
+                {f.stage === 'rejected' && (() => {
+                  const t = trips.find((x) => x.id === f.tripId);
+                  return t?.agentPhone ? (
+                    <a href={wa(t.agentPhone, `${f.agentName}، مستنيين رأي العميل في ${f.code} تاني${f.rejectReason ? `: ${f.rejectReason}` : ''}\n${linkFor(f)}`)} target="_blank" rel="noopener noreferrer"
+                      className="text-center py-2 rounded-xl bg-[#1E7A45] text-white text-xs font-bold">فكّري المندوب على واتساب</a>
+                  ) : null;
+                })()}
+                <button disabled={busy === f.id} onClick={() => remove(f)} className="self-start text-xs font-bold text-[#C2412D] disabled:opacity-50">مسح الفيدباك</button>
               </Card>
             ))}
           </div>
