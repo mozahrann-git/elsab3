@@ -65,7 +65,6 @@ import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { INITIAL_DAILY_QUESTS } from '../data/crmData';
 import { ViewingRequest } from '../types';
 import { subscribeCrmBoard, saveCrmBoard, CrmBoard, CrmBanner, deleteLeadFromDb } from '../services/crmBoardService';
-import { subscribeAllUnitViewings } from '../services/portalService';
 import { thumbUrl } from '../services/mediaStorage';
 import ClientRequestsPanel, { RequestForm } from './sales/ClientRequestsPanel';
 import { paymentOf, PAY_LABEL } from '../services/clientRequests';
@@ -430,11 +429,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [editBoard, setEditBoard] = useState<null | 'banner' | 'quests'>(null);
   const [draftBoard, setDraftBoard] = useState<CrmBoard>({});
   useEffect(() => subscribeCrmBoard(setBoard), []);
-  const [myViewings, setMyViewings] = useState<any[]>([]);
-  useEffect(() => subscribeAllUnitViewings(setMyViewings), []);
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
-  const viewingAgentIds = viewAgentId !== 'all' ? [viewAgentId] : visibleAgents.map((a) => a.id);
-  const todayViewings = myViewings.filter((v) => viewingAgentIds.includes(v.salesAgentId || '') && v.createdAt >= startOfToday.getTime()).length;
+  /* المعاينات اللي اتعملت النهارده = عملاء وصلوا «تمت المعاينة» النهارده،
+     سواء السيلز نقلهم بإيده أو المعاينة اتقفلت من التنسيق.
+     كان بيعدّ طلبات المعاينة اللي اتعملت في بوابة الملاك بس — فالعميل
+     اللي السيلز نقله لـ«تمت المعاينة» ماكانش بيتحسب. */
+  const todayViewings = useMemo(() => {
+    const today = cairoDay();
+    return scopedLeads.filter((l) => (l.activity || []).some((a) =>
+      typeof a.at === 'number' && cairoDay(a.at) === today && /تمت المعاينة/.test(a.outcome || ''))).length;
+  }, [scopedLeads]);
   const viewingsLabel = viewAgentId !== 'all'
     ? `معاينات ${agents.find((a) => a.id === viewAgentId)?.name || ''} النهارده`
     : (isAdmin || isLead) ? 'معاينات الفريق النهارده' : 'معايناتك النهارده';
