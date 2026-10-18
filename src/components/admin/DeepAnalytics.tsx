@@ -100,6 +100,7 @@ export const DeepAnalytics: React.FC<{ leads: Lead[]; properties: Property[] }> 
       if (l.nextActionAt && l.nextActionAt < now && l.followUpStatus !== 'completed' && l.status !== 'closed' && l.status !== 'lost') r.late++;
       (l.activity || []).forEach((a) => {
         if (typeof a.at !== 'number' || a.at < since) return;
+        if ((a.by || '').trim() === 'النظام') return;
         actions++; r.actions++;
         if (/تمت المعاينة/.test(a.outcome || '')) { viewings++; r.viewings++; }
         if (/صفقة مغلقة/.test(a.outcome || '')) { deals++; r.deals++; }

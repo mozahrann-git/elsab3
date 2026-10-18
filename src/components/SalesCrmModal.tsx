@@ -77,6 +77,8 @@ import ClientRequestsPanel, { RequestForm } from './sales/ClientRequestsPanel';
 import { paymentOf, PAY_LABEL } from '../services/clientRequests';
 
 interface SalesCrmModalProps {
+  /** الأدمن نفسه: ملفه الخاص ودفتره (الأونر مالوش دعوة بيهم) */
+  ownerDesk?: boolean;
   isOpen: boolean;
   onClose: () => void;
   properties: Property[];
@@ -126,6 +128,7 @@ export const CRM_PIPELINE_STAGES: {
 ];
 
 export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
+  ownerDesk = false,
   isOpen,
   onClose,
   properties,
@@ -270,7 +273,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const scopedLeads = useMemo(() => {
     const ids = visibleAgents.map((a) => a.id);
     const base = isAdmin ? leads : leads.filter((l) => ids.includes(l.assignedAgentId || '') || l.assignedAgentName === currentSalesAgent?.name);
-    if (viewAgentId === 'all') return base;
+    /* «كل الفريق» = الفريق بس — ملف محمد زهران بيظهر لما يختاره بس */
+    if (viewAgentId === 'all') return base.filter((l) => l.assignedAgentId !== OWNER_DESK.id);
     return base.filter((l) => l.assignedAgentId === viewAgentId);
   }, [leads, isAdmin, currentSalesAgent, visibleAgents, viewAgentId]);
 
@@ -463,7 +467,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const viewingsLabel = viewAgentId !== 'all'
     ? `معاينات ${agents.find((a) => a.id === viewAgentId)?.name || ''} النهارده`
     : (isAdmin || isLead) ? 'معاينات الفريق النهارده' : 'معايناتك النهارده';
-  const todayNewRows = scopedLeads.filter((l) => {
+  const todayNewRows = scopedLeads.filter((l) => !(l as any).copiedFrom && !(l as any).ownerFbIds && !l.id.startsWith('own_')).filter((l) => {
     const t = new Date(l.createdAt || l.lastContactDate || 0).getTime();
     return t >= startOfToday.getTime();
   }).sort((a, b) => new Date(b.createdAt || b.lastContactDate || 0).getTime() - new Date(a.createdAt || a.lastContactDate || 0).getTime());
@@ -476,7 +480,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [actionsLogOpen, setActionsLogOpen] = useState(false);
   /* دفتري: اللي جه ميعاده بيظهر فوق لحد ما يتقفل */
   const [myNotes, setMyNotes] = useState<OwnerNote[]>([]);
-  useEffect(() => (isAdmin ? subscribeNotes(setMyNotes) : undefined), [isAdmin]);
+  useEffect(() => (ownerDesk ? subscribeNotes(setMyNotes) : undefined), [ownerDesk]);
   const [noteTick, setNoteTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setNoteTick((x) => x + 1), 60000); return () => clearInterval(t); }, []);
   const dueNotes = useMemo(() => myNotes.filter((n) => isDue(n)), [myNotes, noteTick]);
@@ -484,11 +488,11 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
      أوتوماتيك لما الإدارة تفتح الـCRM، والعميل الأصلي بيفضل مع السيلز */
   const [deskTrips, setDeskTrips] = useState<FieldTrip[]>([]);
   const [deskFbs, setDeskFbs] = useState<FieldFeedback[]>([]);
-  useEffect(() => (isAdmin ? subscribeTrips(setDeskTrips) : undefined), [isAdmin]);
-  useEffect(() => (isAdmin ? subscribeFieldFeedback(setDeskFbs) : undefined), [isAdmin]);
+  useEffect(() => (ownerDesk ? subscribeTrips(setDeskTrips) : undefined), [ownerDesk]);
+  useEffect(() => (ownerDesk ? subscribeFieldFeedback(setDeskFbs) : undefined), [ownerDesk]);
   const deskDone = useRef(new Set<string>());
   useEffect(() => {
-    if (!isAdmin || !agents.length) return;
+    if (!ownerDesk || !agents.length) return;
     /* الملف نفسه بيتعمل على طول — حتى لو مفيش فيدباك متأكد لسه */
     if (!agents.some((a) => a.id === OWNER_DESK.id) && !deskDone.current.has('agent')) {
       deskDone.current.add('agent');
@@ -508,13 +512,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       deskDone.current.add(k);
       onUpdateLead(l);
     });
-  }, [isAdmin, leads, deskFbs, deskTrips, agents, viewingRequests]);
+  }, [ownerDesk, leads, deskFbs, deskTrips, agents, viewingRequests]);
   /* متابعات الفريق: مقفولة، ولما تتفتح السيلز مرتّبين بالأنشط */
   const [teamOpen, setTeamOpen] = useState(false);
   const rankedAgents = useMemo(() => {
     const today = cairoDay();
     const weekAgo = Date.now() - 7 * 864e5;
-    return visibleAgents.map((a) => {
+    return visibleAgents.filter((a) => a.id !== OWNER_DESK.id).map((a) => {
       const mineL = leads.filter((l) => l.assignedAgentId === a.id);
       let t = 0, w = 0;
       mineL.forEach((l) => (l.activity || []).forEach((x) => {
@@ -761,7 +765,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
             </button>
 
-            {isAdmin && (
+            {ownerDesk && (
               <button
                 onClick={() => { setActiveTab('notebook'); setIsMobileMenuOpen(false); }}
                 className={`w-full p-2.5 rounded-xl text-right flex items-center justify-between text-xs font-bold transition-all cursor-pointer ${
@@ -931,7 +935,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             { id: 'matching', label: 'المطابقة الذكية' },
             { id: 'content', label: 'المحتوى والإعلانات' },
             { id: 'leaderboard', label: 'المتصدرين' },
-            ...(isAdmin ? [{ id: 'notebook', label: '📝 دفتري' }] : []),
+            ...(ownerDesk ? [{ id: 'notebook', label: '📝 دفتري' }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1000,7 +1004,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     <span className="font-medium text-[#8C877D]"> · {viewAgentId !== 'all' ? `بتشوف ${agents.find((a) => a.id === viewAgentId)?.name || ''}` : 'كل الفريق'}</span>
                   </span>
                   <span className="flex items-center gap-2">
-                    {isAdmin && viewAgentId !== OWNER_DESK.id && (
+                    {ownerDesk && viewAgentId !== OWNER_DESK.id && (
                       <span
                         role="button"
                         onClick={(e) => { e.stopPropagation(); setViewAgentId(OWNER_DESK.id); setTeamOpen(false); }}
@@ -1940,7 +1944,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {activeTab === 'daily' && (
           <div className="pt-1">
             {isAdmin ? (
-              <DailyAdminBoard agents={agents} leads={leads} viewingRequests={viewingRequests} adminName={actorName} />
+              <DailyAdminBoard agents={agents.filter((a) => a.id !== OWNER_DESK.id)} leads={leads.filter((l) => l.assignedAgentId !== OWNER_DESK.id)} viewingRequests={viewingRequests} adminName={actorName} />
             ) : (
               <DailyTab
                 properties={properties} leads={leads} currentAgent={currentSalesAgent}
@@ -1951,14 +1955,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           </div>
         )}
 
-        {isAdmin && dueNotes.length > 0 && activeTab !== 'notebook' && (
+        {ownerDesk && dueNotes.length > 0 && activeTab !== 'notebook' && (
           <button onClick={() => setActiveTab('notebook')} className="mx-4 sm:mx-5 mt-3 w-[calc(100%-2rem)] sm:w-[calc(100%-2.5rem)] text-right bg-[#FBEDEA] border border-[#E9B8AE] rounded-2xl px-4 py-3 flex items-center justify-between gap-2">
             <span className="text-sm font-bold text-[#9A2E1F]">⏰ {dueNotes.length === 1 ? `فكّرتني: ${dueNotes[0].name || dueNotes[0].text.slice(0, 40)}` : `${dueNotes.length} حاجات في دفترك جه ميعادها`}</span>
             <span className="text-xs font-bold text-[#9A2E1F] shrink-0">افتح ←</span>
           </button>
         )}
 
-        {activeTab === 'notebook' && isAdmin && (
+        {activeTab === 'notebook' && ownerDesk && (
           <div className="p-4 sm:p-5">
             <Notebook
               byName={actorName}
@@ -1970,7 +1974,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
         {activeTab === 'content' && (
           <div className="p-4 sm:p-5">
-            <ContentTab properties={properties} agents={agents} currentAgent={currentAgent} isAdmin={isAdmin} />
+            <ContentTab properties={properties} agents={agents.filter((a) => a.id !== OWNER_DESK.id)} currentAgent={currentAgent} isAdmin={isAdmin} />
           </div>
         )}
 

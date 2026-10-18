@@ -77,6 +77,7 @@ import { FollowUpPopup } from './components/FollowUpPopup';
 import { FieldCheckInPage } from './components/portal/FieldCheckInPage';
 import { saveUiSession, loadUiSession } from './utils/uiSession';
 import { logEvent } from './services/analyticsService';
+import { OWNER_DESK } from './services/ownerDesk';
 import { logVisit, markVisit } from './services/visitorService';
 import { floorStatusOf } from './services/floorRules';
 import { passes, passesBedrooms } from './utils/multiFilter';
@@ -944,6 +945,11 @@ export default function App() {
     }
     return [];
   });
+
+  /* ملف «محمد زهران» خاص بالأدمن: مش ظاهر للأونر ولا السيلز، ومش
+     داخل في أرقام الفريق (الإحصائيات، الأكشن، الطلبات، المتصدرين) */
+  const teamLeads = useMemo(() => crmLeads.filter((l) => l.assignedAgentId !== OWNER_DESK.id), [crmLeads]);
+  const teamAgents = useMemo(() => salesAgents.filter((a) => a.id !== OWNER_DESK.id), [salesAgents]);
 
   /* شيل البيانات التجريبية اللي اتزرعت زمان أوتوماتيك (مرة لما الأدمن يفتح):
      العملاء التجريبيين (د. طارق المنشاوي، م/ إبراهيم حلمي...)، الحسابات اللي
@@ -2597,7 +2603,7 @@ export default function App() {
             for (const p of cleared) await savePropertyToDb(p);
           },
         }}
-        crmLeads={crmLeads}
+        crmLeads={teamLeads}
         isOpen={isAdminDashboardOpen}
         /* الحساب اللي ليه حق تعديل الشقق بس — مش أدمن كامل */
         propertiesOnly={!isAdminLoggedIn}
@@ -2669,8 +2675,9 @@ export default function App() {
         isOpen={isCrmOpen}
         onClose={() => setIsCrmOpen(false)}
         properties={properties}
-        agents={salesAgents}
-        leads={crmLeads}
+        agents={isAdminLoggedIn ? salesAgents : teamAgents}
+        leads={isAdminLoggedIn ? crmLeads : teamLeads}
+        ownerDesk={isAdminLoggedIn}
         syncError={leadsSyncError}
         isAdmin={isAdminLoggedIn || staffAccess?.role === 'company_owner'}
         canEdit={isAdminLoggedIn || isSalesLoggedIn}
@@ -2724,7 +2731,7 @@ export default function App() {
           onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }} />
       )}
       {activePortal === 'company' && staffAccess && (
-        <CompanyOwnerPanel access={staffAccess} properties={properties} leads={crmLeads} agents={salesAgents} submissions={ownerSubmissions} logoUrl={customLogoUrl}
+        <CompanyOwnerPanel access={staffAccess} properties={properties} leads={teamLeads} agents={teamAgents} submissions={ownerSubmissions} logoUrl={customLogoUrl}
           onClose={() => setActivePortal(null)}
           onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
           onAddUnit={() => { setActivePortal(null); setIsResaleSubmitOpen(true); }}
