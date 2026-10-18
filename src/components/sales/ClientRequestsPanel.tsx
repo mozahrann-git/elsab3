@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BellRing, Check, Loader2, Plus, Search, X } from 'lucide-react';
+import { UnitThumb } from '../crm/UnitThumb';
 import type { ClientRequest, Lead, Property, RequestKind } from '../../types';
 import {
   matchAllRequests, installmentHint, estimatePlan, affordableFromPlan,
@@ -589,10 +590,7 @@ export const ClientRequestsPanel: React.FC<{
                   onClick={() => onOpenProperty?.(m.property)}
                   className="w-full bg-[#FBF8F1] rounded-2xl p-3 flex items-center gap-3 text-right"
                 >
-                  {(m.property.images || []).filter(Boolean).length > 0 ? (
-                    <img loading="lazy" src={thumbUrl(m.property.images[0], 120)} alt=""
-                      className="w-12 h-12 rounded-xl object-cover shrink-0" />
-                  ) : <div className="w-12 h-12 rounded-xl bg-stone-100 shrink-0" />}
+                  <UnitThumb p={m.property} w={120} badge="sm" className="w-12 h-12 rounded-xl shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-mono font-black bg-white px-2 py-0.5 rounded-full">

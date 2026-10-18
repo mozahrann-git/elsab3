@@ -39,6 +39,7 @@ import {
   AlertCircle,
   AlertTriangle,
 } from 'lucide-react';
+import { UnitThumb } from './crm/UnitThumb';
 import { CampaignLeadsModal } from './crm/CampaignLeadsModal';
 import { saveDraft, loadDraft, clearDraft } from '../utils/uiSession';
 import { LionLogo } from './LionLogo';
@@ -1769,13 +1770,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     </div>
 
                     {/* Right Property Image Thumbnail in RTL */}
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-stone-100 shrink-0 border border-[#ECE8DF]">
-                      <img
-                        loading="lazy" decoding="async" src={thumbUrl(prop.images?.[0], 400) || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=400&q=80'}
-                        alt={prop.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                    <UnitThumb p={prop} className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl shrink-0 border border-[#ECE8DF]" />
                   </div>
 
                   {/* 3 Action Buttons Row (WhatsApp, Ad, Preview) */}

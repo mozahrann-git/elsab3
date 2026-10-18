@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Plus, Link2, Settings2, Trash2, Check, Upload, Video, X } from 'lucide-react';
+import { UnitThumb } from '../crm/UnitThumb';
 import { Property, SalesAgent } from '../../types';
 import {
   SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveSalesForms,
@@ -130,7 +131,7 @@ export const ContentTab: React.FC<{
                           <button key={p.id} disabled={!!t}
                             onClick={() => claimSlot({ weekKey: wk, agentId: myId, agentName: currentAgent.name, propertyId: p.id, code: p.code, title: `${p.neighborhood} · ${p.area}م²` })}
                             className="text-right rounded-xl border border-[#ECE8DF] overflow-hidden bg-white disabled:opacity-40 hover:border-[#A07A26]">
-                            <div className="aspect-[4/3] bg-[#F6F4EF]">{imgOf(p) && <img src={imgOf(p)} alt="" className="w-full h-full object-cover" loading="lazy" />}</div>
+                            <UnitThumb p={p} className="aspect-[4/3]" />
                             <div className="p-2 space-y-0.5">
                               <p className="text-xs font-bold font-mono">{p.code}</p>
                               <p className="text-[11px] text-[#6B665C]">{p.neighborhood} · {p.area}م² · {p.bedrooms} غرف</p>

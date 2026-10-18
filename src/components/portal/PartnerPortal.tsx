@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Home, CalendarClock, MessageSquareText, UserRound, Plus, ExternalLink, Pause, Play, Image as ImageIcon, BadgeDollarSign, LogOut, KeyRound, Phone } from 'lucide-react';
+import { UnitThumb } from '../crm/UnitThumb';
 import { Property } from '../../types';
 import { StaffAccess, fetchPropertyPrivateOwner } from '../../services/firebaseService';
 import { UnitVisit, subscribeVisitsByCodes, summarize } from '../../services/visitorService';
@@ -264,9 +265,7 @@ const Stat: React.FC<{ n: string; l: string; color?: string; light?: boolean }> 
     <span className="text-[11px]" style={{ color: light ? '#CFCBC2' : '#6B665C' }}>{l}</span>
   </div>
 );
-const Thumb: React.FC<{ p: Property }> = ({ p }) => p.images?.[0]
-  ? <img loading="lazy" decoding="async" src={thumbUrl(p.images[0], 200)} alt="" className="w-20 h-20 rounded-xl object-cover shrink-0" />
-  : <div className="w-20 h-20 rounded-xl shrink-0" style={{ background: 'repeating-linear-gradient(135deg,#E7E2D8 0 10px,#EFEBE3 10px 20px)' }} />;
+const Thumb: React.FC<{ p: Property }> = ({ p }) => <UnitThumb p={p} w={200} className="w-20 h-20 rounded-xl shrink-0" />;
 
 const OwnerViewing: React.FC<{ v: UnitViewing }> = ({ v }) => {
   const [alt, setAlt] = useState<WhenValue | null>(null);

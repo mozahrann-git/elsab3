@@ -4,6 +4,7 @@ import {
   Phone, MessageCircle, PhoneCall, ClipboardList, Megaphone, CalendarCheck, Eye, Video,
   X, Upload, Copy, Check, Loader2, AlertTriangle, ChevronLeft, ChevronRight, ImageIcon, Download,
 } from 'lucide-react';
+import { UnitThumb } from '../crm/UnitThumb';
 import { Lead, Property, SalesAgent, ViewingRequest } from '../../types';
 import {
   DailySettings, DEFAULT_DAILY_SETTINGS, subscribeDailySettings, workDay, workWeek, dayLabel, cairoHour,
@@ -425,7 +426,7 @@ export const AdsPanel: React.FC<{
             <button key={u.code} onClick={() => setOpenUnit(u)}
               className={`group text-right rounded-[22px] overflow-hidden bg-white border transition active:scale-[.98] ${st === 'rejected' ? 'border-[#D3262B]' : 'border-[#EFE8DA] hover:border-[#C9A24A]'}`}>
               <div className="relative aspect-[4/3] bg-[#F5F0E6] flex items-center justify-center">
-                {u.image ? <img src={thumbUrl(u.image, 400)} alt="" className={`w-full h-full object-cover transition ${st === 'approved' || st === 'pending' ? 'opacity-55' : ''}`} loading="lazy" /> : <ImageIcon size={22} className="text-[#C9C3B6]" />}
+                <UnitThumb p={u.prop || (u.project as any)} className={`absolute inset-0 transition ${st === 'approved' || st === 'pending' ? 'opacity-55' : ''}`} />
                 {st && (
                   <span className={`absolute top-2 right-2 text-[10.5px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${st === 'approved' ? 'bg-[#22483A] text-white' : st === 'pending' ? 'bg-[#FFF4D9] text-[#7A5E12]' : 'bg-[#D3262B] text-white'}`}>
                     {st === 'approved' ? <><Check size={11} />اتقبل</> : st === 'pending' ? 'بيتراجع' : 'اترفض — افتحه'}
