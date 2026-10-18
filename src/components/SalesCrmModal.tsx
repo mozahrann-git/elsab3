@@ -667,33 +667,40 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         
         {/* Sidebar Header */}
         <div>
-          <div className="p-4 sm:p-5 flex items-center justify-between border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <LionLogo size={34} textColor="text-white" subtextColor="text-[#E9DFCA]" />
-              <div>
-                <h2 className="font-readex font-bold text-sm text-white">غرفة العمليات</h2>
-                <p className="text-[11px] text-[#A07A26] font-bold">CRM السبع للعقارات</p>
+          {/* على الموبايل: شريط واحد رفيع (لوجو + اسمك + القائمة + قفل) — المساحة للشغل */}
+          <div className="px-3 py-2 lg:p-5 flex items-center justify-between gap-2 border-b border-white/10">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="lg:hidden"><LionLogo size={32} withText={false} withSubtitle={false} /></span>
+              <span className="hidden lg:block"><LionLogo size={34} textColor="text-white" subtextColor="text-[#E9DFCA]" /></span>
+              <div className="min-w-0">
+                <h2 className="font-readex font-semibold text-[13px] lg:text-sm text-white truncate">
+                  غرفة العمليات
+                  <span className="lg:hidden font-medium text-white/60"> · {isAdmin ? (viewAgentId === 'all' ? 'الإدارة' : `بتشوف ${agents.find((a) => a.id === viewAgentId)?.name || ''}`) : (currentSalesAgent?.name || '')}</span>
+                </h2>
+                <p className="hidden lg:block text-[11px] text-[#A07A26] font-bold">CRM السبع للعقارات</p>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5 lg:hidden">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="p-2 text-stone-400 hover:text-white rounded-xl bg-white/5"
+                aria-label="القائمة"
+                className="w-10 h-10 flex items-center justify-center text-stone-300 hover:text-white rounded-xl bg-white/10"
               >
                 <Menu size={18} />
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-stone-400 hover:text-white rounded-xl bg-white/5"
+                aria-label="اقفل غرفة العمليات"
+                className="w-10 h-10 flex items-center justify-center text-stone-300 hover:text-white rounded-xl bg-white/10"
               >
                 <X size={18} />
               </button>
             </div>
           </div>
 
-          {/* Current Sales Agent Profile Card */}
-          <div className="p-4 border-b border-white/10 bg-white/5">
+          {/* كارت السيلز — على الكمبيوتر بس (على الموبايل اسمه في الشريط فوق) */}
+          <div className="hidden lg:block p-4 border-b border-white/10 bg-white/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-full bg-[#A07A26] text-white font-bold flex items-center justify-center text-xs shadow-xs font-readex">
