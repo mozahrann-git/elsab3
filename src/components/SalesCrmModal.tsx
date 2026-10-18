@@ -166,6 +166,11 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   // Smart Matching Lead Selection & State
   /* بيتحدد من عملاء الشخص الداخل بس — مش من كل ليدات الشركة */
   const [matchingLeadId, setMatchingLeadId] = useState<string>('');
+  /* المطابقة: اختيار العميل من بحث (مش شريط أسماء)، و«طلب جديد» لعميل لسه مش متسجّل */
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const [clientPickQ, setClientPickQ] = useState('');
+  const [newReqOpen, setNewReqOpen] = useState(false);
+  const [newReq, setNewReq] = useState<{ name: string; phone: string; agentId: string }>({ name: '', phone: '', agentId: '' });
   const [highlightedPropCode, setHighlightedPropCode] = useState<string | null>(null);
 
   // Modals inside CRM
@@ -1543,98 +1548,72 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {activeTab === 'matching' && (
           <div className="space-y-4 sm:space-y-5 flex-1 pt-1 max-w-4xl mx-auto w-full">
             
-            {/* Top Client Header Card (Doctor/Client Info & Matching Count Badge) */}
-            <div className="bg-white border border-[#ECE8DF] rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-2xs space-y-3.5">
-              <div className="flex items-start sm:items-center justify-between gap-3">
-                <div className="space-y-1 min-w-0">
-                  <h3 className="font-readex font-bold text-sm sm:text-base text-[#141414] truncate">
-                    {selectedMatchingLead?.name || 'العميل المحدد'} 
-                    <span className="text-xs text-stone-500 font-normal font-mono mr-1.5 dir-ltr inline-block">
-                      ({selectedMatchingLead?.phone || '01009876543'})
-                    </span>
-                  </h3>
-                  <p className="text-xs text-[#6B665C]">
-                    الطلب: <span className="font-bold text-[#141414]">{selectedMatchingLead ? briefLine(selectedMatchingLead) : '—'}</span>
-                  </p>
-                  {/* مكان واحد لتعديل الطلب — الفورم بيفتح مليان باللي متسجّل.
-                      قبل كده كان فيه أزرار دفع هنا بتغيّر المطابقة مؤقتاً من
-                      غير ما تتحفظ، و"رجّع اللي قاله"، وعشان تعدّل الميزانية
-                      تقلب كاش… مكانين بيعدّلوا نفس الحاجة. */}
-                  {selectedMatchingLead && (
-                    <button
-                      type="button"
-                      onClick={() => setRequestLead(selectedMatchingLead)}
-                      className={`text-[11px] rounded-xl px-3 py-1.5 font-bold cursor-pointer text-right leading-relaxed border ${
-                        briefGaps(selectedMatchingLead).length
-                          ? 'bg-[#FFF8E6] border-[#EBD9A6] text-[#7A5E12]'
-                          : 'bg-[#141414] border-[#141414] text-white'
-                      }`}
-                    >
-                      {briefGaps(selectedMatchingLead).length
-                        ? `طلبه ناقص: ${briefGaps(selectedMatchingLead).map((g) => g.label).join('، ')} — سجّل طلبه`
-                        : 'عدّل طلبه'}
-                    </button>
-                  )}
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {[[0, 'الميزانية بالظبط'], [0.05, '±5%'], [0.1, '±10%']].map(([v, t]) => (
-                      <button key={String(v)} type="button" onClick={() => setMatchTolerance(v as number)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${matchTolerance === v ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>{t}</button>
-                    ))}
-                    <button type="button" onClick={() => setMatchStrictHood(!matchStrictHood)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${matchStrictHood ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>{matchStrictHood ? 'نفس الحي بس' : 'كل الأحياء'}</button>
-                  </div>
-
-                  {/* كاش ولا تقسيط — ده اللي بيحدد السقف اللي بنطابق عليه */}
-                  {matchBrief && (
-                    <div className="mt-2 bg-[#FAF8F3] border border-[#ECE8DF] rounded-xl p-2.5 space-y-2">
-
-                      {/* القاعدة بالكلام — الريسيل كاش، والتقسيط مشاريع */}
-                      <p className="text-[11px] text-[#6B665C] leading-relaxed">
-                        {activePay === 'instalment' ? (
-                          <>
-                            <b className="text-[#141414]">مشاريع بس.</b> الريسيل كاش — المالك مش بيقسّط،
-                            فمش بنوريه شقق ريسيل خالص. الفلتر بيشتغل على مقدمه{' '}
-                            <b className="font-mono">{matchBrief.downCash.toLocaleString('en-US')}</b> وقسطه{' '}
-                            <b className="font-mono">{matchBrief.monthly.toLocaleString('en-US')}</b>.
-                          </>
-                        ) : activePay === 'cash' ? (
-                          resaleCeiling(matchBrief) ? (
-                            <><b className="text-[#141414]">ريسيل كاش</b> — لحد <b className="text-[#141414] font-mono">{resaleCeiling(matchBrief).toLocaleString('en-US')}</b> ج.م</>
-                          ) : 'مفيش ميزانية متسجّلة — بيطلّع كل حاجة'
-                        ) : (
-                          <>
-                            <b className="text-[#141414]">الاتنين:</b> ريسيل كاش لحد{' '}
-                            <b className="font-mono">{(resaleCeiling(matchBrief) || 0).toLocaleString('en-US')}</b> ج.م،
-                            ومشاريع على مقدمه وقسطه.
-                          </>
-                        )}
-                      </p>
-
-                    </div>
-                  )}
-                </div>
-
-                {/* Matching Counter Badge */}
-                <div className="bg-[#E6F7ED] border border-[#B3E8C8] text-[#0E7A5A] px-3 sm:px-4 py-1.5 sm:py-2 rounded-2xl font-bold text-xs sm:text-sm whitespace-nowrap shadow-2xs shrink-0 flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-[#0E7A5A]" />
-                  <span>{showResale ? `${matchedProperties.length} شقق مطابقة` : 'تقسيط · مشاريع'}</span>
-                </div>
+            {/* رأس المطابقة: العميل (بتختاره بالبحث) + طلبه + الضبط + عدد الشقق */}
+            <div className="rounded-[26px] border border-[#E7DFCF] bg-white p-4 sm:p-5 space-y-3.5">
+              <div className="flex items-stretch gap-2">
+                <button onClick={() => { setClientPickQ(''); setClientPickerOpen(true); }}
+                  className="flex-1 min-w-0 flex items-center gap-3 rounded-[18px] bg-[#F5F0E6] px-3 py-2.5 text-right">
+                  <span className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center font-readex font-bold text-base"
+                    style={{ background: stageTone(selectedMatchingLead?.status).bg, color: stageTone(selectedMatchingLead?.status).fg }}>
+                    {(selectedMatchingLead?.name || '؟').charAt(0)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-readex font-semibold text-[17px] leading-snug truncate">{selectedMatchingLead?.name || 'اختار عميل'}</span>
+                    <span className="block text-xs text-[#6F695D] font-mono truncate" dir="ltr" style={{ textAlign: 'right' }}>{selectedMatchingLead?.phone || ''}</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] font-bold text-[#8E6C1F] flex items-center gap-1">غيّر<ChevronDown size={14} /></span>
+                </button>
+                <button onClick={() => { setNewReq({ name: '', phone: '', agentId: currentSalesAgent?.id || '' }); setNewReqOpen(true); }}
+                  className="shrink-0 w-[92px] rounded-[18px] bg-[#17150F] text-[#F5F0E6] flex flex-col items-center justify-center gap-0.5 font-bold text-xs">
+                  <Plus size={18} />طلب جديد
+                </button>
               </div>
 
-              {/* Client Quick Switcher */}
-              <div className="pt-2 border-t border-[#ECE8DF]/80 flex items-center gap-2 overflow-x-auto no-scrollbar">
-                <span className="text-[11px] font-bold text-stone-500 shrink-0">تبديل العميل:</span>
-                {scopedLeads.map((ld) => (
-                  <button
-                    key={ld.id}
-                    onClick={() => setMatchingLeadId(ld.id)}
-                    className={`px-2.5 py-1 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                      (selectedMatchingLead?.id === ld.id)
-                        ? 'bg-[#141414] text-white shadow-2xs'
-                        : 'bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#6B665C]'
-                    }`}
-                  >
-                    {ld.name.split(' ')[0]} {ld.name.split(' ')[1] || ''}
+              {selectedMatchingLead && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {briefLine(selectedMatchingLead).split(' · ').map((p, i) => (
+                      <span key={i} className="px-2.5 py-1 rounded-full text-[12px] font-semibold bg-[#F5F0E6] border border-[#E7DFCF]">{p}</span>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => setRequestLead(selectedMatchingLead)}
+                    className={`w-full h-11 rounded-[14px] text-[13px] font-bold border ${briefGaps(selectedMatchingLead).length ? 'bg-[#FFF4D9] border-[#EBD9A6] text-[#7A5E12]' : 'bg-white border-[#E7DFCF] text-[#17150F]'}`}>
+                    {briefGaps(selectedMatchingLead).length
+                      ? `طلبه ناقص: ${briefGaps(selectedMatchingLead).map((g) => g.label).join('، ')} — كمّله`
+                      : 'عدّل طلبه'}
                   </button>
-                ))}
+                </div>
+              )}
+
+              {/* الضبط في سطر واحد */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex p-1 rounded-[14px] bg-[#F5F0E6] border border-[#E7DFCF]" role="group" aria-label="مرونة الميزانية">
+                  {([[0, 'بالظبط'], [0.05, '±٥٪'], [0.1, '±١٠٪']] as [number, string][]).map(([v, t]) => (
+                    <button key={v} type="button" onClick={() => setMatchTolerance(v)} aria-pressed={matchTolerance === v}
+                      className={`h-8 px-3 rounded-[10px] text-[12px] font-bold transition ${matchTolerance === v ? 'bg-[#17150F] text-[#F5F0E6]' : 'text-[#6F695D]'}`}>{t}</button>
+                  ))}
+                </div>
+                <button type="button" onClick={() => setMatchStrictHood(!matchStrictHood)} aria-pressed={matchStrictHood}
+                  className="h-10 px-3 rounded-[14px] border border-[#E7DFCF] bg-white text-[12px] font-bold flex items-center gap-2">
+                  <span className={`w-8 h-[18px] rounded-full relative transition ${matchStrictHood ? 'bg-[#22483A]' : 'bg-[#D8D0BF]'}`}>
+                    <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all ${matchStrictHood ? 'right-[2px]' : 'right-[16px]'}`} />
+                  </span>
+                  نفس الحي بس
+                </button>
+              </div>
+
+              {/* القاعدة + العدد */}
+              <div className="flex items-center justify-between gap-3 rounded-[18px] px-4 py-3" style={{ background: '#22483A', color: '#fff' }}>
+                <p className="text-[12px] leading-relaxed text-white/85 min-w-0">
+                  {!matchBrief ? 'سجّل طلبه عشان المطابقة تشتغل'
+                    : activePay === 'instalment' ? <>تقسيط ← <b className="text-white">مشاريع بس</b> على مقدم {matchBrief.downCash.toLocaleString('en-US')} وقسط {matchBrief.monthly.toLocaleString('en-US')}</>
+                    : activePay === 'cash' ? (resaleCeiling(matchBrief) ? <>ريسيل كاش لحد <b className="text-white font-mono">{resaleCeiling(matchBrief).toLocaleString('en-US')}</b></> : 'مفيش ميزانية — بيطلّع كل حاجة')
+                    : <>ريسيل كاش لحد <b className="text-white font-mono">{(resaleCeiling(matchBrief) || 0).toLocaleString('en-US')}</b> + مشاريع</>}
+                </p>
+                <span className="shrink-0 text-center leading-none">
+                  <span className="block font-readex font-semibold text-[28px]">{showResale ? matchedProperties.length : '—'}</span>
+                  <span className="block text-[10px] text-white/75 mt-1">{showResale ? 'شقة مطابقة' : 'مشاريع'}</span>
+                </span>
               </div>
             </div>
 
@@ -1995,6 +1974,103 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           distributorName={currentAgent?.name || 'الإدارة'}
           onDistribute={onAddLeadsBulk}
         />
+      )}
+
+      {/* اختيار العميل للمطابقة: بحث بالاسم أو الرقم، والأحدث فوق */}
+      {clientPickerOpen && (() => {
+        const q = clientPickQ.trim().toLowerCase();
+        const digitsQ = q.replace(/\D/g, '');
+        const lastAt = (l: Lead) => Math.max(...[(l.activity || [])[0]?.at || 0, new Date(l.createdAt || 0).getTime() || 0]);
+        const list = scopedLeads
+          .filter((l) => !q || l.name.toLowerCase().includes(q) || (digitsQ && String(l.phone || '').replace(/\D/g, '').includes(digitsQ)))
+          .sort((x, y) => Number(!!(y as any).discovery) - Number(!!(x as any).discovery) || lastAt(y) - lastAt(x))
+          .slice(0, 60);
+        return (
+          <div className="fixed inset-0 z-[70] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={() => setClientPickerOpen(false)}>
+            <div className="bg-[#F5F0E6] w-full sm:max-w-lg rounded-t-[28px] sm:rounded-[28px] max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 space-y-3 border-b border-[#E7DFCF]">
+                <div className="flex items-center justify-between">
+                  <p className="font-readex font-semibold text-lg">اختار العميل</p>
+                  <button onClick={() => setClientPickerOpen(false)} aria-label="اقفل" className="w-10 h-10 rounded-full border border-[#E7DFCF] flex items-center justify-center"><X size={16} /></button>
+                </div>
+                <label className="flex items-center gap-2 h-12 px-4 rounded-[16px] bg-white border border-[#E7DFCF]">
+                  <Search size={16} className="text-[#6F695D]" />
+                  <input autoFocus value={clientPickQ} onChange={(e) => setClientPickQ(e.target.value)} placeholder="اكتب الاسم أو الرقم…" className="flex-1 bg-transparent outline-none text-sm" style={{ boxShadow: 'none', border: 0 }} />
+                </label>
+              </div>
+              <div className="overflow-y-auto p-2">
+                {!list.length && (
+                  <div className="p-6 text-center space-y-3">
+                    <p className="text-sm text-[#6F695D]">مفيش عميل بالاسم أو الرقم ده.</p>
+                    <button onClick={() => { setClientPickerOpen(false); setNewReq({ name: /\d/.test(clientPickQ) ? '' : clientPickQ, phone: /\d/.test(clientPickQ) ? clientPickQ : '', agentId: currentSalesAgent?.id || '' }); setNewReqOpen(true); }}
+                      className="h-11 px-5 rounded-[14px] bg-[#17150F] text-[#F5F0E6] text-sm font-bold">سجّله طلب جديد</button>
+                  </div>
+                )}
+                {list.map((l) => {
+                  const t = stageTone(l.status);
+                  const on = selectedMatchingLead?.id === l.id;
+                  return (
+                    <button key={l.id} onClick={() => { setMatchingLeadId(l.id); setClientPickerOpen(false); }}
+                      className={`w-full text-right flex items-center gap-3 p-3 rounded-[18px] ${on ? 'bg-white ring-2 ring-[#17150F]' : 'hover:bg-white'}`}>
+                      <span className="w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center font-bold" style={{ background: t.bg, color: t.fg }}>{l.name.charAt(0)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold text-[15px] truncate">{l.name}</span>
+                        <span className="block text-[11.5px] text-[#6F695D] truncate">{(l as any).discovery ? briefLine(l) : 'لسه مالوش طلب'}</span>
+                      </span>
+                      <span className="shrink-0 text-[11px] font-mono text-[#6F695D]" dir="ltr">{String(l.phone || '').slice(-4)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* طلب جديد: عميل لسه مش متسجّل — الاسم والرقم، وبعدها فورم الطلب على طول */}
+      {newReqOpen && (
+        <div className="fixed inset-0 z-[70] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={() => setNewReqOpen(false)}>
+          <form className="bg-[#F5F0E6] w-full sm:max-w-md rounded-t-[28px] sm:rounded-[28px] p-5 space-y-3" onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = newReq.name.trim(); const phone = newReq.phone.trim();
+              if (!name || phone.replace(/\D/g, '').length < 10) { showToast('اكتب الاسم ورقم صحيح (١٠ أرقام على الأقل)'); return; }
+              const d = phone.replace(/\D/g, '').slice(-10);
+              const exists = leads.find((l) => String(l.phone || '').replace(/\D/g, '').slice(-10) === d);
+              if (exists) {
+                setNewReqOpen(false); setMatchingLeadId(exists.id); setRequestLead(exists);
+                showToast(`العميل ده متسجّل قبل كده مع ${exists.assignedAgentName || '—'} — فتحتلك طلبه`);
+                return;
+              }
+              const agent = agents.find((a) => a.id === newReq.agentId) || currentSalesAgent;
+              if (!agent) { showToast('اختار السيلز المسؤول'); return; }
+              const now = Date.now();
+              const lead: Lead = {
+                id: `lead_${now}`, name, phone, source: 'direct', status: 'new',
+                assignedAgentId: agent.id, assignedAgentName: agent.name, notes: [],
+                createdAt: new Date(now).toISOString(), lastContactDate: new Date(now).toISOString(),
+                addedByName: actorName, addedById: currentSalesAgent?.id, leadKind: 'personal',
+                activity: [{ at: now, by: actorName, outcome: 'طلب جديد من المطابقة', comment: '' }],
+              } as Lead;
+              onAddLead(lead);
+              setNewReqOpen(false); setMatchingLeadId(lead.id); setRequestLead(lead);
+            }}>
+            <div className="flex items-center justify-between">
+              <p className="font-readex font-semibold text-lg">طلب جديد</p>
+              <button type="button" onClick={() => setNewReqOpen(false)} aria-label="اقفل" className="w-10 h-10 rounded-full border border-[#E7DFCF] flex items-center justify-center"><X size={16} /></button>
+            </div>
+            <p className="text-xs text-[#6F695D]">لعميل لسه مش متسجّل. بعد ما تحفظ، فورم طلبه بيفتح على طول والمطابقة تشتغل عليه.</p>
+            <input value={newReq.name} onChange={(e) => setNewReq({ ...newReq, name: e.target.value })} placeholder="اسم العميل" className="w-full h-12 px-4 rounded-[14px] bg-white border border-[#E7DFCF] text-sm" />
+            <input value={newReq.phone} onChange={(e) => setNewReq({ ...newReq, phone: e.target.value })} placeholder="رقمه" inputMode="tel" dir="ltr" className="w-full h-12 px-4 rounded-[14px] bg-white border border-[#E7DFCF] text-sm text-right" />
+            {isAdmin && (
+              <select value={newReq.agentId} onChange={(e) => setNewReq({ ...newReq, agentId: e.target.value })} className="w-full h-12 px-3 rounded-[14px] bg-white border border-[#E7DFCF] text-sm">
+                <option value="">مين السيلز المسؤول؟</option>
+                {agents.filter((a) => a.isActive !== false).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            )}
+            <button type="submit" className="w-full h-12 rounded-[14px] bg-[#17150F] text-[#F5F0E6] font-bold">احفظ وسجّل طلبه</button>
+          </form>
+        </div>
       )}
 
       {requestLead && (
