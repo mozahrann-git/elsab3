@@ -358,7 +358,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     } catch (e) {
       console.error(e);
     }
-    return DEFAULT_BROKERS;
+    return [];
   });
 
   React.useEffect(() => {

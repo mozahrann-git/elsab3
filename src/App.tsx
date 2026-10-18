@@ -338,8 +338,7 @@ export default function App() {
         safeLocalStorageSet('lion_sales_agents', JSON.stringify(liveAgents));
       } else {
         // بيزرع مرة واحدة بس. لو حد مسحهم بقصد، مبيرجعوش.
-        setSalesAgents([]);
-        seedOnce('agents', () => seedSalesAgentsToDb(INITIAL_SALES_AGENTS));
+        setSalesAgents([]);   // مفيش زرع حسابات تجريبية تاني
       }
     }, (_err, isQuota) => {
       if (isQuota) setIsQuotaExceeded(true);
@@ -368,8 +367,7 @@ export default function App() {
         setLeadsSyncError('');          // وصلت داتا = المزامنة رجعت
       } else {
         setCrmLeads([]);
-        setLeadsSyncError('');
-        seedOnce('leads', () => seedCrmLeadsToDb(INITIAL_LEADS));
+        setLeadsSyncError('');   // مفيش زرع عملاء تجريبيين تاني
       }
     }, (err, isQuota) => {
       if (isQuota) setIsQuotaExceeded(true);
@@ -418,9 +416,7 @@ export default function App() {
       if (liveBrokers && liveBrokers.length > 0) {
         setBrokersList(liveBrokers);
         safeLocalStorageSet('lion_brokers_list', JSON.stringify(liveBrokers));
-      } else {
-        seedOnce('brokers', () => seedBrokersToDb(DEFAULT_BROKERS)).catch(err => console.warn('[Firebase] Initial brokers seed:', err));
-      }
+      }   // مفيش زرع بروكرز تجريبيين تاني
     }, (_err, isQuota) => {
       if (isQuota) setIsQuotaExceeded(true);
     });
@@ -749,7 +745,7 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_LEADS;
+    return [];
   });
 
   useEffect(() => {
@@ -946,8 +942,33 @@ export default function App() {
     } catch {
       // ignore
     }
-    return DEFAULT_BROKERS;
+    return [];
   });
+
+  /* شيل البيانات التجريبية اللي اتزرعت زمان أوتوماتيك (مرة لما الأدمن يفتح):
+     العملاء التجريبيين (د. طارق المنشاوي، م/ إبراهيم حلمي...)، الحسابات اللي
+     إيميلاتها lion-estates.com، والبروكرز التجريبيين. كلهم بالـ id اللي اتزرعوا
+     بيه بالظبط — مستحيل يطابق حاجة اتعملت بإيد حد (الـ id بتاعها فيه الوقت). */
+  const demoPurgedRef = useRef(false);
+  useEffect(() => {
+    const isAdminSession = isAdminLoggedIn || staffAccess?.role === 'admin';
+    if (!isAdminSession || demoPurgedRef.current) return;
+    const leadIds = new Set(INITIAL_LEADS.map((l) => l.id));
+    const agentIds = new Set(INITIAL_SALES_AGENTS.map((a) => a.id));
+    const brokerIds = new Set(DEFAULT_BROKERS.map((b) => b.id));
+    const demoLeads = crmLeads.filter((l) => leadIds.has(l.id));
+    const demoAgents = salesAgents.filter((a) => agentIds.has(a.id) || /@lion-estates\.com$/i.test(a.email || ''));
+    const demoBrokers = brokersList.filter((b) => brokerIds.has(b.id));
+    if (!crmLeads.length || !salesAgents.length) return;   // لسه بيحمّل
+    demoPurgedRef.current = true;
+    if (!demoLeads.length && !demoAgents.length && !demoBrokers.length) return;
+    (async () => {
+      for (const l of demoLeads) await deleteLeadFromDb(l.id).catch((e) => console.warn('[Demo purge] lead', l.id, e));
+      for (const a of demoAgents) await deleteSalesAgentFromDb(a.id).catch((e) => console.warn('[Demo purge] agent', a.id, e));
+      for (const b of demoBrokers) await deleteBrokerFromDb(b.id).catch((e) => console.warn('[Demo purge] broker', b.id, e));
+      console.info(`[Demo purge] اتشال ${demoLeads.length} عميل و${demoAgents.length} حساب و${demoBrokers.length} بروكر تجريبي`);
+    })();
+  }, [isAdminLoggedIn, staffAccess, crmLeads, salesAgents, brokersList]);
 
   const handleUpdateBrokersList = (newList: BrokerProfile[]) => {
     /* البق: المسح مكانش بيمسح.
