@@ -77,6 +77,7 @@ export const DeepAnalytics: React.FC<{ leads: Lead[]; properties: Property[] }> 
   const calls = byType(ev, 'unit_call').length;
   const vreq = byType(ev, 'viewing_request').length;
   const asks = wa + calls + vreq;
+  const moreClicks = byType(ev, 'more_units').length;
   const series = useMemo(() => dailySeries(events, ['unit_view'], days === 1 ? 7 : days), [events, days]);
   const units = useMemo(() => unitInterest(ev), [ev]);
   const coldUnits = units.filter((u) => u.views >= 5 && u.asks === 0).sort((a, b) => b.views - a.views).slice(0, 6);
@@ -155,7 +156,7 @@ export const DeepAnalytics: React.FC<{ leads: Lead[]; properties: Property[] }> 
         <Tile label="أكشن الفريق" value={n(work.actions)} sub="مكالمة/كومنت/نقل مرحلة" />
         <Tile label="معاينات اتعملت" value={n(work.viewings)} sub="اتسجّلت «تمت المعاينة»" tone={work.viewings ? GOOD : undefined} />
         <Tile label="صفقات" value={n(work.deals)} sub="اتنقلت «صفقة مغلقة»" tone={work.deals ? GOOD : undefined} />
-        <Tile label="زوار الموقع" value={n(uniqueVisitors(views))} sub={`${n(views.length)} مشاهدة شقة`} />
+        <Tile label="زوار الموقع" value={n(uniqueVisitors(views))} sub={`${n(views.length)} مشاهدة شقة · ${n(moreClicks)} ضغطة «شوف كمان»`} />
         <Tile label="سألوا من الموقع" value={n(asks)} sub={`${n(wa)} واتساب · ${n(calls)} اتصال · ${n(vreq)} معاينة`} />
         <Tile label="نسبة السؤال" value={views.length >= 30 ? `${pct(asks, views.length)}٪` : '—'} sub={views.length >= 30 ? 'من اللي فتحوا شقة' : 'المشاهدات لسه قليلة'} />
         <Tile label="عملاء متأخرين دلوقتي" value={n(work.team.reduce((s, r) => s + r.late, 0))} sub="عدّى ميعاد متابعتهم" tone={BAD} />

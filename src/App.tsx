@@ -2058,12 +2058,13 @@ export default function App() {
     return properties.filter((p) => favoriteIds.includes(p.id));
   }, [properties, favoriteIds]);
 
-  // Initial visible cards count (3 cards, then Load More)
-  const [visibleCount, setVisibleCount] = useState<number>(3);
+  /* أول ٤ شقق، وكل ضغطة على «شوف كمان» بتفتح ٤ تانيين */
+  const PAGE = 4;
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE);
 
   // Reset visible count when filter changes
   useEffect(() => {
-    setVisibleCount(3);
+    setVisibleCount(PAGE);
   }, [filter]);
 
   const displayedProperties = useMemo(() => {
@@ -2402,21 +2403,45 @@ export default function App() {
               ))}
             </div>
 
-            {/* Load More Button (3 cards initially, then Load More) */}
-            {visibleCount < filteredProperties.length && (
-              <div className="pt-4 pb-6 text-center flex flex-col items-center justify-center gap-2">
-                <button
-                  onClick={() => setVisibleCount((prev) => prev + 3)}
-                  className="px-8 py-3.5 bg-[#141414] hover:bg-black text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-3 active:scale-98 cursor-pointer"
-                >
-                  <span>المزيد من الشقق</span>
-                  <ChevronDown size={15} className="text-[#D9B864]" />
-                  <span className="text-[11px] font-mono text-[#D9B864]">
-                    ({filteredProperties.length - visibleCount})
-                  </span>
-                </button>
-              </div>
-            )}
+            {/* «شوف كمان» — ملفت: صور الشقق اللي جاية بتطلّ، والعدد كبير، والزرار دهبي.
+                الإحصائيات كانت بتقول إن محدش بيدوس على الزرار الأسود الصغير. */}
+            {visibleCount < filteredProperties.length && (() => {
+              const next = filteredProperties.slice(visibleCount, visibleCount + 4);
+              const remaining = filteredProperties.length - visibleCount;
+              const pic = (p: Property) => (p.images || []).find((x) => x && !x.includes('images.unsplash.com')) || p.images?.[0] || '';
+              const more = () => {
+                logEvent('more_units', { value: visibleCount });
+                setVisibleCount((prev) => prev + PAGE);
+              };
+              return (
+                <div className="pt-2 pb-6">
+                  <button
+                    onClick={more}
+                    className="group w-full max-w-2xl mx-auto block text-right rounded-3xl overflow-hidden bg-[#141414] text-white shadow-[0_14px_40px_rgba(20,20,20,0.25)] active:scale-[0.99] transition cursor-pointer"
+                  >
+                    <div className="grid grid-cols-4 gap-0.5 h-24 sm:h-28">
+                      {next.map((p) => (
+                        <div key={p.id} className="relative overflow-hidden bg-[#2a2a2a]">
+                          {pic(p) && <img src={pic(p)} alt="" loading="lazy" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition duration-500" />}
+                          <span className="absolute bottom-1 right-1 text-[10px] font-bold bg-black/60 rounded-md px-1.5 py-0.5">{p.neighborhood}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="px-5 py-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-lg sm:text-xl font-extrabold">
+                          فيه <span className="text-[#D9B864]">{remaining.toLocaleString('en-US')}</span> شقة كمان
+                        </p>
+                        <p className="text-xs text-white/60">دوس وشوف اللي بعدهم — كل الأحياء والأسعار</p>
+                      </div>
+                      <span className="shrink-0 px-5 py-3 rounded-2xl bg-[#D9B864] text-[#141414] font-extrabold text-sm flex items-center gap-1.5 animate-pulse group-hover:animate-none">
+                        شوف كمان <ChevronDown size={16} />
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         )}
         </>)}

@@ -23,6 +23,7 @@ export type EventType =
   | 'viewing_request'      // طلب معاينة
   | 'valuation_request'    // طلب تقييم
   | 'owner_submission'     // مالك عرض شقته
+  | 'more_units'           // ضغط «شوف شقق كمان» في الصفحة الرئيسية
   // العرض المخصوص
   | 'offer_sent' | 'offer_opened' | 'offer_unit_view' | 'offer_whatsapp'
   // رحلة الليد
