@@ -464,46 +464,25 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
             </div>
           )}
 
-          {/* Notes & Activity Log */}
-          <div className="space-y-2.5">
-            <h3 className="font-bold text-xs sm:text-sm text-[#141414] flex items-center gap-1.5">
-              <FileText size={15} className="text-[#6B665C]" />
-              <span>سجل الملاحظات والمكالمات ({lead.notes?.length || 0})</span>
-            </h3>
-
-            {/* Add note form */}
-            <form onSubmit={handleAddNote} className="flex gap-2">
-              <input
-                type="text"
-                value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
-                placeholder="أضف ملخص المكالمة أو ملاحظات العميل الحالية..."
-                className="flex-1 px-4 py-2.5 bg-white border border-[#ECE8DF] rounded-xl text-xs text-[#141414] placeholder-[#8C877D] focus:outline-none focus:border-[#A07A26]"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2.5 bg-[#141414] hover:bg-black text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-2xs shrink-0 cursor-pointer"
-              >
-                <Plus size={14} />
-                <span>إضافة</span>
-              </button>
-            </form>
-
-            {/* Notes List */}
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-0.5">
-              {(!lead.notes || lead.notes.length === 0) ? (
-                <p className="text-xs text-[#6B665C] text-center py-3 bg-white border border-[#ECE8DF] rounded-xl">
-                  لا توجد ملاحظات مسجلة بعد لهذا العميل
-                </p>
-              ) : (
-                lead.notes.map((n, i) => (
-                  <div key={i} className="p-3 bg-white border border-[#ECE8DF] rounded-xl text-xs text-[#4A463F] text-right leading-relaxed shadow-2xs">
-                    {n}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          {/* «سجل الملاحظات» اتشال: كان مكان تاني بيتكتب فيه من غير أكشن ولا ميعاد،
+              وكل نقل مرحلة كان بيتكتب فيه مرتين. اللي بيتسجّل دلوقتي في «رحلة العميل» بس.
+              الملاحظات القديمة (قبل رحلة العميل) لسه موجودة للقراية بس. */}
+          {(() => {
+            const old = (lead.notes || []).filter((n) => !/تم نقل المرحلة إلى/.test(n));
+            if (!old.length) return null;
+            return (
+              <details className="rounded-2xl border border-[#E7DFCF] bg-white">
+                <summary className="px-4 py-3 text-xs font-bold text-[#6F695D] cursor-pointer select-none">
+                  ملاحظات قديمة قبل «رحلة العميل» ({old.length}) — للقراية بس
+                </summary>
+                <div className="px-3 pb-3 space-y-1.5 max-h-48 overflow-y-auto">
+                  {old.map((n, i) => (
+                    <p key={i} className="p-2.5 bg-[#F5F0E6] rounded-xl text-xs text-[#4A463F] leading-relaxed">{n}</p>
+                  ))}
+                </div>
+              </details>
+            );
+          })()}
 
         </div>
 

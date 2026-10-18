@@ -1495,7 +1495,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 </>)}
                     {/* آخر ملاحظة + الأزرار */}
                     <p className={`text-[13px] leading-relaxed line-clamp-2 ${compactView ? 'hidden sm:block' : ''}`} style={{ color: c.soft }}>
-                      <strong style={{ color: c.fg }}>آخر ملاحظة: </strong>{lead.followUpNote || lead.notes?.[0] || 'مفيش ملاحظات لسه'}
+                      <strong style={{ color: c.fg }}>آخر ملاحظة: </strong>{lead.followUpNote || (lead.activity || []).find((a) => (a.comment || '').trim())?.comment || 'مفيش ملاحظات لسه'}
                     </p>
 
                     <div className="flex flex-wrap items-center gap-1.5">
