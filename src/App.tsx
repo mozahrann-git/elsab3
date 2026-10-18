@@ -10,7 +10,9 @@ import { CoordinatorPanel } from './components/portal/CoordinatorPanel';
 import { CompanyOwnerPanel } from './components/portal/CompanyOwnerPanel';
 import { MarketingPanel } from './components/portal/MarketingPanel';
 import { FieldFeedbackPage } from './components/portal/FieldFeedbackPage';
-import { SalesFeedbackInbox } from './components/portal/SalesFeedbackInbox';
+import { SalesFeedbackInbox, FeedbackNudge } from './components/portal/SalesFeedbackInbox';
+/* تنبيه المتابعات المنبثق — واقف مؤقتاً بطلب الإدارة، الفيدباك بس اللي بيطلع */
+const FOLLOWUP_POPUP_ON = false;
 import { OfferPublicPage } from './components/sales/OfferPublicPage';
 import { getTrackedLink, logLinkHit } from './services/salesToolsService';
 import { getStaffAccess, StaffAccess } from './services/firebaseService';
@@ -2822,7 +2824,12 @@ export default function App() {
 
       {/* 13. Sales Follow-Ups & Notifications Modal */}
       {/* تنبيه المتابعة المنبثق — بيظهر لوحده أول ما الميعاد يعدّي */}
-      {staffAccess && (staffAccess.role === 'sales' || staffAccess.role === 'admin') && (
+      {/* مؤقتاً: التنبيه المنبثق للفيدباك بس — تنبيه المتابعات واقف لحد ما نرجّعه
+          (FOLLOWUP_POPUP_ON = true يرجّعه زي ما كان) */}
+      {staffAccess && staffAccess.role === 'sales' && (
+        <FeedbackNudge agentId={activeSalesId} onOpen={() => setActivePortal('sales_feedback')} />
+      )}
+      {FOLLOWUP_POPUP_ON && staffAccess && (staffAccess.role === 'sales' || staffAccess.role === 'admin') && (
         <FollowUpPopup
           leads={crmLeads}
           currentAgentId={currentAgent?.id}
