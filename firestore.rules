@@ -304,6 +304,10 @@ service cloud.firestore {
         || (isStaff() && onlyKeys(['status', 'attempts', 'lastAt', 'lastDay', 'lastBy', 'lastNote', 'leadId']));
     }
     /* عدّاد يوم كل سيلز. الإجازة الإدارة بس اللي تحطها */
+    /* دفتر الإدارة: ملاحظات ومهام وفرص — للأدمن بس */
+    match /owner_notes/{id} {
+      allow read, write: if isAdmin();
+    }
     /* «إنت موجود؟»: السيلز بيسجّل رده على نفسه بس */
     match /presence_checks/{id} {
       allow read: if isStaff() || isBoss();

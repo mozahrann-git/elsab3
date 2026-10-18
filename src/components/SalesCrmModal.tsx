@@ -44,6 +44,8 @@ import { saveDraft, loadDraft, clearDraft } from '../utils/uiSession';
 import { LionLogo } from './LionLogo';
 import { UnitPreview } from './crm/UnitPreview';
 import { PresencePrompt } from './sales/PresencePrompt';
+import { Notebook } from './crm/Notebook';
+import { OwnerNote, subscribeNotes, isDue } from '../services/notebook';
 import { OWNER_DESK, planOwnerDesk } from '../services/ownerDesk';
 import { subscribeTrips, subscribeFieldFeedback, FieldTrip, FieldFeedback } from '../services/portalService';
 import { saveSalesAgentToDb } from '../services/firebaseService';
@@ -149,7 +151,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 }) => {
   // Navigation Tabs matching sidebar items (Properties tab removed)
   /* السيلز بيفتح على «يومي» — مهامه قدامه أول حاجة. الإدارة على المسار. */
-  const [activeTab, setActiveTab] = useState<'daily' | 'pipeline' | 'followups' | 'matching' | 'content' | 'leaderboard'>(isAdmin ? 'pipeline' : 'daily');
+  const [activeTab, setActiveTab] = useState<'daily' | 'pipeline' | 'followups' | 'matching' | 'content' | 'leaderboard' | 'notebook'>(isAdmin ? 'pipeline' : 'daily');
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeMobileStageFilter, setActiveMobileStageFilter] = useState<string>('all');
@@ -472,6 +474,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
      فعميل اتعمل عليه ٥ أكشن كان بيتحسب ١ */
   const todayDone = useMemo(() => actionsOn(scopedLeads, cairoDay()).length, [scopedLeads]);
   const [actionsLogOpen, setActionsLogOpen] = useState(false);
+  /* دفتري: اللي جه ميعاده بيظهر فوق لحد ما يتقفل */
+  const [myNotes, setMyNotes] = useState<OwnerNote[]>([]);
+  useEffect(() => (isAdmin ? subscribeNotes(setMyNotes) : undefined), [isAdmin]);
+  const [noteTick, setNoteTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setNoteTick((x) => x + 1), 60000); return () => clearInterval(t); }, []);
+  const dueNotes = useMemo(() => myNotes.filter((n) => isDue(n)), [myNotes, noteTick]);
   /* ملف «محمد زهران»: نسخة من كل عميل عاين وفيدباكه اتأكد — بتتعمل
      أوتوماتيك لما الإدارة تفتح الـCRM، والعميل الأصلي بيفضل مع السيلز */
   const [deskTrips, setDeskTrips] = useState<FieldTrip[]>([]);
@@ -753,6 +761,18 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
             </button>
 
+            {isAdmin && (
+              <button
+                onClick={() => { setActiveTab('notebook'); setIsMobileMenuOpen(false); }}
+                className={`w-full p-2.5 rounded-xl text-right flex items-center justify-between text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'notebook' ? 'bg-[#A07A26] text-white shadow-xs' : 'text-stone-300 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5"><span>📝</span><span>دفتري</span></div>
+                {dueNotes.length > 0 && <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px]">{dueNotes.length}</span>}
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setActiveTab('content');
@@ -910,7 +930,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             { id: 'followups', label: 'المتابعات' },
             { id: 'matching', label: 'المطابقة الذكية' },
             { id: 'content', label: 'المحتوى والإعلانات' },
-            { id: 'leaderboard', label: 'المتصدرين' }
+            { id: 'leaderboard', label: 'المتصدرين' },
+            ...(isAdmin ? [{ id: 'notebook', label: '📝 دفتري' }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -922,6 +943,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               }`}
             >
               {tab.label}
+              {tab.id === 'notebook' && dueNotes.length > 0 && (
+                <span className="mr-1.5 px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px]">{dueNotes.length}</span>
+              )}
               {tab.id === 'followups' && pendingFollowUpsCount > 0 && (
                 <span className="mr-1.5 px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px]">
                   {pendingFollowUpsCount}
@@ -1924,6 +1948,23 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 onGo={(t) => setActiveTab(t)}
               />
             )}
+          </div>
+        )}
+
+        {isAdmin && dueNotes.length > 0 && activeTab !== 'notebook' && (
+          <button onClick={() => setActiveTab('notebook')} className="mx-4 sm:mx-5 mt-3 w-[calc(100%-2rem)] sm:w-[calc(100%-2.5rem)] text-right bg-[#FBEDEA] border border-[#E9B8AE] rounded-2xl px-4 py-3 flex items-center justify-between gap-2">
+            <span className="text-sm font-bold text-[#9A2E1F]">⏰ {dueNotes.length === 1 ? `فكّرتني: ${dueNotes[0].name || dueNotes[0].text.slice(0, 40)}` : `${dueNotes.length} حاجات في دفترك جه ميعادها`}</span>
+            <span className="text-xs font-bold text-[#9A2E1F] shrink-0">افتح ←</span>
+          </button>
+        )}
+
+        {activeTab === 'notebook' && isAdmin && (
+          <div className="p-4 sm:p-5">
+            <Notebook
+              byName={actorName}
+              onAddLead={onAddLead}
+              onOpenLead={(id) => { const l = leads.find((x) => x.id === id); if (l) setSelectedLeadForDetails(l); }}
+            />
           </div>
         )}
 
