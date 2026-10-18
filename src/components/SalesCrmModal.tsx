@@ -480,8 +480,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       deskDone.current.add('agent');
       saveSalesAgentToDb(OWNER_DESK).catch((e) => console.warn('[OwnerDesk] agent', e));
     }
-    if (!leads.length || !deskFbs.length) return;
-    const plan = planOwnerDesk(leads, deskFbs, deskTrips);
+    if (!leads.length) return;
+    const plan = planOwnerDesk(leads, deskFbs, deskTrips, Date.now(), viewingRequests || []);
     plan.create.forEach((l) => {
       const k = `${l.id}:${((l as any).ownerFbIds || []).join(',')}`;
       if (deskDone.current.has(k)) return;
@@ -494,7 +494,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       deskDone.current.add(k);
       onUpdateLead(l);
     });
-  }, [isAdmin, leads, deskFbs, deskTrips, agents]);
+  }, [isAdmin, leads, deskFbs, deskTrips, agents, viewingRequests]);
   /* متابعات الفريق: مقفولة، ولما تتفتح السيلز مرتّبين بالأنشط */
   const [teamOpen, setTeamOpen] = useState(false);
   const rankedAgents = useMemo(() => {
