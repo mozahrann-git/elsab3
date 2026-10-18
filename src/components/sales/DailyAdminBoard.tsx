@@ -158,7 +158,15 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
                   <td className="px-3 py-3"><Cell done={p.calls.done} target={T.calls} sub={`رد ${p.calls.answered} · مهتم ${p.calls.interested}`} /></td>
                   <td className="px-3 py-3"><Cell done={p.requests.done} target={T.requests} sub={`مهم ${p.requests.important} · محيّر ${p.requests.undecided}`} /></td>
                   <td className="px-3 py-3"><Cell done={p.ads.done} target={T.ads} sub={`ريسيل ${p.ads.resale} · إنشاء ${p.ads.offplan}${p.ads.pending ? ` · مستني ${p.ads.pending}` : ''}`} /></td>
-                  <td className="px-3 py-3"><Cell done={p.followUps.done} target={p.followUps.done + p.followUps.left} sub={p.followUps.left ? `فاضل ${p.followUps.left}` : ''} /></td>
+                  <td className="px-3 py-3">
+                    {/* مفيش «هدف» للمتابعات — ده عدد العملاء اللي اتعمل عليهم أكشن، واللي ميعادهم جه ولسه */}
+                    {p.followUps.done || p.followUps.left ? (
+                      <div className="min-w-[88px] space-y-0.5 whitespace-nowrap">
+                        <p className="font-mono text-xs font-black">{n(p.followUps.done)} <span className="font-sans font-bold text-[10px] text-[#6B665C]">عميل اتابعهم</span></p>
+                        {p.followUps.left > 0 && <p className="text-[10px] font-bold text-[#C2412D]">فاضل {n(p.followUps.left)} ميعادهم جه</p>}
+                      </div>
+                    ) : <span className="text-[#8C877D]">—</span>}
+                  </td>
                   <td className="px-3 py-3"><Cell done={p.viewingsWeek} target={T.viewingsWeek} /></td>
                   <td className="px-3 py-3"><Cell done={p.videosWeek} target={T.videosWeek} /></td>
                   <td className="px-3 py-3">

@@ -474,11 +474,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   useEffect(() => (isAdmin ? subscribeFieldFeedback(setDeskFbs) : undefined), [isAdmin]);
   const deskDone = useRef(new Set<string>());
   useEffect(() => {
-    if (!isAdmin || !leads.length || !deskFbs.length) return;
+    if (!isAdmin || !agents.length) return;
+    /* الملف نفسه بيتعمل على طول — حتى لو مفيش فيدباك متأكد لسه */
     if (!agents.some((a) => a.id === OWNER_DESK.id) && !deskDone.current.has('agent')) {
       deskDone.current.add('agent');
       saveSalesAgentToDb(OWNER_DESK).catch((e) => console.warn('[OwnerDesk] agent', e));
     }
+    if (!leads.length || !deskFbs.length) return;
     const plan = planOwnerDesk(leads, deskFbs, deskTrips);
     plan.create.forEach((l) => {
       const k = `${l.id}:${((l as any).ownerFbIds || []).join(',')}`;
@@ -968,6 +970,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     <span className="font-medium text-[#8C877D]"> · {viewAgentId !== 'all' ? `بتشوف ${agents.find((a) => a.id === viewAgentId)?.name || ''}` : 'كل الفريق'}</span>
                   </span>
                   <span className="flex items-center gap-2">
+                    {isAdmin && viewAgentId !== OWNER_DESK.id && (
+                      <span
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); setViewAgentId(OWNER_DESK.id); setTeamOpen(false); }}
+                        className="px-2.5 py-1 rounded-lg bg-[#A07A26] text-white text-[11px] font-bold whitespace-nowrap"
+                      >
+                        📁 ملفي
+                      </span>
+                    )}
                     {viewAgentId !== 'all' && (
                       <span
                         role="button"
