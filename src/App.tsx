@@ -2678,6 +2678,7 @@ export default function App() {
         agents={isAdminLoggedIn ? salesAgents : teamAgents}
         leads={isAdminLoggedIn ? crmLeads : teamLeads}
         ownerDesk={isAdminLoggedIn}
+        logoUrl={customLogoUrl}
         syncError={leadsSyncError}
         isAdmin={isAdminLoggedIn || staffAccess?.role === 'company_owner'}
         canEdit={isAdminLoggedIn || isSalesLoggedIn}

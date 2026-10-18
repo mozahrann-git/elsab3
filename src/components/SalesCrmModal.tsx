@@ -44,6 +44,7 @@ import { saveDraft, loadDraft, clearDraft } from '../utils/uiSession';
 import { LionLogo } from './LionLogo';
 import { UnitPreview } from './crm/UnitPreview';
 import { PresencePrompt } from './sales/PresencePrompt';
+import { crmTheme as T, stageTone } from '../theme/crmTheme';
 import { Notebook } from './crm/Notebook';
 import { OwnerNote, subscribeNotes, isDue } from '../services/notebook';
 import { OWNER_DESK, planOwnerDesk } from '../services/ownerDesk';
@@ -77,6 +78,8 @@ import ClientRequestsPanel, { RequestForm } from './sales/ClientRequestsPanel';
 import { paymentOf, PAY_LABEL } from '../services/clientRequests';
 
 interface SalesCrmModalProps {
+  /** لوجو الشركة — بيظهر علامة مائية ورا الشغل */
+  logoUrl?: string;
   /** الأدمن نفسه: ملفه الخاص ودفتره (الأونر مالوش دعوة بيهم) */
   ownerDesk?: boolean;
   isOpen: boolean;
@@ -128,6 +131,7 @@ export const CRM_PIPELINE_STAGES: {
 ];
 
 export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
+  logoUrl,
   ownerDesk = false,
   isOpen,
   onClose,
@@ -554,6 +558,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   if (!isOpen) return null;
 
   // Quick Move Status Handler
+  const [undoMove, setUndoMove] = useState<{ prev: Lead; text: string } | null>(null);
+  const undoTimer = useRef<any>(null);
   const handleMoveStatus = (lead: Lead, newStatus: LeadStatus, comment = '', next: WhenValue | null = null) => {
     const timestamp = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) + ' - ' + new Date().toLocaleDateString('ar-EG');
     const stageLabel = CRM_PIPELINE_STAGES.find((s) => s.id === newStatus)?.label || newStatus;
@@ -571,6 +577,11 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       followUpStatus: newStatus === 'closed' || newStatus === 'lost' ? 'completed' : 'pending',
     };
     setMoveTarget(null); setMoveComment(''); setMoveNext(null);
+
+    /* «تراجع» بدل «متأكد؟» — النقل بيحصل على طول، وتحت شريط صغير يرجّعه */
+    clearTimeout(undoTimer.current);
+    setUndoMove({ prev: lead, text: `${lead.name.split(' ').slice(0, 2).join(' ')} ← ${stageLabel}` });
+    undoTimer.current = setTimeout(() => setUndoMove(null), 7000);
 
     onUpdateLead(updatedLead);
     setLeadToChangeStatus(null);
@@ -629,7 +640,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-[#F6F4EF] flex flex-col lg:flex-row font-ibm overflow-hidden" 
+      className="fixed inset-0 z-50 bg-[#F5F0E6] flex flex-col lg:flex-row font-ibm overflow-hidden" 
       dir="rtl"
     >
       {/* 1. SIDEBAR (Desktop: Fixed Left Sidebar, Mobile: Top Collapsible Menu) */}
@@ -843,7 +854,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       </aside>
 
       {/* 2. MAIN CRM WORKSPACE */}
-      <main className="flex-1 flex flex-col h-full overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4">
+      <main className="isolate flex-1 flex flex-col h-full overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4">
+        {/* لوجو الشركة علامة مائية — ثابت ورا الشغل، مش بيتداس عليه */}
+        <div aria-hidden="true" className="pointer-events-none select-none fixed flex items-center justify-center" style={{ zIndex: -1, bottom: '-6vh', left: '-8vw', width: 'min(78vw, 560px)', aspectRatio: '1 / 1', opacity: 0.06, filter: 'invert(1) grayscale(1)', mixBlendMode: 'multiply' }}>
+          {logoUrl
+            ? <img src={logoUrl} alt="" className="w-full h-full object-contain" />
+            : <LionLogo size={520} className="w-full h-full" />}
+        </div>
+
 
         {/* المزامنة واقفة — بيظهر لما تقع بس، مش مؤشر دايم.
             من غيره كل واحد بيفضل على نسخته القديمة ومحدش عارف. */}
@@ -1053,17 +1071,18 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </div>
             )}
 
-            {/* عدّاد النهارده */}
+            {/* عدّاد النهارده — رقم كبير، وتحته كلمة، وشارة صغيرة واحدة */}
             <div className="grid grid-cols-3 gap-2">
-              {([['ريكويست جديد النهارده', todayNewLeads, '#1F4E9C', 'new'], ['أكشن اتسجّل النهارده', todayDone, '#141414', 'actions'], [viewingsLabel, todayViewings, '#1E7A45', 'viewings']] as [string, number, string, 'new' | 'actions' | 'viewings'][]).map(([t, v, c, k]) => (
+              {([['ريكويست جديد النهارده', todayNewLeads, 'new'], ['أكشن اتسجّل النهارده', todayDone, 'actions'], [viewingsLabel, todayViewings, 'viewings']] as [string, number, 'new' | 'actions' | 'viewings'][]).map(([t, v, k]) => (
                 <button
                   key={k}
                   onClick={() => (k === 'actions' ? setActionsLogOpen(true) : setCounterOpen(k))}
-                  className="rounded-2xl bg-white border border-[#E8D3A6] p-3 text-center hover:bg-[#FBF8F1]"
+                  className="text-right rounded-[20px] p-3 flex flex-col gap-1 border transition active:scale-[0.97]"
+                  style={{ background: T.surface, borderColor: T.line, color: T.ink }}
                 >
-                  <p className="text-2xl font-readex font-bold" style={{ color: c }}>{v}</p>
-                  <p className="text-[11px] text-[#6B665C]">{t}</p>
-                  <p className="text-[10px] font-bold text-[#A07A26] mt-0.5">التفاصيل ← دوس</p>
+                  <span className="font-readex font-semibold text-[26px] leading-none">{v}</span>
+                  <span className="text-[11px] leading-snug" style={{ color: T.muted }}>{t}</span>
+                  <span className="self-start mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: k === 'viewings' ? stageTone('visit_done').bg : k === 'new' ? T.accent : T.ink, color: '#fff' }}>التفاصيل</span>
                 </button>
               ))}
             </div>
@@ -1143,230 +1162,165 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             </div>
             )}
 
-            {/* Stage Selector Chips (All 9 Stages with Counters) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar shrink-0">
-              <button
-                onClick={() => setActiveMobileStageFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeMobileStageFilter === 'all'
-                    ? 'bg-[#141414] text-white shadow-2xs'
-                    : 'bg-white border border-[#ECE8DF] text-[#6B665C]'
-                }`}
-              >
-                <span>جميع المراحل</span>
-                <span className="text-[10px] bg-white/20 px-1.5 py-0.2 rounded-full font-mono">
-                  {scopedLeads.length}
-                </span>
-              </button>
-
-              {CRM_PIPELINE_STAGES.map((st) => {
-                const count = stageCounts[st.id] || 0;
-                const isSelected = activeMobileStageFilter === st.id;
+            {/* المراحل — كل واحدة بنقطة لونها، والمختارة أسود */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar shrink-0 -mx-1 px-1">
+              {([['all', 'الكل', scopedLeads.length, T.accent] as const, ...CRM_PIPELINE_STAGES.map((st) => [st.id, st.label, stageCounts[st.id] || 0, stageTone(st.id).bg] as const)]).map(([id, label, count, dot]) => {
+                const on = activeMobileStageFilter === id;
                 return (
                   <button
-                    key={st.id}
-                    onClick={() => setActiveMobileStageFilter(st.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
-                      isSelected
-                        ? 'bg-[#A07A26] text-white shadow-2xs'
-                        : 'bg-white border border-[#ECE8DF] text-[#6B665C] hover:border-stone-400'
-                    }`}
+                    key={id}
+                    onClick={() => setActiveMobileStageFilter(id as any)}
+                    className="shrink-0 h-10 px-3.5 rounded-[14px] text-[13px] font-semibold flex items-center gap-2 border transition active:scale-[0.97]"
+                    style={on ? { background: T.ink, color: T.ground, borderColor: T.ink } : { background: T.surface, color: T.ink, borderColor: T.line }}
                   >
-                    <span>{st.label}</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                      isSelected ? 'bg-white/25 text-white' : 'bg-[#F6F4EF] text-[#141414]'
-                    }`}>
-                      {count}
-                    </span>
+                    <span className="w-2 h-2 rounded-full" style={{ background: dot, boxShadow: on ? 'none' : `0 0 0 1px ${T.line}` }} />
+                    {label}
+                    <span className="font-readex text-[11px] opacity-70">{count}</span>
                   </button>
                 );
               })}
             </div>
 
-            {/* دليل الألوان — عشان محدش يقعد يخمّن اللون ده معناه إيه */}
-            <div className="flex items-center gap-3 flex-wrap text-[11px] text-[#6B665C] px-1">
+            {/* دليل ألوان التنبيه — اللون معاه كلمة دايماً */}
+            <div className="flex items-center gap-1.5 flex-wrap text-[11px] px-1">
               {([['#C2410C', 'ليد فريش'], ['#4A5568', 'كامبين قديم'], ['#1F5FB0', 'تحديث من سارة']] as const).map(([c, t]) => (
-                <span key={c} className="text-white font-bold px-2.5 py-1 rounded-lg" style={{ background: c }}>
-                  {t}
+                <span key={c} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-semibold" style={{ borderColor: T.line, background: T.surface, color: T.ink }}>
+                  <span className="w-2 h-2 rounded-full" style={{ background: c }} />{t}
                 </span>
               ))}
             </div>
 
-            {/* Kanban Columns Board (Scrollable horizontal board with all 9 stages) */}
+            {/* لوحة المراحل */}
             <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory no-scrollbar flex-1 items-start">
               {CRM_PIPELINE_STAGES
                 .filter((st) => activeMobileStageFilter === 'all' || activeMobileStageFilter === st.id)
                 .map((st) => {
                   const stageLeads = filteredLeads.filter((l) => l.status === st.id);
+                  const sTone = stageTone(st.id);
 
                   return (
-                    <div 
+                    <div
                       key={st.id}
-                      className="bg-[#EFECE5] rounded-3xl p-3.5 flex flex-col gap-3 min-h-[440px] shadow-2xs w-[82vw] sm:w-[310px] shrink-0 snap-center"
+                      className="rounded-[28px] p-2.5 flex flex-col gap-2.5 min-h-[440px] w-[84vw] sm:w-[320px] shrink-0 snap-center border"
+                      style={{ background: 'rgba(255,253,248,.55)', borderColor: T.line }}
                     >
-                      {/* Column Header */}
-                      <div className="flex items-center justify-between px-2 pt-1 pb-0.5 border-b border-[#ECE8DF]/60">
+                      <div className="flex items-center justify-between px-2.5 pt-1.5">
                         <div className="flex items-center gap-2">
-                          <span className={`w-2.5 h-2.5 rounded-full ${st.dotColor}`} />
-                          <h4 className="font-readex font-bold text-xs text-[#141414]">
-                            {st.label}
-                          </h4>
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ background: sTone.bg, boxShadow: `0 0 0 1px ${T.line}` }} />
+                          <h4 className="font-readex font-semibold text-sm" style={{ color: T.ink }}>{st.label}</h4>
                         </div>
-                        <span className="w-6 h-6 rounded-full bg-white text-[#6B665C] text-xs font-bold flex items-center justify-center shadow-2xs font-mono">
+                        <span className="min-w-7 h-7 px-2 rounded-full text-xs font-bold flex items-center justify-center font-readex" style={{ background: T.surface, color: T.muted, border: `1px solid ${T.line}` }}>
                           {stageLeads.length}
                         </span>
                       </div>
 
-                      {/* Cards Container */}
-                      <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[65vh]">
+                      <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[65vh] no-scrollbar">
                         {stageLeads.length === 0 ? (
-                          <div className="py-12 text-center text-xs text-[#8C877D] border border-dashed border-[#ECE8DF] rounded-2xl bg-white/40">
-                            لا يوجد عملاء في هذه المرحلة
+                          <div className="py-12 text-center text-xs rounded-[22px] border border-dashed" style={{ color: T.muted, borderColor: T.line }}>
+                            مفيش عملاء في المرحلة دي
                           </div>
                         ) : (
-                          stageLeads.map((lead, idx) => {
+                          stageLeads.map((lead) => {
                           const tone = toneStyle(lead);
+                          /* لون الكارت = المرحلة. التنبيهات (فريش / كامبين / تحديث سارة) بتغطّي عليه
+                             لأنها حاجة لازم تتشاف — ومعاها كلمتها دايماً */
+                          const c = tone.tone !== 'none'
+                            ? { bg: tone.hex, fg: '#FFFFFF', soft: 'rgba(255,255,255,.8)', line: 'rgba(255,255,255,.25)', chip: 'rgba(255,255,255,.18)', dark: true }
+                            : sTone;
+                          const b = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || st.defaultBadge);
+                          const late = b.tone === 'late';
+                          const circle = 'w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95';
                           return (
-                            <div 
+                            <div
                               key={lead.id}
-                              className={`rounded-2xl p-3.5 shadow-2xs space-y-2.5 transition-all group ${tone.card}`}
+                              className="rounded-[22px] p-3.5 flex flex-col gap-2 transition"
+                              style={{ background: c.bg, color: c.fg, boxShadow: '0 1px 0 rgba(0,0,0,.04), 0 12px 26px -16px rgba(0,0,0,.45)' }}
                             >
-                              {/* اللون معاه كلام دايماً — اللي مش بيفرّق الألوان يفهم برضه */}
-                              {tone.tone !== 'none' && (
-                                <div className="flex items-center justify-between gap-2 flex-wrap">
-                                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${tone.chip}`}>
-                                    {tone.label}
+                              {/* الميعاد + تنبيه الكارت */}
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="inline-flex items-center gap-1.5 h-[26px] px-2.5 rounded-full text-[11.5px] font-bold"
+                                  style={late
+                                    ? (c.dark ? { background: '#FFFFFF', color: T.late } : { background: T.late, color: '#FFFFFF' })
+                                    : { background: c.chip, color: c.fg }}>
+                                  <Clock size={12} />
+                                  {b.text || st.defaultBadge}
+                                </span>
+                                {tone.tone !== 'none' ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: c.chip }}>{tone.label}</span>
+                                    {tone.tone === 'viewing_update' && (
+                                      <button onClick={() => onUpdateLead(markViewingSeen(lead))} className="text-[10px] font-extrabold bg-white text-[#1F5FB0] px-2 py-0.5 rounded-full cursor-pointer">شفته</button>
+                                    )}
                                   </span>
-                                  {tone.tone === 'viewing_update' && (
-                                    <button
-                                      onClick={() => onUpdateLead(markViewingSeen(lead))}
-                                      className="text-[10px] font-extrabold bg-white text-[#1F5FB0] px-2 py-0.5 rounded-full cursor-pointer"
-                                    >
-                                      شفته
-                                    </button>
-                                  )}
-                                  {tone.tone === 'old_campaign' && lead.campaignName && (
-                                    <span className="text-[10px] text-white/80 font-bold truncate">{lead.campaignName}</span>
-                                  )}
-
-                                </div>
+                                ) : (
+                                  <span className="text-[11px] font-semibold" style={{ color: c.soft }}>{st.label}</span>
+                                )}
+                              </div>
+                              {tone.tone === 'old_campaign' && lead.campaignName && (
+                                <span className="text-[10px] font-bold truncate" style={{ color: c.soft }}>{lead.campaignName}</span>
                               )}
                               {tone.tone === 'viewing_update' && (
-                                <p className="text-[11px] font-bold text-white leading-relaxed">
-                                  {viewingUpdateText(lead)}
-                                </p>
+                                <p className="text-[11.5px] font-bold leading-relaxed">{viewingUpdateText(lead)}</p>
                               )}
-                              {/* Top row: Client Name & Follow-up urgency badge */}
-                              <div className="flex items-center justify-between">
-                                {/* الأولوية من الميعاد نفسه — مش من رقم قديم متخزّن */}
-                                {(() => {
-                                  const b = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || st.defaultBadge);
-                                  if (b.tone === 'late') {
-                                    return (
-                                      <span className={`font-extrabold text-[11px] px-2 py-0.5 rounded-lg ${
-                                        tone.solid ? 'bg-white text-[#9E2A1B]' : 'bg-[#9E2A1B] text-white'
-                                      }`}>{b.text}</span>
-                                    );
-                                  }
-                                  const color = tone.solid
-                                    ? (b.tone === 'soon' ? 'text-white' : 'text-white/85')
-                                    : (b.tone === 'soon' ? 'text-[#C2410C]' : b.tone === 'today' ? 'text-[#A07A26]' : 'text-[#6B665C]');
-                                  return <span className={`font-bold text-xs ${color}`}>{b.text}</span>;
-                                })()}
-                                
-                                <h5 
-                                  onClick={() => setSelectedLeadForDetails(lead)}
-                                  className={`font-readex font-bold text-xs truncate max-w-[130px] cursor-pointer ${tone.solid ? 'text-white' : 'text-[#141414] hover:text-[#A07A26]'}`}
-                                >
-                                  {lead.name}
-                                </h5>
+
+                              {/* الاسم والطلب */}
+                              <button onClick={() => setSelectedLeadForDetails(lead)} className="text-right flex flex-col gap-0.5 cursor-pointer">
+                                <span className="font-readex font-semibold text-[17px] leading-snug truncate">{lead.name}</span>
+                                <span className="text-[12.5px] truncate" style={{ color: c.soft }}>
+                                  {lead.preferredBedrooms ? `${lead.preferredBedrooms} غرف · ` : ''}
+                                  {lead.preferredNeighborhood || 'الهضبة الوسطى'}
+                                </span>
+                              </button>
+
+                              {/* الكود والميزانية */}
+                              <div className="flex items-center justify-between pt-2 text-xs border-t" style={{ borderColor: c.line }}>
+                                <span className="font-mono" style={{ color: c.soft }}>{lead.interestedPropertyCode ? `#${lead.interestedPropertyCode}` : '—'}</span>
+                                <span className="font-readex font-semibold text-[13px]">{lead.budgetMax ? `${(lead.budgetMax / 1000000).toFixed(1)}M` : '—'}</span>
                               </div>
 
-                              {/* Details text */}
-                              <p 
-                                onClick={() => setSelectedLeadForDetails(lead)}
-                                className={`text-xs truncate cursor-pointer ${tone.inkSoft}`}
-                              >
-                                {lead.preferredBedrooms ? `${lead.preferredBedrooms} غرف · ` : ''}
-                                {lead.preferredNeighborhood || 'الهضبة الوسطى'}
-                              </p>
-
-                              {/* Property Code & Budget */}
-                              <div className={`flex items-center justify-between pt-1 border-t text-xs ${tone.divider}`}>
-                                <span className={`font-mono text-xs ${tone.solid ? 'text-white/75' : 'text-[#8C877D]'}`}>
-                                  {lead.interestedPropertyCode ? `#${lead.interestedPropertyCode}` : '—'}
-                                </span>
-                                <span className={`font-bold text-xs ${tone.ink}`}>
-                                  {lead.budgetMax ? `${(lead.budgetMax / 1000000).toFixed(1)}M` : '—'}
-                                </span>
-                              </div>
-
-                              {/* Field Viewing Report Badge (From Broker via Sarah Hanafy) */}
+                              {/* كومنت المعاينة */}
                               {lead.fieldViewingComment && (
-                                <div className="p-2.5 bg-amber-50 border border-amber-200/80 rounded-xl space-y-1">
-                                  <div className="flex items-center justify-between font-bold text-amber-950 text-[11px]">
-                                    <span className="flex items-center gap-1">
-                                      <Eye size={12} className="text-amber-700 shrink-0" />
-                                      <span>كومنت المعاينة ({lead.fieldViewingBrokerName || 'البروكر'}):</span>
-                                    </span>
+                                <div className="rounded-2xl p-2.5 space-y-1" style={{ background: c.chip }}>
+                                  <div className="flex items-center justify-between font-bold text-[11px]">
+                                    <span className="flex items-center gap-1"><Eye size={12} />كومنت المعاينة ({lead.fieldViewingBrokerName || 'البروكر'})</span>
                                     {lead.fieldViewingOutcome && (
-                                      <span className="px-1.5 py-0.5 bg-amber-200 text-amber-950 rounded font-black text-[9px]">
+                                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-white text-[#17150F]">
                                         {lead.fieldViewingOutcome === 'interested' ? 'مهتم' : lead.fieldViewingOutcome === 'made_offer' ? 'قدّم عرض' : lead.fieldViewingOutcome === 'not_suitable' ? 'غير مناسبة' : lead.fieldViewingOutcome}
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-stone-900 line-clamp-2 text-[11px] font-semibold leading-relaxed">
-                                    « {lead.fieldViewingComment} »
-                                  </p>
-                                  <div className="text-[10px] text-stone-500 flex items-center justify-between pt-0.5">
+                                  <p className="line-clamp-2 text-[11.5px] font-semibold leading-relaxed">« {lead.fieldViewingComment} »</p>
+                                  <div className="text-[10px] flex items-center justify-between" style={{ color: c.soft }}>
                                     <span>تنسيق: {lead.coordinatorName || 'سارة حنفي'}</span>
                                     {lead.fieldViewingRecordedAt && <span className="font-mono text-[9px]">{lead.fieldViewingRecordedAt}</span>}
                                   </div>
                                 </div>
                               )}
 
-                              {/* السيلز المسؤول */}
-                              <div className="flex items-center justify-between gap-2 pt-1 text-[10px]">
-                                <span className="px-2 py-0.5 rounded-lg bg-[#F6F4EF] text-[#6B665C] font-bold truncate max-w-[60%]">
-                                  {lead.assignedAgentName || 'غير مسند'}
+                              {/* السيلز + الأزرار */}
+                              <div className="flex items-center justify-between gap-2 pt-1">
+                                <span className="flex items-center gap-1.5 min-w-0 text-[11.5px] font-semibold">
+                                  <span className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ background: c.dark ? 'rgba(255,255,255,.2)' : T.ink, color: c.dark ? '#fff' : T.ground }}>
+                                    {(lead.assignedAgentName || '؟').trim().charAt(0)}
+                                  </span>
+                                  <span className="truncate">{lead.assignedAgentName || 'غير مسند'}</span>
                                 </span>
-                                {isAdmin && canEdit && (
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); adminDeleteLead(lead); }}
-                                    className="px-2 py-0.5 rounded-lg text-[#C2412D] bg-[#FBEDEA] border border-[#E9B8AE] font-bold">حذف</button>
-                                )}
+                                <span className="flex items-center gap-1 shrink-0">
+                                  <a href={generateWhatsAppLink(lead.phone, undefined, undefined, `مرحباً أستاذ ${lead.name}، بخصوص طلبك العقاري في الهضبة الوسطى`)} target="_blank" rel="noreferrer"
+                                    className={circle} style={{ background: c.chip }} aria-label="واتساب" title="واتساب"><MessageCircle size={15} /></a>
+                                  <a href={generateCallLink(lead.phone)} className={circle} style={{ background: c.chip }} aria-label="اتصال" title="اتصال"><Phone size={15} /></a>
+                                  <button type="button" onClick={() => setLeadToChangeStatus(lead)}
+                                    className="h-9 px-3 rounded-full flex items-center gap-1 text-[11.5px] font-bold transition active:scale-95 cursor-pointer"
+                                    style={c.dark ? { background: '#FFFFFF', color: c.bg } : { background: T.ink, color: T.ground }}
+                                    title="نقل المرحلة">
+                                    <ArrowLeftRight size={12} />نقل
+                                  </button>
+                                </span>
                               </div>
-
-                              {/* Bottom Action Bar: Quick Status Move & Communication */}
-                              <div className="pt-2 border-t border-[#ECE8DF] flex items-center justify-between gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setLeadToChangeStatus(lead)}
-                                  className="px-2.5 py-1 bg-[#F6F4EF] hover:bg-[#FAF4E5] text-[#A07A26] border border-[#E9DFCA] rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                                  title="نقل مرحلة العميل (سريع)"
-                                >
-                                  <ArrowLeftRight size={12} />
-                                  <span>نقل المرحلة</span>
-                                </button>
-
-                                <div className="flex items-center gap-1">
-                                  <a
-                                    href={generateWhatsAppLink(lead.phone, undefined, undefined, `مرحباً أستاذ ${lead.name}، بخصوص طلبك العقاري في الهضبة الوسطى`)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
-                                    title="مراسلة واتساب"
-                                  >
-                                    <MessageCircle size={14} />
-                                  </a>
-                                  <a
-                                    href={generateCallLink(lead.phone)}
-                                    className="p-1.5 bg-[#F6F4EF] text-[#141414] hover:bg-[#ECE8DF] rounded-lg transition-colors cursor-pointer"
-                                    title="اتصال هاتفياً"
-                                  >
-                                    <Phone size={14} />
-                                  </a>
-                                </div>
-                              </div>
+                              {isAdmin && canEdit && (
+                                <button type="button" onClick={(e) => { e.stopPropagation(); adminDeleteLead(lead); }}
+                                  className="self-start text-[10.5px] font-bold underline underline-offset-2 opacity-80 cursor-pointer" style={{ color: c.dark ? '#FFFFFF' : T.late }}>حذف العميل</button>
+                              )}
                             </div>
                           );
                           })
@@ -1376,6 +1330,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   );
                 })}
             </div>
+
+            {/* «تراجع» بعد نقل المرحلة */}
+            {undoMove && (
+              <div role="status" className="fixed z-[95] bottom-5 left-1/2 -translate-x-1/2 w-[min(360px,calc(100vw-24px))] flex items-center justify-between gap-2 rounded-[18px] p-2 ps-4 text-[13px] shadow-[0_14px_34px_rgba(0,0,0,.28)] animate-[fadeUp_.3s_ease]"
+                style={{ background: T.ink, color: T.ground }}>
+                <span className="flex items-center gap-2 min-w-0"><CheckCircle2 size={16} style={{ color: T.accent }} className="shrink-0" /><span className="truncate">{undoMove.text}</span></span>
+                <button onClick={() => { clearTimeout(undoTimer.current); onUpdateLead(undoMove.prev); setUndoMove(null); }}
+                  className="h-9 px-3.5 rounded-xl font-bold text-[13px] shrink-0 cursor-pointer" style={{ background: T.accent, color: T.accentInk }}>تراجع</button>
+              </div>
+            )}
 
           </div>
         )}
