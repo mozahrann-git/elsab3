@@ -781,7 +781,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           </div>
 
           {/* Sidebar Nav Links */}
-          <nav className={`p-3 space-y-1.5 ${isMobileMenuOpen ? 'block' : 'hidden lg:block'}`}>
+          <nav className="p-3 space-y-1.5 hidden lg:block">
             <button
               onClick={() => {
                 setActiveTab('daily');
@@ -907,7 +907,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         </div>
 
         {/* Sidebar Footer Buttons */}
-        <div className={`p-4 border-t border-white/10 space-y-2 ${isMobileMenuOpen ? 'block' : 'hidden lg:block'}`}>
+        <div className="p-4 border-t border-white/10 space-y-2 hidden lg:block">
           {/* لينكاتي — على الموبايل في القائمة (على الكمبيوتر في الشريط فوق) */}
           <div className="lg:hidden flex justify-center">
             <OwnerLinkCard
@@ -941,6 +941,68 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           </button>
         </div>
       </aside>
+
+      {/* القائمة على الموبايل: شيت ناعم من تحت بدل ما الشاشة تتزق لتحت */}
+      <div className={`lg:hidden fixed inset-0 z-[65] transition-colors duration-300 ${isMobileMenuOpen ? 'bg-black/45 pointer-events-auto' : 'bg-black/0 pointer-events-none'}`}
+        onClick={() => setIsMobileMenuOpen(false)} aria-hidden={!isMobileMenuOpen}>
+        <div onClick={(e) => e.stopPropagation()} dir="rtl"
+          className={`absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-[32px] bg-[#F5F0E6] text-[#17150F] shadow-2xl transition-transform duration-300 ease-out ${isMobileMenuOpen ? 'translate-y-0' : 'translate-y-full'}`}
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
+          <div className="pt-2.5 flex justify-center"><span className="w-10 h-1.5 rounded-full bg-[#D8D0BF]" /></div>
+          <div className="px-5 pt-3 pb-4 flex items-center gap-3">
+            <span className="w-11 h-11 rounded-2xl bg-[#17150F] text-[#E9C46A] flex items-center justify-center font-readex font-bold">
+              {isAdmin ? 'إد' : (currentSalesAgent?.name?.charAt(0) || 'م')}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-readex font-semibold text-[17px] truncate">{isAdmin ? 'الإدارة' : (currentSalesAgent?.name || 'مستشار المبيعات')}</p>
+              <p className="text-[12px] text-[#6F695D] truncate">{(isAdmin || isLead) ? (viewAgentId === 'all' ? 'بتشوف الفريق كله' : `بتشوف ${agents.find((a) => a.id === viewAgentId)?.name || ''}`) : 'غرفة العمليات'}</p>
+            </div>
+            <button onClick={() => setIsMobileMenuOpen(false)} aria-label="اقفل القائمة" className="w-10 h-10 rounded-full bg-white border border-[#E7DFCF] flex items-center justify-center"><X size={16} /></button>
+          </div>
+
+          <div className="px-4 grid grid-cols-2 gap-2">
+            {([
+              ['daily', isAdmin ? 'مهام الفريق' : 'مهامي النهارده', <CheckCircle2 key="i" size={19} />, 0],
+              ['pipeline', 'مسار العملاء', <Layers key="i" size={19} />, scopedLeads.length],
+              ['followups', 'المتابعات', <Calendar key="i" size={19} />, pendingFollowUpsCount],
+              ['matching', 'المطابقة', <Target key="i" size={19} />, 0],
+              ['content', 'المحتوى والإعلانات', <Target key="i" size={19} />, 0],
+              ['leaderboard', 'المتصدرين', <Crown key="i" size={19} />, 0],
+              ...(ownerDesk ? [['notebook', 'دفتري', <span key="i" className="text-[17px] leading-none">📝</span>, dueNotes.length]] : []),
+            ] as [string, string, React.ReactNode, number][]).map(([id, label, icon, n]) => {
+              const on = activeTab === id;
+              const alert = n > 0 && (id === 'followups' || id === 'notebook');
+              return (
+                <button key={id} onClick={() => { setActiveTab(id as CrmTab); setIsMobileMenuOpen(false); }}
+                  className={`relative h-[76px] rounded-[20px] p-3 flex flex-col justify-between text-right transition active:scale-[.97] ${on ? 'bg-[#17150F] text-[#F5F0E6]' : 'bg-[#FFFDF8] border border-[#E7DFCF]'}`}>
+                  <span className={on ? 'text-[#E9C46A]' : 'text-[#8E6C1F]'}>{icon}</span>
+                  <span className="text-[13px] font-bold leading-tight">{label}</span>
+                  {n > 0 && (
+                    <span className={`absolute top-2.5 left-2.5 min-w-6 h-6 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${alert ? 'bg-[#D3262B] text-white' : on ? 'bg-white/15 text-white' : 'bg-[#F1EADC] text-[#6F695D]'}`}>{n}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="px-4 mt-4 space-y-2">
+            <div className="flex items-center justify-between gap-2 rounded-[20px] bg-[#FFFDF8] border border-[#E7DFCF] px-4 py-2.5">
+              <span className="text-[13px] font-bold">لينكات الإحالة بتاعتك</span>
+              <OwnerLinkCard
+                byCode={currentSalesAgent?.id || (isAdmin ? 'admin' : undefined)}
+                byName={currentSalesAgent?.name || (isAdmin ? 'الإدارة' : undefined)}
+              />
+            </div>
+            {isAdmin && onAddLeadsBulk && (
+              <button onClick={() => { setIsCampaignOpen(true); setIsMobileMenuOpen(false); }}
+                className="w-full h-12 rounded-[16px] bg-[#17150F] text-[#F5F0E6] text-[13.5px] font-bold flex items-center justify-center gap-2">
+                <Flame size={16} className="text-[#FF7A1A]" />وزّع ليدات كامبين
+              </button>
+            )}
+            <button onClick={onClose} className="w-full h-12 rounded-[16px] text-[13px] font-bold text-[#6F695D]">← العودة لمعرض الشقق</button>
+          </div>
+        </div>
+      </div>
 
       {/* 2. MAIN CRM WORKSPACE */}
       <main className="isolate flex-1 flex flex-col h-full overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4">

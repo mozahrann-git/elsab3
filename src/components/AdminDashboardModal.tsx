@@ -1128,24 +1128,23 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         {/* ================================================================ */}
         {/* DESKTOP & TABLET SIDEBAR (Hidden on mobile)                       */}
         {/* ================================================================ */}
-        {mobileNavOpen && <button aria-label="إغلاق القائمة" className="md:hidden fixed inset-0 z-30 bg-black/50" onClick={() => setMobileNavOpen(false)} />}
-        <aside onClick={() => setMobileNavOpen(false)} className={`${mobileNavOpen ? 'fixed inset-y-0 right-0 z-40 flex w-72 shadow-2xl' : 'hidden'} md:relative md:flex md:w-64 lg:w-72 flex-col justify-between bg-white border-l border-[#ECE8DF] shrink-0 h-full shadow-sm`}>
+        <button aria-label="إغلاق القائمة" tabIndex={mobileNavOpen ? 0 : -1} onClick={() => setMobileNavOpen(false)}
+          className={`md:hidden fixed inset-0 z-30 transition-colors duration-300 ${mobileNavOpen ? 'bg-black/45' : 'bg-black/0 pointer-events-none'}`} />
+        {/* القائمة: سودا زي غرفة العمليات، وعلى الموبايل بتنزلق من اليمين بنعومة */}
+        <aside onClick={() => setMobileNavOpen(false)} className={`fixed inset-y-0 right-0 z-40 w-[84vw] max-w-[320px] transition-transform duration-300 ease-out ${mobileNavOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full'} md:translate-x-0 md:relative md:w-64 lg:w-72 md:shadow-none flex flex-col justify-between bg-[#17150F] text-white shrink-0 h-full`}>
           {/* Top Brand Info */}
-          <div className="p-5 border-b border-[#ECE8DF]/80">
+          <div className="p-5 border-b border-white/10">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 bg-[#141414] text-white rounded-2xl flex items-center justify-center shrink-0 shadow-sm">
+              <div className="w-11 h-11 bg-white/10 text-white rounded-2xl flex items-center justify-center shrink-0">
                 <ShieldCheck size={22} className="text-[#D9B864]" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-black font-readex text-[#141414] truncate">
-                    لوحة الإدارة المستقلة
+                  <h2 className="text-[16px] font-semibold font-readex text-white truncate">
+                    لوحة الإدارة
                   </h2>
-                  <span className="px-2 py-0.5 bg-[#FAF4E5] text-[#A07A26] border border-[#E9DFCA] text-[10px] font-bold rounded-lg shrink-0">
-                    Pro OS
-                  </span>
                 </div>
-                <p className="text-[11px] text-[#6B665C] truncate mt-0.5">
+                <p className="text-[11.5px] text-[#D9B864] truncate mt-0.5">
                   التحكم المركزي في المعرض والنظام
                 </p>
               </div>
@@ -1154,24 +1153,24 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
           {/* Sidebar Nav Items */}
           <div className="flex-1 overflow-y-auto p-3.5 space-y-1.5 no-scrollbar">
-            <div className="px-3 py-1.5 text-[10px] font-bold text-[#A07A26] tracking-wider">
+            <div className="px-3 py-1.5 text-[11px] font-bold text-[#C9A24A] tracking-wide">
               إدارة المعرض والوحدات
             </div>
 
             <button
               onClick={() => setActiveTab('manage')}
-              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+              className={`w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer ${
                 activeTab === 'manage'
-                  ? 'bg-[#141414] text-white shadow-sm'
-                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+                  ? 'bg-[#F5F0E6] text-[#17150F]'
+                  : 'text-[#CFCBC2] hover:bg-white/[.07] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Building size={16} className={activeTab === 'manage' ? 'text-[#D9B864]' : 'text-stone-400'} />
+                <Building size={16} className={activeTab === 'manage' ? 'text-[#8E6C1F]' : 'text-[#8A8478]'} />
                 <span>إدارة الشقق</span>
               </div>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
-                activeTab === 'manage' ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600'
+                activeTab === 'manage' ? 'bg-[#17150F]/10 text-[#17150F]' : 'bg-white/10 text-[#CFCBC2]'
               }`}>
                 {properties.length}
               </span>
@@ -1182,14 +1181,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 if (activeTab !== 'add') resetForm();
                 setActiveTab('add');
               }}
-              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+              className={`w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer ${
                 activeTab === 'add'
-                  ? 'bg-[#A07A26] text-white shadow-sm'
-                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+                  ? 'bg-[#A9842F] text-white'
+                  : 'text-[#CFCBC2] hover:bg-white/[.07] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <PlusCircle size={16} className={activeTab === 'add' ? 'text-white' : 'text-[#A07A26]'} />
+                <PlusCircle size={16} className={activeTab === 'add' ? 'text-white' : 'text-[#D9B864]'} />
                 <span>{editingPropertyId ? 'تعديل الشقة الحالية' : 'إضافة شقة جديدة'}</span>
               </div>
               {editingPropertyId && (
@@ -1204,57 +1203,57 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             {!propertiesOnly && (<>
             <button
               onClick={() => setActiveTab('projects')}
-              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+              className={`w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer ${
                 activeTab === 'projects'
-                  ? 'bg-[#141414] text-white shadow-sm'
-                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+                  ? 'bg-[#F5F0E6] text-[#17150F]'
+                  : 'text-[#CFCBC2] hover:bg-white/[.07] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Building size={16} className={activeTab === 'projects' ? 'text-[#D9B864]' : 'text-stone-400'} />
+                <Building size={16} className={activeTab === 'projects' ? 'text-[#8E6C1F]' : 'text-[#8A8478]'} />
                 <span>تحت الإنشاء</span>
               </div>
             </button>
 
             <button
               onClick={() => setActiveTab('submissions')}
-              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+              className={`w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer ${
                 activeTab === 'submissions'
-                  ? 'bg-[#141414] text-white shadow-sm'
-                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+                  ? 'bg-[#F5F0E6] text-[#17150F]'
+                  : 'text-[#CFCBC2] hover:bg-white/[.07] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Layers size={16} className={activeTab === 'submissions' ? 'text-[#D9B864]' : 'text-stone-400'} />
+                <Layers size={16} className={activeTab === 'submissions' ? 'text-[#8E6C1F]' : 'text-[#8A8478]'} />
                 <span>عروض الملاك</span>
               </div>
               {pendingSubmissions.length > 0 ? (
-                <span className="px-2 py-0.5 text-[10px] rounded-full font-mono font-bold bg-[#FAF4E5] text-[#A07A26] border border-[#E9DFCA] animate-pulse">
+                <span className="px-2 py-0.5 text-[11px] rounded-full font-bold bg-[#D3262B] text-white">
                   {pendingSubmissions.length} جديد
                 </span>
               ) : (
-                <span className="text-[10px] font-mono text-stone-400">{ownerSubmissions.length}</span>
+                <span className="text-[11px] font-mono text-[#8A8478]">{ownerSubmissions.length}</span>
               )}
             </button>
 
-            <div className="pt-3 px-3 py-1.5 text-[10px] font-bold text-[#A07A26] tracking-wider">
+            <div className="pt-3 px-3 py-1.5 text-[11px] font-bold text-[#C9A24A] tracking-wide">
               الفريق والأسعار والتحليلات
             </div>
 
             <button
               onClick={() => setActiveTab('sales_team')}
-              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+              className={`w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer ${
                 activeTab === 'sales_team'
-                  ? 'bg-[#141414] text-white shadow-sm'
-                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+                  ? 'bg-[#F5F0E6] text-[#17150F]'
+                  : 'text-[#CFCBC2] hover:bg-white/[.07] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Users size={16} className={activeTab === 'sales_team' ? 'text-[#D9B864]' : 'text-stone-400'} />
+                <Users size={16} className={activeTab === 'sales_team' ? 'text-[#8E6C1F]' : 'text-[#8A8478]'} />
                 <span>فريق المبيعات</span>
               </div>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
-                activeTab === 'sales_team' ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600'
+                activeTab === 'sales_team' ? 'bg-[#17150F]/10 text-[#17150F]' : 'bg-white/10 text-[#CFCBC2]'
               }`}>
                 {salesAgentsList.length}
               </span>
@@ -1262,18 +1261,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             <button
               onClick={() => setActiveTab('brokers')}
-              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+              className={`w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer ${
                 activeTab === 'brokers'
-                  ? 'bg-[#141414] text-white shadow-sm'
-                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+                  ? 'bg-[#F5F0E6] text-[#17150F]'
+                  : 'text-[#CFCBC2] hover:bg-white/[.07] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Briefcase size={16} className={activeTab === 'brokers' ? 'text-[#D9B864]' : 'text-stone-400'} />
+                <Briefcase size={16} className={activeTab === 'brokers' ? 'text-[#8E6C1F]' : 'text-[#8A8478]'} />
                 <span>إدارة ومراقبة البروكرز</span>
               </div>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
-                activeTab === 'brokers' ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600'
+                activeTab === 'brokers' ? 'bg-[#17150F]/10 text-[#17150F]' : 'bg-white/10 text-[#CFCBC2]'
               }`}>
                 {brokerAccounts.length}
               </span>
@@ -1282,13 +1281,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             {onOpenBrokerPortal && (
               <button
                 onClick={onOpenBrokerPortal}
-                className="w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer text-emerald-900 bg-emerald-50/90 hover:bg-emerald-100 border border-emerald-200/80 shadow-2xs"
+                className="w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer text-[#CFCBC2] hover:bg-white/[.07] hover:text-white"
               >
                 <div className="flex items-center gap-2.5">
-                  <Users size={16} className="text-emerald-700" />
+                  <Users size={16} className="text-[#7ED3A0]" />
                   <span>بوابة البروكر والمعاينات</span>
                 </div>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-200/80 text-emerald-900 font-bold">
+                <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-[#7ED3A0]/15 text-[#7ED3A0] font-bold">
                   بوابة الشركاء
                 </span>
               </button>
@@ -1296,18 +1295,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             <button
               onClick={() => setActiveTab('market_pricing')}
-              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+              className={`w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer ${
                 activeTab === 'market_pricing'
-                  ? 'bg-[#141414] text-white shadow-sm'
-                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+                  ? 'bg-[#F5F0E6] text-[#17150F]'
+                  : 'text-[#CFCBC2] hover:bg-white/[.07] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Compass size={16} className={activeTab === 'market_pricing' ? 'text-[#D9B864]' : 'text-stone-400'} />
+                <Compass size={16} className={activeTab === 'market_pricing' ? 'text-[#8E6C1F]' : 'text-[#8A8478]'} />
                 <span>خريطة الأسعار والصفقات</span>
               </div>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
-                activeTab === 'market_pricing' ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600'
+                activeTab === 'market_pricing' ? 'bg-[#17150F]/10 text-[#17150F]' : 'bg-white/10 text-[#CFCBC2]'
               }`}>
                 {closedDealsList.length}
               </span>
@@ -1315,32 +1314,32 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             <button
               onClick={() => setActiveTab('analytics')}
-              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+              className={`w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer ${
                 activeTab === 'analytics'
-                  ? 'bg-[#141414] text-white shadow-sm'
-                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+                  ? 'bg-[#F5F0E6] text-[#17150F]'
+                  : 'text-[#CFCBC2] hover:bg-white/[.07] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <BarChart3 size={16} className={activeTab === 'analytics' ? 'text-[#D9B864]' : 'text-stone-400'} />
+                <BarChart3 size={16} className={activeTab === 'analytics' ? 'text-[#8E6C1F]' : 'text-[#8A8478]'} />
                 <span>التحليلات والمؤشرات</span>
               </div>
             </button>
 
-            <div className="pt-3 px-3 py-1.5 text-[10px] font-bold text-[#A07A26] tracking-wider">
+            <div className="pt-3 px-3 py-1.5 text-[11px] font-bold text-[#C9A24A] tracking-wide">
               إعدادات المنصة
             </div>
 
             <button
               onClick={() => setActiveTab('settings')}
-              className={`w-full px-3.5 py-2.5 rounded-2xl font-bold flex items-center justify-between text-xs transition-all cursor-pointer ${
+              className={`w-full px-4 h-12 rounded-[14px] font-semibold flex items-center justify-between text-[13.5px] transition-all cursor-pointer ${
                 activeTab === 'settings'
-                  ? 'bg-[#141414] text-white shadow-sm'
-                  : 'text-[#4A463F] hover:bg-[#FAF4E5]/80 hover:text-[#141414]'
+                  ? 'bg-[#F5F0E6] text-[#17150F]'
+                  : 'text-[#CFCBC2] hover:bg-white/[.07] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Lock size={16} className={activeTab === 'settings' ? 'text-[#D9B864]' : 'text-stone-400'} />
+                <Lock size={16} className={activeTab === 'settings' ? 'text-[#8E6C1F]' : 'text-[#8A8478]'} />
                 <span>الإعدادات والشعار</span>
               </div>
             </button>
@@ -1348,10 +1347,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           </div>
 
           {/* Bottom Actions in Sidebar */}
-          <div className="p-3.5 border-t border-[#ECE8DF] space-y-2 bg-[#F6F4EF]/40">
+          <div className="p-3.5 border-t border-white/10 space-y-2">
             <button
               onClick={() => setIsExcelModalOpen(true)}
-              className="w-full py-2.5 px-3 bg-[#FAF4E5] border border-[#E9DFCA] hover:bg-[#F3EAD5] text-[#A07A26] rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+              className="w-full h-12 px-3 bg-[#F5F0E6] text-[#17150F] rounded-[14px] text-[13px] font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <FileSpreadsheet size={15} />
               <span>استيراد وتصدير إكسيل</span>
@@ -1360,14 +1359,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={onLogout}
-                className="flex-1 py-2 bg-white border border-[#ECE8DF] hover:bg-stone-100 text-[#141414] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                className="flex-1 h-11 bg-white/10 hover:bg-white/15 text-white rounded-[14px] text-[13px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
                 <LogOut size={13} />
                 <span>تسجيل خروج</span>
               </button>
               <button
                 onClick={onClose}
-                className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                className="px-4 h-11 bg-white/5 hover:bg-white/10 text-[#CFCBC2] rounded-[14px] text-[13px] font-bold transition-all cursor-pointer"
                 title="الرجوع للمعرض"
               >
                 الموقع
