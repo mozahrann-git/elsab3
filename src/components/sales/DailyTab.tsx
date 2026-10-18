@@ -39,23 +39,35 @@ export const Bar: React.FC<{ done: number; target: number; tone?: 'ok' | 'warn' 
 const TaskCard: React.FC<{
   icon: React.ReactNode; title: string; done: number; target: number; sub?: React.ReactNode;
   action?: string; onAction?: () => void; note?: string; neutral?: boolean;
-}> = ({ icon, title, done, target, sub, action, onAction, note, neutral }) => (
-  <div className="bg-white border border-[#ECE8DF] rounded-2xl p-3.5 space-y-2">
-    <div className="flex items-center justify-between gap-2">
-      <p className="font-bold text-sm text-[#141414] flex items-center gap-1.5">{icon}{title}</p>
-      <p className="font-mono font-black text-sm">
-        <span className={done >= target ? 'text-[#1E7A45]' : 'text-[#141414]'}>{n(done)}</span>
-        {!neutral && <span className="text-[#8C877D]"> / {n(target)}</span>}
+}> = ({ icon, title, done, target, sub, action, onAction, note, neutral }) => {
+  /* المهمة اللي خلصت بتقلب أخضر غامق — تعرف اللي فاضل من غير ما تقرا */
+  const full = !neutral && target > 0 && done >= target;
+  const pct = target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0;
+  return (
+    <div className="rounded-[22px] p-3.5 flex flex-col gap-2 border min-w-0"
+      style={full ? { background: '#22483A', color: '#fff', borderColor: '#22483A' } : { background: '#FFFDF8', color: '#17150F', borderColor: '#E7DFCF' }}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-[14px] flex items-center gap-1.5 min-w-0">{icon}<span className="truncate">{title}</span></p>
+        {full && <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/15">✓ خلصت</span>}
+      </div>
+      <p className="font-readex leading-none">
+        <span className="text-[30px] font-semibold">{n(done)}</span>
+        {!neutral && <span className="text-[15px] font-medium" style={{ opacity: 0.6 }}> / {n(target)}</span>}
       </p>
+      {!neutral && (
+        <div className="h-2 rounded-full overflow-hidden" style={{ background: full ? 'rgba(255,255,255,.2)' : '#EFE7D6' }} role="img" aria-label={`${pct}٪`}>
+          <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(pct, done ? 4 : 0)}%`, background: full ? '#fff' : pct >= 50 ? '#A9842F' : '#D3262B' }} />
+        </div>
+      )}
+      {sub && <div className="text-[12px] font-semibold leading-relaxed" style={{ opacity: full ? 0.85 : 1, color: full ? '#fff' : '#6F695D' }}>{sub}</div>}
+      {note && <p className="text-[12px] font-bold rounded-xl px-3 py-1.5" style={full ? { background: 'rgba(255,255,255,.12)' } : { background: '#F8F0DD', color: '#7A5C14' }}>{note}</p>}
+      {action && onAction && (
+        <button onClick={onAction} className="mt-auto h-11 rounded-[14px] text-[12.5px] font-bold leading-tight px-2"
+          style={full ? { background: '#fff', color: '#22483A' } : { background: '#17150F', color: '#F5F0E6' }}>{action}</button>
+      )}
     </div>
-    {!neutral && <Bar done={done} target={target} />}
-    {sub && <div className="text-[11px] text-[#6B665C] font-bold leading-relaxed">{sub}</div>}
-    {note && <p className="text-[11px] font-bold text-[#A07A26] bg-[#FBF1E4] rounded-lg px-2 py-1">{note}</p>}
-    {action && onAction && (
-      <button onClick={onAction} className="w-full py-2 rounded-xl bg-[#141414] text-white text-xs font-bold">{action}</button>
-    )}
-  </div>
-);
+  );
+};
 
 interface Props {
   properties: Property[];
@@ -151,7 +163,7 @@ export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, vie
         </p>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
         <TaskCard icon={<PhoneCall size={15} className="text-[#A07A26]" />} title="المكالمات" done={p.calls.done} target={T.calls}
           sub={<>رد {n(p.calls.answered)} · مهتم <b className="text-[#1E7A45]">{n(p.calls.interested)}</b> · مردش {n(p.calls.noAnswer)} · غلط {n(p.calls.wrong)}</>}
           action="ابدأ المكالمات" onAction={() => open('calls')} />

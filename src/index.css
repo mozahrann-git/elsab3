@@ -201,3 +201,13 @@ input[type="range"].range-rtl {
 .crm-late::after { content: ''; position: absolute; inset: -3px; border-radius: inherit; border: 2px solid rgba(211,38,43,.55); animation: crmLate 1.8s ease-out infinite; pointer-events: none; }
 @keyframes crmLate { 0% { opacity: .9; transform: scale(1) } 100% { opacity: 0; transform: scale(1.03) } }
 @media (prefers-reduced-motion: reduce) { .crm-late::after { animation: none; } }
+
+/* لوحة الإدارة: نفس الثيم على ألوان stone/amber اللي مستخدمة فيها */
+.crm-skin .bg-stone-50, .crm-skin .bg-stone-50\/80, .crm-skin .bg-stone-100 { background-color: #F1EADC; }
+.crm-skin .bg-stone-900, .crm-skin .bg-stone-950 { background-color: var(--crm-ink); }
+.crm-skin .text-stone-900, .crm-skin .text-stone-800 { color: var(--crm-ink); }
+.crm-skin .text-stone-500, .crm-skin .text-stone-400 { color: var(--crm-muted); }
+.crm-skin .border-stone-100, .crm-skin .border-stone-200, .crm-skin .border-stone-300 { border-color: var(--crm-line); }
+.crm-skin .bg-amber-50 { background-color: #F8F0DD; }
+.crm-skin .shadow-\[0_2px_12px_rgba\(0\,0\,0\,0\.03\)\], .crm-skin .shadow-sm { box-shadow: 0 1px 0 rgba(0,0,0,.03), 0 10px 26px -18px rgba(23,21,15,.35); }
+.crm-skin .bg-\[\#F6F4EF\].admin-dark, .crm-skin .admin-dark { background-color: var(--crm-ink); }

@@ -1110,12 +1110,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     showToast('تم حذف الحساب بنجاح');
   };
 
+  /* نفس ثيم غرفة العمليات — بيتفعّل على الصفحة وهي مفتوحة عشان النوافذ اللي فوقها تاخده كمان */
+  React.useEffect(() => {
+    if (!isOpen) return;
+    document.body.classList.add('crm-skin');
+    return () => document.body.classList.remove('crm-skin');
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-60 bg-stone-950/80 backdrop-blur-md text-right text-[#141414] flex flex-col h-screen w-screen overflow-hidden font-ibm antialiased" dir="rtl">
       <div 
-        className="relative w-full h-full bg-[#F6F4EF] text-right text-[#141414] flex flex-col md:flex-row overflow-hidden"
+        className="relative w-full h-full bg-[#F5F0E6] text-right text-[#17150F] flex flex-col md:flex-row overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ================================================================ */}
@@ -1375,13 +1382,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
           
           {/* Top Bar for Mobile & Quick Controls */}
-          <header className="px-4 sm:px-6 py-3 bg-white border-b border-[#ECE8DF] flex items-center justify-between shrink-0 shadow-2xs z-10">
+          <header className="admin-dark px-4 sm:px-6 py-3.5 bg-[#17150F] text-[#F5F0E6] flex items-center justify-between gap-2 shrink-0 z-10">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="md:hidden w-9 h-9 bg-[#141414] text-[#D9B864] rounded-xl flex items-center justify-center shrink-0">
+              <div className="hidden sm:flex md:hidden w-10 h-10 bg-white/10 text-[#D9B864] rounded-[13px] items-center justify-center shrink-0">
                 <ShieldCheck size={18} />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xs sm:text-sm md:text-base font-black font-readex text-[#141414] truncate">
+                <h1 className="text-[15px] sm:text-lg font-semibold font-readex text-[#F5F0E6] truncate">
                   {activeTab === 'manage' && 'إدارة الشقق والوحدات'}
                   {activeTab === 'add' && (editingPropertyId ? 'تعديل بيانات الشقة' : 'إضافة شقة جديدة')}
                   {activeTab === 'projects' && 'المشاريع تحت الإنشاء'}
@@ -1391,7 +1398,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   {activeTab === 'analytics' && 'تحليلات الأداء والتفاعل'}
                   {activeTab === 'settings' && 'إعدادات المنصة واللوجو والفوتر'}
                 </h1>
-                <p className="text-[10px] sm:text-xs text-[#6B665C] truncate hidden sm:block">
+                <p className="text-[10px] sm:text-xs text-[#F5F0E6]/60 truncate hidden sm:block">
                   إدارة شاملة لبيانات العقارات · المبيعات · التقارير · التخصيص
                 </p>
               </div>
@@ -1408,43 +1415,43 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
               <button
                 onClick={() => setMobileNavOpen(true)}
-                className="md:hidden px-3 py-1.5 rounded-xl font-bold bg-[#141414] text-white text-xs"
+                className="md:hidden h-10 px-3.5 rounded-[14px] font-bold bg-white/10 text-white text-xs"
                 aria-label="القائمة"
               >
-                ☰ القائمة
+                ☰
               </button>
               <button
                 onClick={() => setIsAccountsOpen(true)}
-                className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 bg-[#FAF4E5] border border-[#E9DFCA] text-[#A07A26] text-xs"
+                className="h-10 px-3.5 rounded-[14px] font-bold flex items-center gap-1.5 bg-[#A9842F] text-white text-xs"
                 title="الإيميلات والباسووردات لكل الفريق والملاك والبروكرز"
               >
                 <span>الحسابات</span>
               </button>
               <button
                 onClick={() => setIsChangePassOpen(true)}
-                className="hidden sm:flex px-3 py-1.5 rounded-xl font-bold items-center gap-1.5 bg-[#F6F4EF] border border-[#ECE8DF] text-[#141414] text-xs"
+                className="hidden sm:flex h-10 px-3.5 rounded-[14px] font-bold items-center gap-1.5 bg-white/10 text-white text-xs"
               >
                 <span>باسووردي</span>
               </button>
               <button
                 onClick={onClose}
-                className="px-3.5 py-1.5 bg-[#141414] hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                title="الرجوع للمعرض العام"
+                className="h-10 px-3.5 bg-white text-[#17150F] rounded-[14px] text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                title="الرجوع للمعرض العام" aria-label="معاينة الموقع"
               >
-                <span>معاينة الموقع</span>
-                <ExternalLink size={13} />
+                <span className="hidden sm:inline">معاينة الموقع</span>
+                <ExternalLink size={14} />
               </button>
             </div>
           </header>
 
           {/* MOBILE TABS SCROLLER (Hidden on Tablet/Desktop) */}
-          <div className="md:hidden bg-white border-b border-[#ECE8DF] px-3 py-2 shrink-0 overflow-x-auto no-scrollbar flex items-center gap-1.5 text-xs">
+          <div className="md:hidden bg-[#F5F0E6] border-b border-[#E7DFCF] px-3 py-2.5 shrink-0 overflow-x-auto no-scrollbar flex items-center gap-1.5 text-[13px]">
             <button
               onClick={() => setActiveTab('manage')}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+              className={`h-10 px-3.5 rounded-[14px] font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer border ${
                 activeTab === 'manage'
-                  ? 'bg-[#141414] text-white'
-                  : 'bg-[#F6F4EF] text-[#6B665C]'
+                  ? 'bg-[#17150F] text-[#F5F0E6] border-[#17150F]'
+                  : 'bg-white text-[#17150F] border-[#E7DFCF]'
               }`}
             >
               <Building size={13} />
@@ -1456,10 +1463,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 if (activeTab !== 'add') resetForm();
                 setActiveTab('add');
               }}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+              className={`h-10 px-3.5 rounded-[14px] font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer border ${
                 activeTab === 'add'
                   ? 'bg-[#A07A26] text-white'
-                  : 'bg-[#F6F4EF] text-[#6B665C]'
+                  : 'bg-white text-[#17150F] border-[#E7DFCF]'
               }`}
             >
               <PlusCircle size={13} />
@@ -1471,10 +1478,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             {!propertiesOnly && (<>
             <button
               onClick={() => setActiveTab('submissions')}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+              className={`h-10 px-3.5 rounded-[14px] font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer border ${
                 activeTab === 'submissions'
-                  ? 'bg-[#141414] text-white'
-                  : 'bg-[#F6F4EF] text-[#6B665C]'
+                  ? 'bg-[#17150F] text-[#F5F0E6] border-[#17150F]'
+                  : 'bg-white text-[#17150F] border-[#E7DFCF]'
               }`}
             >
               <Layers size={13} />
@@ -1488,10 +1495,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             <button
               onClick={() => setActiveTab('sales_team')}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+              className={`h-10 px-3.5 rounded-[14px] font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer border ${
                 activeTab === 'sales_team'
-                  ? 'bg-[#141414] text-white'
-                  : 'bg-[#F6F4EF] text-[#6B665C]'
+                  ? 'bg-[#17150F] text-[#F5F0E6] border-[#17150F]'
+                  : 'bg-white text-[#17150F] border-[#E7DFCF]'
               }`}
             >
               <Users size={13} />
@@ -1500,10 +1507,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             <button
               onClick={() => setActiveTab('market_pricing')}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+              className={`h-10 px-3.5 rounded-[14px] font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer border ${
                 activeTab === 'market_pricing'
-                  ? 'bg-[#141414] text-white'
-                  : 'bg-[#F6F4EF] text-[#6B665C]'
+                  ? 'bg-[#17150F] text-[#F5F0E6] border-[#17150F]'
+                  : 'bg-white text-[#17150F] border-[#E7DFCF]'
               }`}
             >
               <Compass size={13} />
@@ -1512,10 +1519,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             <button
               onClick={() => setActiveTab('analytics')}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+              className={`h-10 px-3.5 rounded-[14px] font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer border ${
                 activeTab === 'analytics'
-                  ? 'bg-[#141414] text-white'
-                  : 'bg-[#F6F4EF] text-[#6B665C]'
+                  ? 'bg-[#17150F] text-[#F5F0E6] border-[#17150F]'
+                  : 'bg-white text-[#17150F] border-[#E7DFCF]'
               }`}
             >
               <BarChart3 size={13} />
@@ -1524,10 +1531,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             <button
               onClick={() => setActiveTab('settings')}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+              className={`h-10 px-3.5 rounded-[14px] font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 cursor-pointer border ${
                 activeTab === 'settings'
-                  ? 'bg-[#141414] text-white'
-                  : 'bg-[#F6F4EF] text-[#6B665C]'
+                  ? 'bg-[#17150F] text-[#F5F0E6] border-[#17150F]'
+                  : 'bg-white text-[#17150F] border-[#E7DFCF]'
               }`}
             >
               <Lock size={13} />
@@ -1550,7 +1557,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           )}
 
         {/* TAB BODY CONTAINER */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 bg-[#F6F4EF]">
+        <div className="relative isolate flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 bg-[#F5F0E6]">
+          {/* اللوجو علامة مائية ورا الشغل */}
+          <div aria-hidden="true" className="pointer-events-none select-none fixed flex items-center justify-center"
+            style={{ zIndex: -1, bottom: '-6vh', left: '-8vw', width: 'min(78vw, 560px)', aspectRatio: '1 / 1', opacity: 0.06, filter: 'invert(1) grayscale(1)', mixBlendMode: 'multiply' }}>
+            <LionLogo size={520} />
+          </div>
 
           {/* ================================================================ */}
           {/* TAB 1: MANAGE PROPERTIES                                         */}
