@@ -1560,7 +1560,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         <div className="relative isolate flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 bg-[#F5F0E6]">
           {/* اللوجو علامة مائية ورا الشغل */}
           <div aria-hidden="true" className="pointer-events-none select-none fixed flex items-center justify-center"
-            style={{ zIndex: -1, bottom: '-6vh', left: '-8vw', width: 'min(78vw, 560px)', aspectRatio: '1 / 1', opacity: 0.06, filter: 'invert(1) grayscale(1)', mixBlendMode: 'multiply' }}>
+            style={{ zIndex: -1, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'min(72vw, 520px)', aspectRatio: '1 / 1', opacity: 0.06, filter: 'invert(1) grayscale(1)', mixBlendMode: 'multiply' }}>
             <LionLogo size={520} />
           </div>
 

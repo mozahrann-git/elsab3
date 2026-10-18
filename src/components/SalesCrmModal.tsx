@@ -875,7 +875,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       {/* 2. MAIN CRM WORKSPACE */}
       <main className="isolate flex-1 flex flex-col h-full overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4">
         {/* لوجو الشركة علامة مائية — ثابت ورا الشغل، مش بيتداس عليه */}
-        <div aria-hidden="true" className="pointer-events-none select-none fixed flex items-center justify-center" style={{ zIndex: -1, bottom: '-6vh', left: '-8vw', width: 'min(78vw, 560px)', aspectRatio: '1 / 1', opacity: 0.06, filter: 'invert(1) grayscale(1)', mixBlendMode: 'multiply' }}>
+        <div aria-hidden="true" className="pointer-events-none select-none fixed flex items-center justify-center" style={{ zIndex: -1, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'min(72vw, 520px)', aspectRatio: '1 / 1', opacity: 0.06, filter: 'invert(1) grayscale(1)', mixBlendMode: 'multiply' }}>
           {logoUrl
             ? <img src={logoUrl} alt="" className="w-full h-full object-contain" />
             : <LionLogo size={520} className="w-full h-full" />}
