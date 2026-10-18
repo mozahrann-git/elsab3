@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarClock, Users, MessageSquareText, FilePen, Home, Plus, Phone, Send, LogOut, FileSpreadsheet, Sun } from 'lucide-react';
 import { Property, OwnerSubmission } from '../../types';
 import { fetchPropertyPrivateOwner, subscribeToViewingRequests, saveAccount, savePropertyPrivateOwner, stripPublicOwnerContact, savePropertyImageHashes } from '../../services/firebaseService';
@@ -16,6 +16,7 @@ import {
 import { subscribeToSalesAgents } from '../../services/firebaseService';
 import { SalesAgent } from '../../types';
 import { brokerEscalation, minsText, MAX_SLOTS } from '../../services/brokerEscalation';
+import { Voice, Stars } from './SalesFeedbackInbox';
 import { PortalShell, Card, Chip, Btn, fmt, since } from './PortalShell';
 import { waLink } from '../../utils/helpers';
 import { MorningRollCall } from './MorningRollCall';
@@ -39,7 +40,7 @@ interface Props {
 }
 
 const wa = (phone: string, text: string) => waLink(phone, text);
-const input = 'w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm';
+const input = 'w-full min-h-12 rounded-[14px] bg-white border border-[#E7DFCF] px-4 py-3 text-sm placeholder:text-[#A8A196]';
 const mapLink = (p: Property) => {
   const loc = (p.location || '').trim();
   if (/^https?:\/\//.test(loc)) return loc;
@@ -72,13 +73,13 @@ export const CoordinatorPanel: React.FC<Props> = ({ name, isAdmin, properties, s
       title={name || 'مسؤولة الملاك'} subtitle={isAdmin ? 'الإدارة · الملاك والمعاينات' : 'مسؤولة الملاك'} logoUrl={logoUrl}
       badge={pendingV + pendingC + pendingS + pendingF ? { text: `${pendingV + pendingC + pendingS + pendingF} محتاجين رد`, tone: 'red' } : undefined}
       tabs={[
-        { key: 'viewings', label: 'المعاينات', icon: <CalendarClock size={18} />, badge: pendingV },
-        { key: 'agents', label: 'المندوبين', icon: <Users size={18} /> },
-        { key: 'rollcall', label: 'نداء الصباح', icon: <Sun size={18} /> },
-        { key: 'feedback', label: 'الفيدباك', icon: <MessageSquareText size={18} />, badge: pendingF },
-        { key: 'changes', label: 'التعديلات', icon: <FilePen size={18} />, badge: pendingC },
-        { key: 'units', label: 'شقق جديدة', icon: <Home size={18} />, badge: pendingS },
-        ...(isAdmin ? [{ key: 'excel', label: 'شيت الملاك', icon: <FileSpreadsheet size={18} /> }] : []),
+        { key: 'viewings', label: 'المعاينات', icon: <CalendarClock size={18} />, badge: pendingV, hint: 'طلب السيلز ← كلّمي المالك أو البروكر ← اتأكدت ← ابعتيها للمندوب' },
+        { key: 'agents', label: 'المندوبين', icon: <Users size={18} />, hint: 'مشوار جديد، الدور على مين، وكل مشوار لحد ما الفيدباك يوصل' },
+        { key: 'rollcall', label: 'نداء الصباح', icon: <Sun size={18} />, hint: 'مين من المندوبين جاهز ينزل النهارده' },
+        { key: 'feedback', label: 'الفيدباك', icon: <MessageSquareText size={18} />, badge: pendingF, hint: 'راجعي رأي العميل بعد المعاينة وابعتيه للسيلز' },
+        { key: 'changes', label: 'التعديلات', icon: <FilePen size={18} />, badge: pendingC, hint: 'طلبات الملاك يغيّروا سعر أو بيانات شقتهم' },
+        { key: 'units', label: 'شقق جديدة', icon: <Home size={18} />, badge: pendingS, hint: 'عروض الملاك اللي مستنية مراجعة قبل ما تتنشر' },
+        ...(isAdmin ? [{ key: 'excel', label: 'شيت الملاك', icon: <FileSpreadsheet size={18} />, hint: 'بيانات الملاك وأرقامهم — للإدارة بس' }] : []),
       ]}
       active={tab} onTab={setTab} onClose={onClose}
       footer={<button onClick={onLogout} className="w-full px-4 py-3 rounded-xl text-sm text-[#F0776A] hover:bg-white/10 text-right flex items-center gap-2"><LogOut size={16} />خروج</button>}
@@ -165,6 +166,9 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openReqs.length, viewings.length]);
   const [busy, setBusy] = useState(false);
+  /* على الموبايل الفورم مقفول لحد ما تحتاجه — الطلبات المستنية هي اللي تبان الأول */
+  const [formOpen, setFormOpen] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
   const p = properties.find((x) => x.code.toUpperCase() === code.trim().toUpperCase());
   const [phones, setPhones] = useState<Record<string, string>>({});
   const phoneOf = async (v: UnitViewing) => {
@@ -198,8 +202,13 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      <Card className="lg:col-span-1 content-start">
-        <p className="font-bold text-lg">معاينة جديدة</p>
+      <div ref={formRef} className="lg:col-span-1 scroll-mt-4">
+      <Card className="content-start">
+        <button type="button" onClick={() => setFormOpen((o) => !o)} className="flex items-center justify-between gap-2 text-right lg:pointer-events-none">
+          <span className="font-readex font-semibold text-[17px] flex items-center gap-2"><span className="lg:hidden w-8 h-8 rounded-xl bg-[#17150F] text-[#F5F0E6] flex items-center justify-center"><Plus size={16} /></span>معاينة جديدة</span>
+          <span className="lg:hidden text-[12px] font-bold text-[#8E6C1F]">{formOpen ? 'اقفل' : 'افتح'}</span>
+        </button>
+        <div className={`${formOpen ? 'flex' : 'hidden lg:flex'} flex-col gap-3`}>
         <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="كود الشقة (مثلاً H1128)" dir="ltr" className={`${input} font-mono`} list="codes" />
         <datalist id="codes">{properties.map((x) => <option key={x.id} value={x.code}>{x.title}</option>)}</datalist>
         {p ? <p className="text-sm text-[#1E7A45]">✓ {p.title}{p.brokerId ? ' · وحدة بروكر' : ''}</p> : code && <p className="text-sm text-[#C2412D]">الكود مش موجود</p>}
@@ -223,19 +232,21 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
             setCode(''); setTime(null); setNote(''); setFromReq(null);
           } finally { setBusy(false); }
         }}>بلّغ {p?.brokerId ? 'البروكر' : 'المالك'}</Btn>
+        </div>
       </Card>
+      </div>
       <div className="lg:col-span-2 grid gap-3 content-start">
         {isAdmin && <BrokerScoreCard viewings={viewings} brokers={brokers} />}
         {openReqs.map((r) => (
           <Card key={r.id} tone="gold">
             <div className="flex flex-wrap justify-between items-center gap-2">
-              <span className="font-bold">{r.propertyCode} · {r.clientPreferredTime || 'من غير ميعاد'}</span>
+              <span className="flex items-center gap-2 font-bold"><span className="font-mono text-[15px] px-2.5 py-0.5 rounded-xl bg-white">{r.propertyCode}</span>{r.clientPreferredTime || 'من غير ميعاد'}</span>
               <Chip tone="gold">طلب من السيلز · {since((r as any).createdAtTimestamp || Date.now())}</Chip>
             </div>
             <p className="text-sm text-[#6B665C]">
               {r.propertyTitle} · السيلز: <b>{r.requestingAgentName || '—'}</b> · المالك: <b>{owners[r.propertyId] || '—'}</b>
             </p>
-            <Btn onClick={() => { setFromReq(r); setCode(r.propertyCode); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>كلّمي المالك وحددي الميعاد</Btn>
+            <Btn onClick={() => { setFromReq(r); setCode(r.propertyCode); setFormOpen(true); setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }}>كلّمي المالك وحددي الميعاد</Btn>
             {/* مؤقتاً لحد ما أرقام الملاك تتسجّل: المعاينة تتحط في مشوار
                 مع المندوب على طول، وسارة بتأكد إنها اتعملت */}
             <div className="grid grid-cols-2 gap-2">
@@ -251,7 +262,7 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
             </div>
           </Card>
         ))}
-        {active.length === 0 && <p className="text-center text-sm text-[#6B665C] py-10">مفيش معاينات مفتوحة</p>}
+        {active.length === 0 && !openReqs.length && <p className="text-center text-sm text-[#6F695D] py-14 rounded-[24px] border border-dashed border-[#D8D0BF]">مفيش معاينات مفتوحة دلوقتي</p>}
         {active.map((v) => {
           const late = v.ownerStatus === 'pending' && Date.now() - v.lastNotifiedAt > 15 * 60000;
           const esc = brokerEscalation(v, Date.now());
@@ -260,7 +271,7 @@ const ViewingsTab: React.FC<{ viewings: UnitViewing[]; properties: Property[]; i
           return (
             <Card key={v.id} tone={v.ownerStatus === 'pending' ? 'alert' : undefined}>
               <div className="flex flex-wrap justify-between gap-2">
-                <span className="font-bold">{v.propertyCode} · {v.scheduledText}</span>
+                <span className="flex items-center gap-2 font-bold"><span className="font-mono text-[15px] px-2.5 py-0.5 rounded-xl bg-[#F1EADC]">{v.propertyCode}</span>{v.scheduledText}</span>
                 {v.ownerStatus === 'pending' ? <Chip tone="red">{v.brokerId ? 'البروكر' : 'المالك'} ما ردّش · {since(v.lastNotifiedAt)}</Chip>
                   : v.ownerStatus === 'confirmed' ? <Chip tone="green">اتأكدت {v.brokerConfirmedTime || ''}</Chip>
                   : v.ownerStatus === 'canceled' ? <Chip tone="grey">اتلغت{v.canceledReason ? ` · ${v.canceledReason}` : ''}</Chip>
@@ -582,27 +593,37 @@ const FeedbackTab: React.FC<{ fbs: FieldFeedback[]; trips: FieldTrip[]; agents: 
 
   return (
     <div className="space-y-6">
-      {groups.map(([title, list]) => (
+      {groups.every(([, l]) => !l.length) && (
+        <p className="text-center text-sm text-[#6F695D] py-14">مفيش فيدباك لسه — أول ما مندوب يبعت رأي عميل هيظهر هنا</p>
+      )}
+      {groups.filter(([, l]) => l.length).map(([title, list], gi) => (
         <div key={title} className="space-y-3">
-          <p className="font-bold">{title} ({list.length})</p>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${gi === 0 && list === groups[0][1] ? 'bg-[#D3262B]' : title.startsWith('اترفض') ? 'bg-[#E9B949]' : title.startsWith('مستني') ? 'bg-[#1F4E9C]' : 'bg-[#22483A]'}`} />
+            <p className="font-readex font-semibold text-[16px]">{title}</p>
+            <span className="h-6 min-w-6 px-2 rounded-full bg-[#17150F] text-[#F5F0E6] text-[11px] font-bold inline-flex items-center justify-center">{list.length}</span>
+          </div>
           {groupFeedback(list, trips).map((g) => (
-            <div key={g.key} className="rounded-2xl border border-[#E8D3A6] bg-[#FBF8F1] p-3 space-y-2">
-              <div className="flex flex-wrap justify-between items-center gap-2">
-                <p className="font-bold">{groupTitle(g)}</p>
-                <span className="text-xs text-[#6B665C]">{[g.phone, g.salesName ? `السيلز ${g.salesName}` : '', g.client ? `المندوب ${g.agentName}` : '', g.client ? g.time : ''].filter(Boolean).join(' · ')}</span>
+            <div key={g.key} className="rounded-[28px] border border-[#E7DFCF] bg-[#FFFDF8] p-3 space-y-3">
+              <div className="flex items-center gap-3 px-1 pt-1">
+                <span className="w-11 h-11 shrink-0 rounded-2xl bg-[#E9B949] text-[#17150F] flex items-center justify-center font-readex font-bold">{(g.client ? groupTitle(g) : '؟').charAt(0)}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-[15.5px] truncate">{groupTitle(g)}</p>
+                  <p className="text-[11.5px] text-[#6F695D] truncate">{[g.phone, g.salesName ? `السيلز ${g.salesName}` : '', g.client ? `المندوب ${g.agentName}` : '', g.client ? g.time : ''].filter(Boolean).join(' · ')}</p>
+                </div>
               </div>
-              <p className="text-[11px] text-[#6B665C]">طلع على: {g.items.map((x) => x.code).join('، ')}</p>
+              <div className="flex flex-wrap gap-1.5 px-1">{g.items.map((x) => <span key={x.id} className="font-mono text-[11.5px] font-bold px-2.5 py-1 rounded-lg bg-[#F1EADC]">{x.code}</span>)}</div>
               <div className="grid gap-3 lg:grid-cols-2">
                 {g.items.map((f) => (
                   <Card key={f.id}>
-                    <div className="flex justify-between"><span className="font-bold">{f.code} · {f.agentName}</span><span className="text-[#D9B864]">{'★'.repeat(f.rating)}</span></div>
+                    <div className="flex justify-between items-center gap-2"><span className="font-bold"><span className="font-mono">{f.code}</span> · {f.agentName}</span><Stars n={f.rating || 0} /></div>
                     <p className={`text-xs font-bold ${f.salesAgentName ? 'text-[#6B665C]' : 'text-[#C2412D]'}`}>
                       {f.salesAgentName ? `السيلز: ${f.salesAgentName}` : 'من غير سيلز — التأكيد مش هيوصل لحد'}
                     </p>
-                    {f.voiceUrl && <audio controls src={f.voiceUrl} className="w-full" />}
+                    {f.voiceUrl && <Voice src={f.voiceUrl} />}
                     {f.stage === 'submitted'
                       ? <textarea rows={3} className={input} value={txt[f.id] ?? f.text} onChange={(e) => setTxt((s) => ({ ...s, [f.id]: e.target.value }))} placeholder="اكتبي الفيدباك من الفويس" />
-                      : <p className="leading-7">"{f.text}"</p>}
+                      : <p className="text-[14.5px] leading-7 bg-[#FBF7EE] rounded-[18px] rounded-tr-md px-4 py-3">{f.text}</p>}
                     {f.stage === 'rejected' && f.rejectReason && <p className="text-xs font-bold text-[#C2412D]">سبب الرفض: {f.rejectReason}</p>}
                     <div className="flex flex-wrap gap-1.5">{(f.positives || []).map((x) => <Chip key={x} tone="green">+ {x}</Chip>)}{(f.negatives || []).map((x) => <Chip key={x} tone="red">− {x}</Chip>)}</div>
                     {f.stage === 'submitted' && (
@@ -615,7 +636,7 @@ const FeedbackTab: React.FC<{ fbs: FieldFeedback[]; trips: FieldTrip[]; agents: 
                       const t = trips.find((x) => x.id === f.tripId);
                       return t?.agentPhone ? (
                         <a href={wa(t.agentPhone, `${f.agentName}، مستنيين رأي العميل في ${f.code} تاني${f.rejectReason ? `: ${f.rejectReason}` : ''}\n${linkFor(f)}`)} target="_blank" rel="noopener noreferrer"
-                          className="text-center py-2 rounded-xl bg-[#1E7A45] text-white text-xs font-bold">فكّري المندوب على واتساب</a>
+                          className="min-h-[48px] flex items-center justify-center rounded-[16px] bg-[#22483A] text-white text-[13.5px] font-bold">فكّري المندوب على واتساب</a>
                       ) : null;
                     })()}
                     {f.stage === 'sara_confirmed' && (
@@ -640,7 +661,7 @@ const FeedbackTab: React.FC<{ fbs: FieldFeedback[]; trips: FieldTrip[]; agents: 
           <div className="grid gap-3 lg:grid-cols-2">
             {published.map((o) => (
               <Card key={o.id}>
-                <div className="flex justify-between"><span className="font-bold">{o.propertyCode} · {o.date}</span><span className="text-[#D9B864]">{'★'.repeat(o.rating || 0)}</span></div>
+                <div className="flex justify-between items-center gap-2"><span className="font-bold"><span className="font-mono">{o.propertyCode}</span> · {o.date}</span><Stars n={o.rating || 0} /></div>
                 <p className="leading-7 text-sm">"{o.summary}"</p>
                 <button disabled={busy === o.id} onClick={async () => {
                   if (!window.confirm(`تشيلي فيدباك ${o.propertyCode} من عند المالك والأونر؟`)) return;
@@ -695,7 +716,7 @@ const UnitsTab: React.FC<{ submissions: OwnerSubmission[]; properties: Property[
             {q ? <Chip tone="green">اتأكد مع المالك · {q.by}{q.accountDelivered ? ' · الحساب اتسلّم' : ''}</Chip> : <Chip tone="red">لسه محتاجة مراجعة جودة</Chip>}
             <div className="grid grid-cols-3 gap-2">
               <Btn onClick={() => setOpen(s)} className="text-xs !px-2">راجع وانشر</Btn>
-              <a href={`tel:${s.phone}`} className="rounded-xl bg-[#F6F4EF] text-sm font-semibold flex items-center justify-center">اتصال</a>
+              <a href={`tel:${s.phone}`} className="min-h-[48px] rounded-[16px] bg-[#F1EADC] text-[13.5px] font-bold flex items-center justify-center">اتصال</a>
               <Btn tone="danger" onClick={() => onReject(s.id)} className="text-xs !px-2">رفض</Btn>
             </div>
           </Card>

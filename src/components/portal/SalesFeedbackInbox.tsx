@@ -14,7 +14,7 @@ const RATE_WORD = ['', 'وحشة', 'مش أوي', 'معقولة', 'عجبته', 
 const isVoiceOnly = (t?: string) => !t || /^\(?\s*فويس\s*\)?$/.test(t.trim());
 const mmss = (s: number) => (isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
 
-const Stars: React.FC<{ n: number }> = ({ n }) => (
+export const Stars: React.FC<{ n: number }> = ({ n }) => (
   <span className="flex items-center gap-1.5">
     <span className="flex" dir="ltr" aria-label={`${n} من 5`}>
       {[1, 2, 3, 4, 5].map((i) => (
@@ -26,7 +26,7 @@ const Stars: React.FC<{ n: number }> = ({ n }) => (
 );
 
 /* مشغّل فويس صغير بدل مشغّل المتصفح التقيل */
-const Voice: React.FC<{ src: string }> = ({ src }) => {
+export const Voice: React.FC<{ src: string }> = ({ src }) => {
   const a = useRef<HTMLAudioElement>(null);
   const [on, setOn] = useState(false);
   const [t, setT] = useState(0);
