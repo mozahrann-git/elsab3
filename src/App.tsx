@@ -721,6 +721,10 @@ export default function App() {
       return null;
     }
   });
+  /* الجهاز بيفتكر آخر سيلز دخل (عشان لو هو نفسه يرجع). بس لو اللي داخل دلوقتي
+     إدارة، الرقم ده قديم ومش بتاعه — من غير كده الإدارة كانت بتشوف «عملائي»
+     بتاعة فرح لأنها آخر حد دخل من الجهاز ده. */
+  const activeSalesId = isAdminLoggedIn ? null : currentSalesAgentId;
 
   /* حسابات السيلز — الكاش المحلي بس عشان الشاشة ما تبقاش فاضية لحظة التحميل.
      مبنرجعش للحسابات التجريبية هنا: لو حد مسحهم، رجوعهم من الكاش
@@ -1189,8 +1193,8 @@ export default function App() {
      تنبيه متابعة لعميل عند سيلز تانية مش شغل الأدمن.
      الأدمن لسه بيشوف الفريق كله — بس لما يدوس "الفريق كله" بإيده. */
   const salesAlertsCount = useMemo(
-    () => alertCount(crmLeads, currentSalesAgentId, false, alertTick),
-    [crmLeads, currentSalesAgentId, alertTick],
+    () => alertCount(crmLeads, activeSalesId, false, alertTick),
+    [crmLeads, activeSalesId, alertTick],
   );
 
   // Current active sales agent session
@@ -1200,9 +1204,9 @@ export default function App() {
      بيفتكروا إنهم هو. ومينفعش نرجّع أول واحد في القايمة كمان — ده كان
      بيخلّي الإدارة تشتغل باسم سيلز من غير ما تعرف. */
   const currentAgent = useMemo(() => {
-    if (!currentSalesAgentId) return undefined;
-    return salesAgents.find(a => a.id === currentSalesAgentId) || undefined;
-  }, [salesAgents, currentSalesAgentId]);
+    if (!activeSalesId) return undefined;
+    return salesAgents.find(a => a.id === activeSalesId) || undefined;
+  }, [salesAgents, activeSalesId]);
 
   const handleSalesLoginSuccess = (agent: SalesAgent) => {
     setIsSalesLoggedIn(true);
@@ -1582,7 +1586,7 @@ export default function App() {
     try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch { /* */ }
     const check = () => {
       // مفيش حد مفتوح بحسابه كسيلز = مفيش متابعات بتخصه = مفيش تنبيه
-      if (!currentSalesAgentId) return;
+      if (!activeSalesId) return;
       const now = Date.now();
       let seen: Record<string, number> = {};
       try { seen = JSON.parse(localStorage.getItem('lion_followup_seen') || '{}'); } catch { /* */ }
@@ -1591,7 +1595,7 @@ export default function App() {
         if (!at || at > now || now - at > 12 * 3600000) return;
         /* التنبيه المنبثق بيروح لصاحب العميل بس — الأدمن كمان.
            قبل كده الأدمن كان بيتنطّ له تنبيه كل عميل في الشركة طول اليوم. */
-        if (l.assignedAgentId !== currentSalesAgentId) return;
+        if (l.assignedAgentId !== activeSalesId) return;
         if (seen[l.id] === at) return;
         seen[l.id] = at;
         const msg = `⏰ ميعاد متابعة ${l.name}: ${l.followUpNote || 'كلّمه دلوقتي'}`;
@@ -1604,7 +1608,7 @@ export default function App() {
     const t = setInterval(check, 30000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [crmLeads, isSalesLoggedIn, isAdminLoggedIn, currentSalesAgentId]);
+  }, [crmLeads, isSalesLoggedIn, isAdminLoggedIn, activeSalesId]);
 ;
 
   /* العدّادات كانت بتزيد في ذاكرة المتصفح بس، يعني بتتصفّر مع كل ريفريش
@@ -2686,7 +2690,7 @@ export default function App() {
         isAdmin={isAdminLoggedIn || staffAccess?.role === 'company_owner'}
         canEdit={isAdminLoggedIn || isSalesLoggedIn}
         onDeleteLead={(id) => setCrmLeads((prev) => prev.filter((l) => l.id !== id))}
-        currentAgentId={currentSalesAgentId || undefined}
+        currentAgentId={activeSalesId || undefined}
         onLogout={handleSalesLogout}
         onUpdateLead={handleUpdateLead}
         onAddLead={handleAddLead}
@@ -2764,7 +2768,7 @@ export default function App() {
         projectFilter={projectFilter}
         setProjectFilter={setProjectFilter}
       />
-      <SalesFeedbackInbox isOpen={activePortal === 'sales_feedback'} onClose={() => setActivePortal(null)} agentId={currentSalesAgentId} isAdmin={isAdminLoggedIn} />
+      <SalesFeedbackInbox isOpen={activePortal === 'sales_feedback'} onClose={() => setActivePortal(null)} agentId={activeSalesId} isAdmin={isAdminLoggedIn} />
       {offerId && <OfferPublicPage offerId={offerId} onClose={() => { setOfferId(null); try { window.history.replaceState({}, '', '/'); } catch { /* */ } }} />}
       {checkInAgentId && (
         <FieldCheckInPage
@@ -2840,7 +2844,7 @@ export default function App() {
         leads={crmLeads}
         agents={salesAgents}
         currentAgent={currentAgent}
-        currentAgentId={currentSalesAgentId}
+        currentAgentId={activeSalesId}
         onUpdateLead={handleUpdateLead}
         canSeeTeam={staffAccess?.role === 'admin' || staffAccess?.role === 'company_owner'}
         onSelectLead={(lead) => {
