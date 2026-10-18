@@ -555,11 +555,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   /* بعد الحفظ رايح فين: مكالمة الاكتشاف ولا المطابقة على طول.
      لازم يفضل فوق الـ return اللي تحت — أي hook تحته بيكسر الصفحة. */
 
+  /* لازم قبل أي return — React بيقع لو عدد الـhooks اتغيّر بين رسمة والتانية */
+  const [undoMove, setUndoMove] = useState<{ prev: Lead; text: string } | null>(null);
+  const undoTimer = useRef<any>(null);
   if (!isOpen) return null;
 
   // Quick Move Status Handler
-  const [undoMove, setUndoMove] = useState<{ prev: Lead; text: string } | null>(null);
-  const undoTimer = useRef<any>(null);
   const handleMoveStatus = (lead: Lead, newStatus: LeadStatus, comment = '', next: WhenValue | null = null) => {
     const timestamp = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) + ' - ' + new Date().toLocaleDateString('ar-EG');
     const stageLabel = CRM_PIPELINE_STAGES.find((s) => s.id === newStatus)?.label || newStatus;
