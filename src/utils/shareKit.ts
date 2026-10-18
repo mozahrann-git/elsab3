@@ -140,12 +140,74 @@ function triggerDownload(href: string, filename: string) {
   a.remove();
 }
 
+/* ---------------- الآيفون: الحفظ في الصور ----------------
+   سفاري على الآيفون أي تنزيل بيروح «الملفات» مش الصور، ومفيش طريقة من موقع
+   تحط فيديو في الصور غير قايمة المشاركة بتاعة الآيفون («حفظ الفيديو»).
+   فعلى الآيفون: بنجيب الملفات، ونفتح قايمة المشاركة بيهم. ولو الآيفون رفض
+   يفتحها لوحده (بياخد وقت في التحميل)، بيظهر زرار «احفظ في الصور» يدوس عليه. */
+export const isIOS = () => {
+  const ua = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && (navigator as any).maxTouchPoints > 1);
+};
+
+const mimeOf = (name: string, fallback: string) => {
+  const e = name.split('.').pop()?.toLowerCase() || '';
+  return e === 'mp4' ? 'video/mp4' : e === 'mov' ? 'video/quicktime' : e === 'webm' ? 'video/webm'
+    : e === 'png' ? 'image/png' : e === 'webp' ? 'image/webp' : e === 'jpg' || e === 'jpeg' ? 'image/jpeg' : fallback;
+};
+
+async function fetchAsFile(url: string, filename: string): Promise<File> {
+  const res = await fetch(downloadUrl(url), { mode: 'cors' });
+  if (!res.ok) throw new Error(String(res.status));
+  const blob = await res.blob();
+  /* النوع من الامتداد الأول — الآيفون مابيعرضش «حفظ الفيديو» لو النوع مش مظبوط */
+  const type = mimeOf(filename, blob.type && blob.type !== 'application/octet-stream' ? blob.type : 'application/octet-stream');
+  return new File([blob], filename, { type });
+}
+
+function askToSave(files: File[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    const wrap = document.createElement('div');
+    wrap.setAttribute('dir', 'rtl');
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;padding:16px;font-family:"IBM Plex Sans Arabic",system-ui,sans-serif';
+    const isVid = files.some((f) => f.type.startsWith('video/'));
+    wrap.innerHTML = `<div style="background:#FFFDF8;border-radius:28px;padding:20px;width:100%;max-width:420px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+      <p style="font-weight:700;font-size:17px;margin:0 0 6px;color:#17150F">${isVid ? 'الفيديو جاهز' : `${files.length > 1 ? `${files.length} صور جاهزين` : 'الصورة جاهزة'}`}</p>
+      <p style="font-size:13px;color:#6F695D;margin:0 0 14px">دوس الزرار، وبعدين اختار «${isVid ? 'حفظ الفيديو' : files.length > 1 ? `حفظ ${files.length} صور` : 'حفظ الصورة'}» عشان ${isVid ? 'يروح' : 'تروح'} الصور</p>
+      <button data-go style="width:100%;height:52px;border:0;border-radius:16px;background:#17150F;color:#F5F0E6;font-weight:700;font-size:15px">احفظ في الصور</button>
+      <button data-no style="width:100%;height:44px;border:0;background:none;color:#6F695D;font-weight:700;font-size:13px;margin-top:6px">إلغاء</button></div>`;
+    const done = (ok: boolean) => { wrap.remove(); resolve(ok); };
+    wrap.querySelector('[data-go]')!.addEventListener('click', async () => {
+      try { await navigator.share({ files } as any); done(true); } catch { done(false); }
+    });
+    wrap.querySelector('[data-no]')!.addEventListener('click', () => done(false));
+    document.body.appendChild(wrap);
+  });
+}
+
+/** الآيفون: يحفظ الملفات في الصور. بترجّع false لو الجهاز مش بيدعم ده (ساعتها تنزيل عادي) */
+async function saveToPhotos(urls: { url: string; name: string }[], onProgress?: (done: number, total: number) => void): Promise<boolean> {
+  if (!isIOS() || !(navigator as any).canShare) return false;
+  const files: File[] = [];
+  for (let i = 0; i < urls.length; i += 1) {
+    files.push(await fetchAsFile(urls[i].url, urls[i].name));
+    onProgress?.(i + 1, urls.length);
+  }
+  if (!files.length || !(navigator as any).canShare({ files })) return false;
+  try { await navigator.share({ files } as any); return true; }
+  catch (e: any) {
+    if (e?.name === 'AbortError') return true;           // هو اللي قفل القايمة
+    return askToSave(files);                              // اللمسة الأولى «خلصت» — نطلب لمسة جديدة
+  }
+}
+
 /**
  * بينزّل ملف واحد.
  * بنجرّب نجيبه كـ blob الأول عشان التنزيل يشتغل على الموبايل،
  * ولو الخادم رفض بنفتح رابط التحميل المباشر.
  */
 export async function downloadFile(url: string, filename: string): Promise<void> {
+  try { if (await saveToPhotos([{ url, name: filename }])) return; } catch { /* نكمّل بالتنزيل العادي */ }
   try {
     const res = await fetch(downloadUrl(url), { mode: 'cors' });
     if (!res.ok) throw new Error(String(res.status));
@@ -165,6 +227,10 @@ export async function downloadAll(
   onProgress?: (done: number, total: number) => void,
 ): Promise<void> {
   const list = urls.filter(Boolean);
+  /* الآيفون: كله مرة واحدة في قايمة المشاركة («حفظ ٨ صور») بدل ٨ تنزيلات في «الملفات» */
+  try {
+    if (await saveToPhotos(list.map((url, i) => ({ url, name: `${base}-${i + 1}.${extOf(url, 'jpg')}` })), onProgress)) return;
+  } catch { /* نكمّل بالتنزيل العادي */ }
   for (let i = 0; i < list.length; i += 1) {
     const url = list[i];
     await downloadFile(url, `${base}-${i + 1}.${extOf(url, 'jpg')}`);
