@@ -12,7 +12,7 @@ import {
 import { ContentSlot, subscribeSlots, weekKey } from '../../services/salesToolsService';
 import { PresenceCheck, subscribePresenceOfDay, summarize } from '../../services/presence';
 import { thumbUrl } from '../../services/mediaStorage';
-import { parseLine } from '../crm/CampaignLeadsModal';
+import { parseLine, phonesInLine } from '../crm/CampaignLeadsModal';
 import { Bar } from './DailyTab';
 
 /*
@@ -327,12 +327,16 @@ const UploadModal: React.FC<{ agents: SalesAgent[]; settings: DailySettings; lea
   const rows = useMemo(() => {
     const out: { phone: string; name?: string }[] = [];
     text.split(/\r?\n/).forEach((line) => {
+      const all = phonesInLine(line);
+      /* سطر فيه رقم واحد: بناخد الاسم كمان. أكتر من رقم: كل رقم لوحده من غير اسم */
+      if (all.length > 1) { all.forEach((phone) => out.push({ phone })); return; }
       const p = parseLine(line);
       if (p) out.push({ phone: p.phone, name: p.name === 'عميل من الكامبين' ? '' : p.name });
+      else if (all.length === 1) out.push({ phone: all[0] });
     });
     return out;
   }, [text]);
-  const bad = useMemo(() => text.split(/\r?\n/).filter((l) => l.trim() && !parseLine(l)).length, [text]);
+  const bad = useMemo(() => text.split(/\r?\n/).filter((l) => l.trim() && !parseLine(l) && !phonesInLine(l).length).length, [text]);
 
   const readSheet = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; e.target.value = '';

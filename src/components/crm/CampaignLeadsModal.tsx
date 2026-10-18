@@ -58,6 +58,23 @@ export function parseLine(line: string): Parsed | null {
   return { name: (name || 'عميل من الكامبين').slice(0, 60), phone };
 }
 
+/** كل أرقام الموبايل اللي في السطر — مش أول واحد بس.
+    parseLine بيلزق الأرقام اللي بينها مسافات (عشان 0100 123 4567)، فلو في سطر
+    رقمين ورا بعض كانوا بيتلزقوا رقم واحد طويل ومايتقريش ولا واحد فيهم. */
+export function phonesInLine(line: string): string[] {
+  const clean = toEnglishDigits(line.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, ''));
+  const out: string[] = [];
+  const re = /(?<!\d)(?:\+?2\s?)?0?1[0125](?:[\s\-.()]?\d){8}(?!\d)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(clean))) {
+    let p = m[0].replace(/\D/g, '');
+    if (p.startsWith('20')) p = p.slice(2);
+    if (!p.startsWith('0')) p = `0${p}`;
+    if (p.length === 11 && !out.includes(p)) out.push(p);
+  }
+  return out;
+}
+
 const normPhone = (p: string) => p.replace(/\D/g, '').slice(-10);
 
 interface Props {
@@ -91,13 +108,18 @@ export const CampaignLeadsModal: React.FC<Props> = ({ isOpen, onClose, agents, e
   const parsed = useMemo(() => {
     const out: Parsed[] = [];
     const seen = new Set<string>();
-    text.split(/\r?\n/).forEach((line) => {
-      const p = parseLine(line);
-      if (!p) return;
+    const add = (p: Parsed) => {
       const k = normPhone(p.phone);
       if (seen.has(k)) return;      // مكرر في نفس اللصقة
       seen.add(k);
       out.push(p);
+    };
+    text.split(/\r?\n/).forEach((line) => {
+      const all = phonesInLine(line);
+      if (all.length > 1) { all.forEach((phone) => add({ name: 'عميل من الكامبين', phone })); return; }
+      const p = parseLine(line);
+      if (p) add(p);
+      else if (all.length === 1) add({ name: 'عميل من الكامبين', phone: all[0] });
     });
     return out;
   }, [text]);
@@ -105,7 +127,7 @@ export const CampaignLeadsModal: React.FC<Props> = ({ isOpen, onClose, agents, e
   const fresh = useMemo(() => parsed.filter((p) => !known.has(normPhone(p.phone))), [parsed, known]);
   const dupes = parsed.length - fresh.length;
   const badLines = useMemo(
-    () => text.split(/\r?\n/).filter((l) => l.trim() && !parseLine(l)).length,
+    () => text.split(/\r?\n/).filter((l) => l.trim() && !parseLine(l) && !phonesInLine(l).length).length,
     [text],
   );
 
