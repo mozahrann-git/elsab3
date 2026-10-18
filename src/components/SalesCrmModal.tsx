@@ -159,7 +159,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 }) => {
   // Navigation Tabs matching sidebar items (Properties tab removed)
   /* السيلز بيفتح على «يومي» — مهامه قدامه أول حاجة. الإدارة على المسار. */
-  const [activeTab, setActiveTab] = useState<'daily' | 'pipeline' | 'followups' | 'matching' | 'content' | 'leaderboard' | 'notebook'>(isAdmin ? 'pipeline' : 'daily');
+  type CrmTab = 'daily' | 'pipeline' | 'followups' | 'matching' | 'content' | 'leaderboard' | 'notebook';
+  /* التاب اللي كنت فيه بيتفتكر — الريفرش بيرجّعك عليه */
+  const [activeTab, setActiveTab] = useState<CrmTab>(() => {
+    try {
+      const t = sessionStorage.getItem('crm_tab') as CrmTab | null;
+      if (t && ['daily', 'pipeline', 'followups', 'matching', 'content', 'leaderboard', 'notebook'].includes(t) && (t !== 'notebook' || ownerDesk)) return t;
+    } catch { /* الوضع الخاص */ }
+    return isAdmin ? 'pipeline' : 'daily';
+  });
+  useEffect(() => { try { sessionStorage.setItem('crm_tab', activeTab); } catch { /* */ } }, [activeTab]);
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   /* الموبايل: البحث أيقونة في الشريط فوق، بتفتح خانة تحته */

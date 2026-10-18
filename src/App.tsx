@@ -1355,15 +1355,18 @@ export default function App() {
 
   /* بنفضل حافظين "إنت كنت فين" عشان لو المتصفح قفل التاب وانت في واتساب،
      ترجع لنفس الشاشة مش للصفحة الرئيسية. */
+  /* الرجوع بيحصل مرة واحدة بس، وبعد ما نعرف الشخص داخل بأنهي صفة.
+     ومن غيره ماينفعش نحفظ: أول ما الصفحة تفتح كل الشاشات مقفولة، فلو حفظنا
+     ساعتها بنمسح «كان فين» قبل ما الدخول يخلص — وده اللي كان بيطلّعك برا مع الريفرش. */
+  const restoredRef = React.useRef(false);
   useEffect(() => {
+    if (!restoredRef.current) return;
     saveUiSession({
       screen: isAdminDashboardOpen ? 'admin' : isCrmOpen ? 'crm' : isSalesNotificationsOpen ? 'sales_notifications' : null,
       portal: activePortal,
     });
   }, [isAdminDashboardOpen, isCrmOpen, isSalesNotificationsOpen, activePortal]);
 
-  /* الرجوع بيحصل مرة واحدة بس، وبعد ما نعرف الشخص داخل بأنهي صفة */
-  const restoredRef = React.useRef(false);
   useEffect(() => {
     if (restoredRef.current) return;
     const signedIn = isAdminLoggedIn || isSalesLoggedIn || Boolean(staffAccess);
