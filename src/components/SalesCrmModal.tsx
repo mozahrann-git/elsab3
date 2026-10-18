@@ -1095,12 +1095,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           </div>
         </div>
 
-        {/* عدّادات النهارده — شريط صغير ثابت فوق في كل التابات، ومعاه «عميل جديد» */}
-        <div className="sticky top-0 z-30 -mx-3 sm:-mx-5 lg:-mx-6 -mt-3 sm:-mt-5 lg:mt-0 lg:static lg:mx-0 px-3 sm:px-5 lg:px-0 py-2.5 lg:py-0 bg-[#F5F0E6]/92 backdrop-blur-md lg:bg-transparent lg:backdrop-blur-0">
+        {/* عدّادات النهارده — فوق في كل التابات، ومعاه «عميل جديد». بتمشي مع الصفحة عادي */}
+        <div>
           <div className="grid grid-cols-4 lg:grid-cols-3 gap-1.5 sm:gap-2">
             <button
               onClick={() => setIsAddLeadOpen(true)}
-              className="lg:hidden h-[58px] rounded-[16px] bg-[#17150F] text-[#F5F0E6] flex flex-col items-center justify-center gap-0.5 active:scale-[0.97] transition"
+              className="lg:hidden min-h-[64px] rounded-[16px] bg-[#17150F] text-[#F5F0E6] flex flex-col items-center justify-center gap-0.5 active:scale-[0.97] transition"
             >
               <Plus size={17} />
               <span className="text-[10.5px] font-bold">عميل جديد</span>
@@ -1110,13 +1110,11 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 key={k}
                 onClick={() => (k === 'actions' ? setActionsLogOpen(true) : setCounterOpen(k))}
                 title={k === 'viewings' ? viewingsLabel : t}
-                className="h-[58px] lg:h-auto lg:py-3 rounded-[16px] border bg-[#FFFDF8] border-[#E7DFCF] px-2.5 flex items-center gap-2 text-right active:scale-[0.97] transition"
+                className="min-h-[64px] lg:py-3 rounded-[16px] border bg-[#FFFDF8] border-[#E7DFCF] px-2.5 py-2 flex flex-col justify-center text-right active:scale-[0.97] transition"
               >
-                <span className="w-1.5 self-stretch my-2.5 rounded-full shrink-0" style={{ background: c }} />
-                <span className="min-w-0">
-                  <span className="block font-readex font-semibold text-[20px] lg:text-[24px] leading-none text-[#17150F]">{v}</span>
-                  <span className="block text-[10px] lg:text-[11.5px] leading-tight mt-1 text-[#6F695D]">{t}</span>
-                </span>
+                <span className="block font-readex font-semibold text-[20px] lg:text-[24px] leading-none text-[#17150F]">{v}</span>
+                <span className="block w-6 h-[3px] rounded-full mt-1.5" style={{ background: c }} />
+                <span className="block text-[10px] lg:text-[11.5px] leading-tight mt-1.5 text-[#6F695D]">{t}</span>
               </button>
             ))}
           </div>
