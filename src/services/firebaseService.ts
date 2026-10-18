@@ -19,6 +19,7 @@ import {
   persistentMultipleTabManager,
   serverTimestamp
 } from 'firebase/firestore';
+import { firestoreSafeMode } from '../utils/firestoreRecovery';
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
@@ -90,6 +91,8 @@ export const db = (() => {
     ignoreUndefinedProperties: true,
   };
   try {
+    /* لو Firestore انهار مرتين على الجهاز ده قريب، بنشتغل من غير الكاش المحلي كام يوم */
+    if (firestoreSafeMode()) throw new Error('safe mode');
     const cached = {
       ...baseSettings,
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),

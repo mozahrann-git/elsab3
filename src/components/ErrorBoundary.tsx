@@ -1,4 +1,5 @@
 import React from 'react';
+import { isFirestoreCrash, recoverFromFirestoreCrash } from '../utils/firestoreRecovery';
 
 /*
   حارس الأخطاء: بدل ما الشاشة تفضى بيضا لما حاجة تضرب،
@@ -22,6 +23,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    if (isFirestoreCrash(error) && recoverFromFirestoreCrash()) { this.setState({ info: '__recovering__' }); return; }
     console.error('[ErrorBoundary] الشاشة كانت هتفضى بسبب:', error, errorInfo);
     this.setState({ info: (errorInfo?.componentStack || '').split('\n').slice(0, 8).join('\n') });
   }
@@ -40,6 +42,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     const { error, info } = this.state;
     if (!error) return this.props.children;
+    /* انهيار Firestore: بنعيد التحميل لوحدنا — مفيش داعي لصفحة خطأ */
+    if (info === '__recovering__' || (isFirestoreCrash(error) && !info)) {
+      return (
+        <div dir="rtl" style={{ minHeight: '100dvh', background: '#F5F0E6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'IBM Plex Sans Arabic', system-ui, sans-serif", color: '#6F695D' }}>
+          بنعيد الاتصال…
+        </div>
+      );
+    }
 
     return (
       <div
