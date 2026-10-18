@@ -2,10 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Plus, Link2, Settings2, Trash2, Check, Upload, Video, X } from 'lucide-react';
 import { Property, SalesAgent } from '../../types';
 import {
-  SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveSalesForms, AdField, DiscoveryQuestion,
+  SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveSalesForms,
   ContentSlot, subscribeSlots, claimSlot, updateSlot, deleteSlot, weekKey,
-  TrackedLink, subscribeLinks, createTrackedLink, linkUrl, adTagOf,
+  TrackedLink, subscribeLinks, createTrackedLink, linkUrl,
 } from '../../services/salesToolsService';
+import {
+  DailySettings, DEFAULT_DAILY_SETTINGS, subscribeDailySettings, workDay, workWeek,
+  AdPost, subscribeMyAds, subscribeAdsOfDay, distribute, advertisableResale, advertisableProjects,
+} from '../../services/dailyTasks';
+import { Project, subscribeProjects } from '../../services/projectService';
+import { AdsPanel } from './DailyTab';
 import { uploadFile } from '../../services/mediaStorage';
 import { realImages } from '../../utils/propertyMedia';
 
@@ -13,7 +19,8 @@ import { realImages } from '../../utils/propertyMedia';
   تبويب المحتوى:
   - فيديو الأسبوع: الأدمن بيحدد الشقق، كل سيلز بياخد فيديوهين منها في الأسبوع،
     السكربت بيطلع جاهز من بيانات الشقة، وهو بيصوّر بموبايله ويرفع. ٣ خطوات بس.
-  - مساعد الإعلان زي ما هو.
+  - إعلانات النهارده: الشقق المتوزعة على السيلز الأسبوع ده (كانت جوه «يومي»)،
+    كل شقة نصها وصورها جاهزين — بدل «مساعد الإعلان» اللي كان بيكتب من الصفر.
 */
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 const Card: React.FC<{ children: React.ReactNode; tone?: 'gold' | 'dark'; className?: string }> = ({ children, tone, className = '' }) => (
@@ -51,10 +58,19 @@ export const ContentTab: React.FC<{
   const [forms, setForms] = useState<SalesForms>(DEFAULT_FORMS);
   const [slots, setSlots] = useState<ContentSlot[]>([]);
   const [links, setLinks] = useState<TrackedLink[]>([]);
-  const [tab, setTab] = useState<'video' | 'ad'>('video');
-  const [editForms, setEditForms] = useState(false);
+  const [tab, setTab] = useState<'video' | 'ads'>('ads');
   const [poolOpen, setPoolOpen] = useState(false);
+  const [settings, setSettings] = useState<DailySettings>(DEFAULT_DAILY_SETTINGS);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [myAds, setMyAds] = useState<AdPost[]>([]);
+  const [dayAds, setDayAds] = useState<AdPost[]>([]);
   useEffect(() => subscribeSalesForms(setForms), []);
+  useEffect(() => subscribeDailySettings(setSettings), []);
+  useEffect(() => subscribeProjects(setProjects), []);
+  const adDay = workDay(Date.now(), settings.closeHour);
+  const adWeek = workWeek(adDay);
+  useEffect(() => (currentAgent?.id ? subscribeMyAds(currentAgent.id, adDay, setMyAds) : undefined), [currentAgent?.id, adDay]);
+  useEffect(() => (isAdmin ? subscribeAdsOfDay(adDay, setDayAds) : undefined), [isAdmin, adDay]);
   useEffect(() => subscribeSlots(setSlots), []);
   useEffect(() => subscribeLinks(currentAgent?.id || null, isAdmin, setLinks), [currentAgent?.id, isAdmin]);
 
@@ -70,14 +86,16 @@ export const ContentTab: React.FC<{
 
   return (
     <div className="space-y-4" dir="rtl">
-      <div className="flex flex-wrap gap-2 items-center">
-        <button onClick={() => setTab('video')} className={`px-4 py-2 rounded-xl text-sm font-bold ${tab === 'video' ? 'bg-[#141414] text-white' : 'bg-white border border-[#ECE8DF]'}`}>فيديو الأسبوع</button>
-        <button onClick={() => setTab('ad')} className={`px-4 py-2 rounded-xl text-sm font-bold ${tab === 'ad' ? 'bg-[#141414] text-white' : 'bg-white border border-[#ECE8DF]'}`}>مساعد الإعلان</button>
-        {isAdmin && tab === 'video' && <button onClick={() => setPoolOpen(true)} className="mr-auto px-3 py-2 rounded-xl bg-[#A07A26] text-white text-xs font-bold flex items-center gap-1.5"><Video size={14} />اختار شقق الفيديو ({pool.length})</button>}
-        {isAdmin && tab === 'ad' && <button onClick={() => setEditForms(!editForms)} className="mr-auto px-3 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold flex items-center gap-1.5"><Settings2 size={14} />تعديل الخانات</button>}
+      <div className="flex items-center gap-2">
+        <div className="flex p-1 rounded-[16px] bg-white border border-[#E7DFCF]">
+          {([['ads', 'إعلانات النهارده'], ['video', 'فيديو الأسبوع']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setTab(k)}
+              className={`h-10 px-4 rounded-[12px] text-[13px] font-bold transition ${tab === k ? 'bg-[#17150F] text-[#F5F0E6]' : 'text-[#6F695D]'}`}>{l}</button>
+          ))}
+        </div>
+        {isAdmin && tab === 'video' && <button onClick={() => setPoolOpen(true)} className="mr-auto h-10 px-3 rounded-[14px] bg-[#A07A26] text-white text-xs font-bold flex items-center gap-1.5"><Video size={14} />شقق الفيديو ({pool.length})</button>}
       </div>
 
-      {isAdmin && editForms && tab === 'ad' && <FormsEditor forms={forms} onClose={() => setEditForms(false)} />}
       {poolOpen && <PoolPicker properties={properties} pool={pool} quota={quota} onClose={() => setPoolOpen(false)} />}
 
       {tab === 'video' ? (
@@ -162,7 +180,28 @@ export const ContentTab: React.FC<{
           )}
         </div>
       ) : (
-        <AdComposer forms={forms} properties={properties} agentId={myId} agentName={currentAgent?.name || ''} links={links} />
+        <div className="space-y-4">
+          {currentAgent && (
+            <AdsPanel agentId={myId} agentName={currentAgent.name} agentPhone={currentAgent.phone} day={adDay} week={adWeek}
+              settings={settings} properties={properties} projects={projects} myAds={myAds} />
+          )}
+          {isAdmin && <AdsSplit agents={agents} settings={settings} properties={properties} projects={projects} week={adWeek} dayAds={dayAds} />}
+          {currentAgent && links.length > 0 && (
+            <Card>
+              <p className="font-bold flex items-center gap-2"><Link2 size={16} className="text-[#A07A26]" />لينكاتك المتتبّعة</p>
+              {links.slice(0, 8).map((l) => (
+                <div key={l.id} className="flex justify-between items-center border-t border-[#F0ECE4] pt-2 text-sm gap-2">
+                  <span className="truncate">{l.title || l.code}</span>
+                  <span className="flex gap-2 text-[11px] shrink-0">
+                    <span className="px-2 py-1 rounded-lg bg-[#F6F4EF]">{l.hits} فتحة</span>
+                    <span className="px-2 py-1 rounded-lg bg-[#EEF5F0] text-[#1E7A45]">{l.waClicks} واتساب</span>
+                    <button onClick={() => navigator.clipboard?.writeText(linkUrl(l.id))} className="px-2 py-1 rounded-lg bg-[#141414] text-white">نسخ</button>
+                  </span>
+                </div>
+              ))}
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );
@@ -293,127 +332,52 @@ const VideoCard: React.FC<{ slot: ContentSlot; property?: Property; properties: 
 };
 
 // ---------- مساعد الإعلان ----------
-const AdComposer: React.FC<{ forms: SalesForms; properties: Property[]; agentId: string; agentName: string; links: TrackedLink[] }> = ({ forms, properties, agentId, agentName, links }) => {
-  const [code, setCode] = useState('');
-  const [vals, setVals] = useState<Record<string, string>>({});
-  const [sig, setSig] = useState<string>(() => { try { return localStorage.getItem('lion_ad_signature') || ''; } catch { return ''; } });
-  const [out, setOut] = useState<{ text: string; url: string } | null>(null);
-  const p = properties.find((x) => x.code.toUpperCase() === code.trim().toUpperCase());
 
-  const priceLine = useMemo(() => {
-    if (!p) return '';
-    const peers = properties.filter((x) => x.neighborhood === p.neighborhood && x.area > 0);
-    const avg = peers.length ? peers.reduce((s, x) => s + x.price / x.area, 0) / peers.length : 0;
-    const ppm = p.area ? p.price / p.area : 0;
-    const d = avg ? Math.round(((ppm - avg) / avg) * 100) : 0;
-    return `${fmt(p.price)} ج.م · ${fmt(ppm)} للمتر${avg ? ` · ${d <= 0 ? 'أقل من' : 'أعلى من'} متوسط الحي بـ ${Math.abs(d)}%` : ''}`;
-  }, [p, properties]);
-
-  const missing = forms.adFields.filter((f) => f.required && (vals[f.id] || '').trim().split(/\s+/).filter(Boolean).length < 4);
-
-  const compose = async () => {
-    if (!p) return;
-    const id = await createTrackedLink({ agentId, agentName, kind: 'ad', code: p.code, target: `/?property=${p.code}`, title: `إعلان ${p.code}` });
-    const url = linkUrl(id);
-    const body = forms.adFields.map((f) => (f.id === 'price' ? (vals[f.id] || priceLine) : vals[f.id])).filter((x) => (x || '').trim()).join('\n\n');
-    setOut({ text: `${body}\n\n${sig}\n${url}\nكود الوحدة: ${p.code} · ${adTagOf(agentName, p.code)}`, url });
-  };
-
+/* الإدارة: الشقق اتوزعت على مين الأسبوع ده، وكل واحد نشر كام النهارده.
+   التوزيع أوتوماتيك: كل شقة ريسيل منشورة ومش مباعة بتروح لسيلز واحد من
+   اللي داخلين المهام اليومية (بالدور حسب الكود)، وكل أسبوع بيلف خطوة. */
+const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; properties: Property[]; projects: Project[]; week: string; dayAds: AdPost[] }> = ({ agents, settings, properties, projects, week, dayAds }) => {
+  const resale = useMemo(() => distribute(advertisableResale(properties), settings.agentIds, week), [properties, settings.agentIds, week]);
+  const proj = useMemo(() => distribute(advertisableProjects(projects), settings.agentIds, week), [projects, settings.agentIds, week]);
+  const team = settings.agentIds.map((id) => agents.find((a) => a.id === id)).filter((a): a is SalesAgent => !!a);
+  const T = settings.targets;
+  const [open, setOpen] = useState('');
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card>
-        <p className="font-bold">اكتب إعلانك</p>
-        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="كود الشقة" dir="ltr" list="adcodes" className="rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm font-mono" />
-        <datalist id="adcodes">{properties.map((x) => <option key={x.id} value={x.code} />)}</datalist>
-        {p && <p className="text-xs text-[#1E7A45]">✓ {p.title}</p>}
-        {forms.adFields.map((f) => (
-          <label key={f.id} className="space-y-1.5 block">
-            <span className="text-[13px] font-bold flex items-center gap-2">{f.label}{f.required && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#FBEDEA] text-[#C2412D]">إجباري</span>}</span>
-            <textarea rows={2} value={vals[f.id] ?? (f.id === 'price' ? priceLine : '')} onChange={(e) => setVals({ ...vals, [f.id]: e.target.value })}
-              placeholder={f.example} className="w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm" />
-            <span className="text-[11px] text-[#8C877D]">{f.hint}</span>
-          </label>
-        ))}
-        <label className="space-y-1.5 block">
-          <span className="text-[13px] font-bold">توقيعك</span>
-          <input value={sig} onChange={(e) => { setSig(e.target.value); try { localStorage.setItem('lion_ad_signature', e.target.value); } catch { /* */ } }}
-            placeholder="سارة حنفي · استشاري الهضبة الوسطى · 01xxxxxxxxx" className="w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm" />
-        </label>
-        <button disabled={!p || missing.length > 0} onClick={compose} className="py-3.5 rounded-xl bg-[#141414] text-white font-bold disabled:opacity-40">شوف الإعلان النهائي</button>
-        {missing.length > 0 && <p className="text-[11px] text-[#C2412D]">اكتب 4 كلمات على الأقل في: {missing.map((f) => f.label).join('، ')}</p>}
-      </Card>
-
-      <div className="space-y-4">
-        {out && (
-          <Card tone="gold">
-            <p className="font-bold">الإعلان جاهز</p>
-            <pre className="whitespace-pre-wrap text-[13px] leading-7 font-[inherit]">{out.text}</pre>
-            <button onClick={() => navigator.clipboard?.writeText(out.text)} className="py-3 rounded-xl bg-[#141414] text-white font-bold flex items-center justify-center gap-2"><Copy size={16} />انسخ الإعلان</button>
-          </Card>
-        )}
-        <Card>
-          <p className="font-bold flex items-center gap-2"><Link2 size={16} className="text-[#A07A26]" />لينكاتك المتتبّعة</p>
-          {links.slice(0, 8).map((l) => (
-            <div key={l.id} className="flex justify-between items-center border-t border-[#F0ECE4] pt-2 text-sm gap-2">
-              <span className="truncate">{l.title || l.code}</span>
-              <span className="flex gap-2 text-[11px] shrink-0">
-                <span className="px-2 py-1 rounded-lg bg-[#F6F4EF]">{l.hits} فتحة</span>
-                <span className="px-2 py-1 rounded-lg bg-[#EEF5F0] text-[#1E7A45]">{l.waClicks} واتساب</span>
-                <button onClick={() => navigator.clipboard?.writeText(linkUrl(l.id))} className="px-2 py-1 rounded-lg bg-[#141414] text-white">نسخ</button>
+    <div className="rounded-[28px] bg-white border border-[#E7DFCF] p-4 sm:p-5 space-y-3">
+      <div>
+        <p className="font-readex font-semibold text-[19px]">التوزيع الأسبوع ده</p>
+        <p className="text-[12.5px] text-[#6F695D] mt-0.5 leading-relaxed">
+          أوتوماتيك على اللي داخلين المهام اليومية: كل شقة ريسيل منشورة ومش مباعة بتروح لسيلز واحد بس، وكل أسبوع التوزيع بيلف.
+          مين داخل بتحدده من «يومي» ← الإعدادات.
+        </p>
+      </div>
+      {!team.length && <p className="text-[13px] text-[#6F695D] bg-[#F5F0E6] rounded-2xl p-4">مفيش حد داخل المهام اليومية لسه.</p>}
+      {team.map((a) => {
+        const r = resale.get(a.id) || [], p = proj.get(a.id) || [];
+        const mine = dayAds.filter((x) => x.agentId === a.id && x.status !== 'rejected');
+        const rr = mine.filter((x) => x.kind === 'resale').length, pp = mine.filter((x) => x.kind === 'offplan').length;
+        const ok = rr >= T.adsResale && pp >= T.adsOffPlan;
+        return (
+          <div key={a.id} className="rounded-[20px] bg-[#F5F0E6] p-3">
+            <button onClick={() => setOpen(open === a.id ? '' : a.id)} className="w-full flex items-center justify-between gap-2 text-right">
+              <span className="min-w-0">
+                <span className="block font-semibold text-[14.5px] truncate">{a.name}</span>
+                <span className="block text-[11.5px] text-[#6F695D]">معاه {r.length} ريسيل · {p.length} مشروع</span>
               </span>
-            </div>
-          ))}
-          {!links.length && <p className="text-xs text-[#8C877D]">هتظهر هنا أول ما تعمل إعلان</p>}
-        </Card>
-      </div>
+              <span className={`shrink-0 text-[12px] font-bold px-3 py-1.5 rounded-full ${ok ? 'bg-[#22483A] text-white' : 'bg-white text-[#17150F]'}`}>
+                النهارده {rr}/{T.adsResale} · {pp}/{T.adsOffPlan}
+              </span>
+            </button>
+            {open === a.id && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {[...r.map((x) => x.code), ...p.map((x) => x.code)].map((c) => (
+                  <span key={c} className={`font-mono text-[11px] px-2 py-1 rounded-lg ${mine.some((m) => m.code === c) ? 'bg-[#22483A] text-white' : 'bg-white'}`}>{c}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
-  );
-};
-
-// ---------- تعديل الأسئلة والخانات (للأدمن) ----------
-const FormsEditor: React.FC<{ forms: SalesForms; onClose: () => void }> = ({ forms, onClose }) => {
-  const [d, setD] = useState(forms);
-  const [busy, setBusy] = useState(false);
-  const inp = 'w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-2.5 text-sm';
-  const save = async () => { setBusy(true); try { await saveSalesForms(d); onClose(); } finally { setBusy(false); } };
-  return (
-    <Card tone="gold">
-      <p className="font-bold">تعديل خانات الإعلان</p>
-      <div className="grid gap-2 sm:grid-cols-4">
-        {[['أقل عدد إجابات', 'minAnswers'], ['عدد شقق العرض', 'offerUnits'], ['صلاحية العرض (ساعة)', 'offerHours'], ['فيديوهات أسبوعياً', 'videosPerWeek']].map(([l, k]) => (
-          <label key={k} className="text-xs font-bold space-y-1">{l}
-            <input type="number" value={(d as any)[k]} onChange={(e) => setD({ ...d, [k]: Number(e.target.value) } as SalesForms)} className={inp} />
-          </label>
-        ))}
-      </div>
-
-      <p className="font-bold text-sm pt-2">أسئلة مكالمة الاكتشاف</p>
-      {d.discovery.map((q, i) => (
-        <div key={q.id} className="grid gap-2 sm:grid-cols-12 items-center border-b border-[#E8D3A6] pb-2">
-          <input value={q.label} onChange={(e) => setD({ ...d, discovery: d.discovery.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} className={`${inp} sm:col-span-4`} />
-          <input value={(q.options || []).join('، ')} placeholder="الاختيارات مفصولة بفاصلة" onChange={(e) => setD({ ...d, discovery: d.discovery.map((x, j) => (j === i ? { ...x, options: e.target.value.split('،').map((s) => s.trim()).filter(Boolean) } : x)) })} className={`${inp} sm:col-span-5`} />
-          <label className="sm:col-span-2 text-xs flex items-center gap-1.5"><input type="checkbox" checked={!!q.required} onChange={(e) => setD({ ...d, discovery: d.discovery.map((x, j) => (j === i ? { ...x, required: e.target.checked } : x)) })} />إجباري</label>
-          <button onClick={() => setD({ ...d, discovery: d.discovery.filter((_, j) => j !== i) })} className="sm:col-span-1 text-[#C2412D]"><Trash2 size={14} /></button>
-        </div>
-      ))}
-      <button onClick={() => setD({ ...d, discovery: [...d.discovery, { id: `q${Date.now()}`, label: '', type: 'chips', options: [] } as DiscoveryQuestion] })} className="self-start text-xs font-bold text-[#A07A26] flex items-center gap-1"><Plus size={13} />سؤال جديد</button>
-
-      <p className="font-bold text-sm pt-2">خانات الإعلان</p>
-      {d.adFields.map((f, i) => (
-        <div key={f.id} className="grid gap-2 sm:grid-cols-12 items-center border-b border-[#E8D3A6] pb-2">
-          <input value={f.label} onChange={(e) => setD({ ...d, adFields: d.adFields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} className={`${inp} sm:col-span-4`} />
-          <input value={f.hint} placeholder="التلميح" onChange={(e) => setD({ ...d, adFields: d.adFields.map((x, j) => (j === i ? { ...x, hint: e.target.value } : x)) })} className={`${inp} sm:col-span-3`} />
-          <input value={f.example} placeholder="مثال" onChange={(e) => setD({ ...d, adFields: d.adFields.map((x, j) => (j === i ? { ...x, example: e.target.value } : x)) })} className={`${inp} sm:col-span-3`} />
-          <label className="sm:col-span-1 text-xs flex items-center gap-1"><input type="checkbox" checked={!!f.required} onChange={(e) => setD({ ...d, adFields: d.adFields.map((x, j) => (j === i ? { ...x, required: e.target.checked } : x)) })} />إجباري</label>
-          <button onClick={() => setD({ ...d, adFields: d.adFields.filter((_, j) => j !== i) })} className="sm:col-span-1 text-[#C2412D]"><Trash2 size={14} /></button>
-        </div>
-      ))}
-      <button onClick={() => setD({ ...d, adFields: [...d.adFields, { id: `f${Date.now()}`, label: '', hint: '', example: '' } as AdField] })} className="self-start text-xs font-bold text-[#A07A26] flex items-center gap-1"><Plus size={13} />خانة جديدة</button>
-
-      <div className="flex gap-2 pt-2">
-        <button disabled={busy} onClick={save} className="flex-1 py-3 rounded-xl bg-[#141414] text-white font-bold">حفظ</button>
-        <button onClick={onClose} className="px-5 py-3 rounded-xl bg-white border border-[#E4DFD4] font-bold">إلغاء</button>
-      </div>
-    </Card>
   );
 };

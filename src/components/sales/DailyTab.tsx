@@ -96,11 +96,9 @@ export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, vie
   const [myDay, setMyDay] = useState<SalesDay | null>(null);
   const [myAds, setMyAds] = useState<AdPost[]>([]);
   const [slots, setSlots] = useState<ContentSlot[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
   useEffect(() => subscribeMyDay(agentId, day, setMyDay, setErr), [agentId, day]);
   useEffect(() => subscribeMyAds(agentId, day, setMyAds, setErr), [agentId, day]);
   useEffect(() => subscribeSlots(setSlots), []);
-  useEffect(() => subscribeProjects(setProjects), []);
 
   const p = useMemo(() => computeProgress({
     agentId, agentName, day, closeHour: settings.closeHour, leads, salesDay: myDay, ads: myAds,
@@ -108,12 +106,11 @@ export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, vie
   }), [agentId, agentName, day, settings.closeHour, leads, myDay, myAds, viewingRequests, slots, now]);
   const score = dayScore(p, T);
 
-  const [section, setSection] = useState<'calls' | 'ads' | null>(null);
+  const [section, setSection] = useState<'calls' | null>(null);
   const callsRef = useRef<HTMLDivElement>(null);
-  const adsRef = useRef<HTMLDivElement>(null);
-  const open = (s: 'calls' | 'ads') => {
+  const open = (s: 'calls') => {
     setSection(s);
-    setTimeout(() => (s === 'calls' ? callsRef : adsRef).current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    setTimeout(() => callsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
 
   if (!currentAgent) {
@@ -175,7 +172,7 @@ export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, vie
 
         <TaskCard icon={<Megaphone size={15} className="text-[#A07A26]" />} title="الإعلانات" done={p.ads.done} target={T.ads}
           sub={<>ريسيل {n(p.ads.resale)}/{T.adsResale} · تحت الإنشاء {n(p.ads.offplan)}/{T.adsOffPlan}{p.ads.pending ? ` · مستني مراجعة ${p.ads.pending}` : ''}{p.ads.rejected ? ` · مرفوض ${p.ads.rejected}` : ''}</>}
-          action="شقق الإعلانات" onAction={() => open('ads')} />
+          action="شقق الإعلانات" onAction={() => onGo('content')} />
 
         <TaskCard icon={<CalendarCheck size={15} className="text-[#A07A26]" />} title="متابعات النهارده" done={p.followUps.done} target={p.followUps.done + p.followUps.left}
           sub={p.followUps.left ? <span className="text-[#C2412D]">فاضل {n(p.followUps.left)} عميل ميعاده جه ومتعملش عليه حاجة</span> : 'مفيش عميل ميعاده جه ومستني'}
@@ -192,14 +189,6 @@ export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, vie
       <div ref={callsRef}>
         {section === 'calls' && (
           <CallsPanel agentId={agentId} agentName={agentName} closeHour={settings.closeHour} onAddLead={onAddLead} onClose={() => setSection(null)} />
-        )}
-      </div>
-      <div ref={adsRef}>
-        {section === 'ads' && (
-          <AdsPanel
-            agentId={agentId} agentName={agentName} agentPhone={currentAgent?.phone} day={day} week={week} settings={settings}
-            properties={properties} projects={projects} myAds={myAds} onClose={() => setSection(null)}
-          />
         )}
       </div>
     </div>
@@ -355,9 +344,14 @@ const InterestedForm: React.FC<{
    ============================================================ */
 export type AdUnit = { code: string; kind: AdKind; title: string; image?: string; prop?: Property; project?: Project };
 
-const AdsPanel: React.FC<{
+/*
+  إعلانات الأسبوع: الشقق اللي واقعة عليك إنت بس الأسبوع ده.
+  اللي لسه ماتنشرش فوق، واللي اتنشر النهارده بعلامة على الصورة.
+  دوس على أي شقة ← الصور والفيديو والنص جاهزين ← انشر ← ارفع سكرين.
+*/
+export const AdsPanel: React.FC<{
   agentId: string; agentName: string; agentPhone?: string; day: string; week: string; settings: DailySettings;
-  properties: Property[]; projects: Project[]; myAds: AdPost[]; onClose: () => void;
+  properties: Property[]; projects: Project[]; myAds: AdPost[]; onClose?: () => void;
 }> = ({ agentId, agentName, agentPhone, day, week, settings, properties, projects, myAds, onClose }) => {
   const [kind, setKind] = useState<AdKind>('resale');
   const [openUnit, setOpenUnit] = useState<AdUnit | null>(null);
@@ -370,60 +364,78 @@ const AdsPanel: React.FC<{
     () => distribute(advertisableProjects(projects), settings.agentIds, week).get(agentId) || [],
     [projects, settings.agentIds, week, agentId],
   );
-  const units: AdUnit[] = kind === 'resale'
-    ? mineResale.map((p) => ({ code: p.code, kind: 'resale' as const, title: `${p.neighborhood} · ${p.area}م² · ${p.bedrooms} غرف`, image: p.images?.[0], prop: p }))
-    : mineProjects.map((p) => ({ code: p.code, kind: 'offplan' as const, title: `${p.kind === 'compound' ? 'كمبوند' : 'عمارة'} ${p.name} · ${p.neighborhood}`, image: p.images?.[0], project: p }));
-
   const adOf = (code: string) => myAds.find((a) => a.code === code);
+  const rank = (u: AdUnit) => { const st = adOf(u.code)?.status; return st === 'rejected' ? 0 : !st ? 1 : st === 'pending' ? 2 : 3; };
+  const units: AdUnit[] = (kind === 'resale'
+    ? mineResale.map((p) => ({ code: p.code, kind: 'resale' as const, title: `${p.neighborhood} · ${p.area}م² · ${p.bedrooms} غرف`, image: p.images?.[0], prop: p }))
+    : mineProjects.map((p) => ({ code: p.code, kind: 'offplan' as const, title: `${p.kind === 'compound' ? 'كمبوند' : 'عمارة'} ${p.name} · ${p.neighborhood}`, image: p.images?.[0], project: p }))
+  ).sort((x, y) => rank(x) - rank(y));
+
   const T = settings.targets;
-  const doneKind = myAds.filter((a) => a.kind === kind && a.status !== 'rejected').length;
+  const cnt = (k: AdKind) => myAds.filter((a) => a.kind === k && a.status !== 'rejected').length;
+  const goal = (k: AdKind) => (k === 'resale' ? T.adsResale : T.adsOffPlan);
+  const doneKind = cnt(kind) >= goal(kind);
 
   return (
-    <div className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="font-bold text-sm">شقق الإعلانات بتاعتك الأسبوع ده</p>
-        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F6F4EF]"><X size={16} /></button>
-      </div>
-      <p className="text-[11px] text-[#6B665C] font-bold">
-        الشقق دي متوزعة عليك إنت بس — محدش تاني من الفريق معاه نفسها الأسبوع ده. دوس على الكود، انسخ الإعلان، انشره، وارفع سكرين شوت.
-      </p>
-      <div className="grid grid-cols-2 gap-2">
-        {([['resale', `ريسيل (${myAds.filter((a) => a.kind === 'resale' && a.status !== 'rejected').length}/${T.adsResale})`], ['offplan', `تحت الإنشاء (${myAds.filter((a) => a.kind === 'offplan' && a.status !== 'rejected').length}/${T.adsOffPlan})`]] as [AdKind, string][]).map(([k, l]) => (
-          <button key={k} onClick={() => setKind(k)}
-            className={`py-2.5 rounded-xl text-xs font-bold ${kind === k ? 'bg-[#141414] text-white' : 'bg-[#F6F4EF] border border-[#ECE8DF]'}`}>{l}</button>
-        ))}
+    <div className="rounded-[28px] bg-white border border-[#E7DFCF] p-4 sm:p-5 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-readex font-semibold text-[19px]">إعلانات النهارده</p>
+          <p className="text-[12.5px] text-[#6F695D] mt-0.5 leading-relaxed">شقق الأسبوع بتاعتك إنت بس. دوس على شقة ← انسخ وانشر ← ارفع سكرين.</p>
+        </div>
+        {onClose && <button onClick={onClose} aria-label="اقفل" className="w-10 h-10 shrink-0 rounded-full border border-[#E7DFCF] flex items-center justify-center"><X size={16} /></button>}
       </div>
 
+      <div className="grid grid-cols-2 gap-2">
+        {(['resale', 'offplan'] as AdKind[]).map((k) => {
+          const c = cnt(k), g = goal(k), on = kind === k, ok = c >= g;
+          return (
+            <button key={k} onClick={() => setKind(k)}
+              className={`rounded-[20px] p-3 text-right transition ${on ? 'bg-[#17150F] text-[#F5F0E6]' : 'bg-[#F5F0E6] text-[#17150F]'}`}>
+              <span className="flex items-center justify-between">
+                <span className="text-[13px] font-bold">{k === 'resale' ? 'ريسيل' : 'تحت الإنشاء'}</span>
+                <span className="font-readex font-semibold text-[18px] tabular-nums">{c}<span className="opacity-50 text-[13px]">/{g}</span></span>
+              </span>
+              <span className={`mt-2 block h-1.5 rounded-full overflow-hidden ${on ? 'bg-white/15' : 'bg-[#E2D9C6]'}`}>
+                <span className="block h-full rounded-full transition-all" style={{ width: `${g ? Math.min(100, (c / g) * 100) : 100}%`, background: ok ? '#4C9A6E' : '#C9A24A' }} />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {doneKind && (
+        <p className="text-[12.5px] font-bold text-[#22483A] bg-[#E9F2EC] rounded-2xl px-4 py-2.5 flex items-center gap-2"><Check size={15} />خلّصت المطلوب من النوع ده النهارده</p>
+      )}
       {!units.length && (
-        <p className="text-xs font-bold text-[#6B665C] bg-[#F6F4EF] rounded-xl p-3">
-          {kind === 'resale' ? 'مفيش شقق ريسيل متاحة للإعلان دلوقتي.' : 'مفيش مشاريع تحت الإنشاء متضافة في قسم المشاريع.'}
+        <p className="text-[13px] text-[#6F695D] bg-[#F5F0E6] rounded-2xl p-4">
+          {!settings.agentIds.includes(agentId) ? 'إنت مش داخل المهام اليومية — الإدارة هي اللي بتضيفك.'
+            : kind === 'resale' ? 'مفيش شقق ريسيل متاحة للإعلان دلوقتي.' : 'مفيش مشاريع تحت الإنشاء متضافة في قسم المشاريع.'}
         </p>
       )}
       {kind === 'offplan' && units.length > 0 && units.length < T.adsOffPlan * 6 && (
-        <p className="text-[11px] text-[#8C877D]">المشاريع قليلة، فممكن تعلن عن نفس المشروع في أكتر من يوم.</p>
-      )}
-      {doneKind >= (kind === 'resale' ? T.adsResale : T.adsOffPlan) && (
-        <p className="text-[11px] font-bold text-[#1E7A45] bg-[#EEF5F0] rounded-lg px-2 py-1.5">خلّصت المطلوب من النوع ده النهارده ✓</p>
+        <p className="text-[11.5px] text-[#8C877D]">المشاريع قليلة، فممكن تعلن عن نفس المشروع في أكتر من يوم.</p>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {units.map((u) => {
-          const a = adOf(u.code);
-          const st = a?.status;
+          const st = adOf(u.code)?.status;
+          const price = u.prop ? Number(u.prop.price || 0) : Number((u.project as any)?.startingPrice || 0);
           return (
             <button key={u.code} onClick={() => setOpenUnit(u)}
-              className={`text-right rounded-xl border overflow-hidden ${st === 'approved' ? 'border-[#1E7A45]' : st === 'pending' ? 'border-[#A07A26]' : st === 'rejected' ? 'border-[#C2412D]' : 'border-[#ECE8DF]'}`}>
-              <div className="h-20 bg-[#F6F4EF] flex items-center justify-center">
-                {u.image ? <img src={thumbUrl(u.image, 300)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <ImageIcon size={20} className="text-[#C9C3B6]" />}
-              </div>
-              <div className="p-2">
-                <p className="font-mono font-black text-xs">{u.code}</p>
-                <p className="text-[10px] text-[#6B665C] truncate">{u.title}</p>
+              className={`group text-right rounded-[22px] overflow-hidden bg-white border transition active:scale-[.98] ${st === 'rejected' ? 'border-[#D3262B]' : 'border-[#EFE8DA] hover:border-[#C9A24A]'}`}>
+              <div className="relative aspect-[4/3] bg-[#F5F0E6] flex items-center justify-center">
+                {u.image ? <img src={thumbUrl(u.image, 400)} alt="" className={`w-full h-full object-cover transition ${st === 'approved' || st === 'pending' ? 'opacity-55' : ''}`} loading="lazy" /> : <ImageIcon size={22} className="text-[#C9C3B6]" />}
                 {st && (
-                  <p className={`text-[10px] font-bold mt-0.5 ${st === 'approved' ? 'text-[#1E7A45]' : st === 'pending' ? 'text-[#A07A26]' : 'text-[#C2412D]'}`}>
-                    {st === 'approved' ? 'اتقبل ✓' : st === 'pending' ? 'مستني مراجعة' : 'مرفوض — افتحه'}
-                  </p>
+                  <span className={`absolute top-2 right-2 text-[10.5px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${st === 'approved' ? 'bg-[#22483A] text-white' : st === 'pending' ? 'bg-[#FFF4D9] text-[#7A5E12]' : 'bg-[#D3262B] text-white'}`}>
+                    {st === 'approved' ? <><Check size={11} />اتقبل</> : st === 'pending' ? 'بيتراجع' : 'اترفض — افتحه'}
+                  </span>
                 )}
+              </div>
+              <div className="p-3 space-y-0.5">
+                <p className="font-mono font-bold text-[13.5px]">{u.code}</p>
+                <p className="text-[11.5px] text-[#6F695D] truncate">{u.title}</p>
+                {price > 0 && <p className="text-[12px] font-bold font-mono">{price.toLocaleString('en-US')}</p>}
               </div>
             </button>
           );
