@@ -162,6 +162,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const [activeTab, setActiveTab] = useState<'daily' | 'pipeline' | 'followups' | 'matching' | 'content' | 'leaderboard' | 'notebook'>(isAdmin ? 'pipeline' : 'daily');
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  /* الموبايل: البحث أيقونة في الشريط فوق، بتفتح خانة تحته */
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [activeMobileStageFilter, setActiveMobileStageFilter] = useState<string>('all');
   
   // Smart Matching Lead Selection & State
@@ -689,6 +691,26 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             <div className="flex items-center gap-1.5 lg:hidden">
               <button
+                onClick={() => setMobileSearchOpen((o) => !o)}
+                aria-label="بحث"
+                aria-pressed={mobileSearchOpen}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl ${mobileSearchOpen || leadSearchQuery ? 'bg-[#F5F0E6] text-[#17150F]' : 'bg-white/10 text-stone-300'}`}
+              >
+                <Search size={17} />
+              </button>
+              <button
+                onClick={() => setIsNotificationsOpen(true)}
+                aria-label="تنبيهات المتابعة"
+                className="relative w-10 h-10 flex items-center justify-center text-stone-300 rounded-xl bg-white/10"
+              >
+                <Bell size={17} />
+                {pendingFollowUpsCount > 0 && (
+                  <span className="absolute -top-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#D3262B] text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-[#141414]">
+                    {pendingFollowUpsCount}
+                  </span>
+                )}
+              </button>
+              <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 aria-label="القائمة"
                 className="w-10 h-10 flex items-center justify-center text-stone-300 hover:text-white rounded-xl bg-white/10"
@@ -704,6 +726,25 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               </button>
             </div>
           </div>
+
+          {(mobileSearchOpen || leadSearchQuery) && (
+            <div className="lg:hidden px-3 pb-3 pt-1">
+              <label className="flex items-center gap-2 h-11 px-3.5 rounded-[14px] bg-white/10 text-white">
+                <Search size={15} className="text-white/60 shrink-0" />
+                <input
+                  autoFocus
+                  value={leadSearchQuery}
+                  onChange={(e) => setLeadSearchQuery(e.target.value)}
+                  placeholder="اسم، رقم، كود شقة أو حي…"
+                  className="flex-1 min-w-0 bg-transparent outline-none text-[13px] text-white placeholder:text-white/45"
+                  style={{ boxShadow: 'none', border: 0, background: 'transparent' }}
+                />
+                {leadSearchQuery && (
+                  <button onClick={() => setLeadSearchQuery('')} aria-label="امسح البحث" className="w-7 h-7 rounded-full bg-white/15 flex items-center justify-center"><X size={13} /></button>
+                )}
+              </label>
+            </div>
+          )}
 
           {/* كارت السيلز — على الكمبيوتر بس (على الموبايل اسمه في الشريط فوق) */}
           <div className="hidden lg:block p-4 border-b border-white/10 bg-white/5">
@@ -858,6 +899,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
         {/* Sidebar Footer Buttons */}
         <div className={`p-4 border-t border-white/10 space-y-2 ${isMobileMenuOpen ? 'block' : 'hidden lg:block'}`}>
+          {/* لينكاتي — على الموبايل في القائمة (على الكمبيوتر في الشريط فوق) */}
+          <div className="lg:hidden flex justify-center">
+            <OwnerLinkCard
+              byCode={currentSalesAgent?.id || (isAdmin ? 'admin' : undefined)}
+              byName={currentSalesAgent?.name || (isAdmin ? 'الإدارة' : undefined)}
+            />
+          </div>
           <button
             onClick={() => setIsAddLeadOpen(true)}
             className="w-full py-2.5 px-3 bg-[#A07A26] hover:bg-[#8B681D] text-white font-readex font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
@@ -914,7 +962,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
         
         {/* Top Control Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white border border-[#ECE8DF] p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-2xs">
+        <div className="hidden lg:flex items-center justify-between gap-3 bg-white border border-[#ECE8DF] p-4 rounded-3xl shadow-2xs">
           
           {/* Search Box */}
           <div className="relative flex-1 max-w-md">
@@ -973,6 +1021,33 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             >
               <X size={20} />
             </button>
+          </div>
+        </div>
+
+        {/* عدّادات النهارده — شريط صغير ثابت فوق في كل التابات، ومعاه «عميل جديد» */}
+        <div className="sticky top-0 z-30 -mx-3 sm:-mx-5 lg:-mx-6 -mt-3 sm:-mt-5 lg:mt-0 lg:static lg:mx-0 px-3 sm:px-5 lg:px-0 py-2.5 lg:py-0 bg-[#F5F0E6]/92 backdrop-blur-md lg:bg-transparent lg:backdrop-blur-0">
+          <div className="grid grid-cols-4 lg:grid-cols-3 gap-1.5 sm:gap-2">
+            <button
+              onClick={() => setIsAddLeadOpen(true)}
+              className="lg:hidden h-[58px] rounded-[16px] bg-[#17150F] text-[#F5F0E6] flex flex-col items-center justify-center gap-0.5 active:scale-[0.97] transition"
+            >
+              <Plus size={17} />
+              <span className="text-[10.5px] font-bold">عميل جديد</span>
+            </button>
+            {([['ريكويست النهارده', todayNewLeads, 'new', T.accent], ['أكشن النهارده', todayDone, 'actions', T.ink], ['معاينات النهارده', todayViewings, 'viewings', stageTone('visit_done').bg]] as [string, number, 'new' | 'actions' | 'viewings', string][]).map(([t, v, k, c]) => (
+              <button
+                key={k}
+                onClick={() => (k === 'actions' ? setActionsLogOpen(true) : setCounterOpen(k))}
+                title={k === 'viewings' ? viewingsLabel : t}
+                className="h-[58px] lg:h-auto lg:py-3 rounded-[16px] border bg-[#FFFDF8] border-[#E7DFCF] px-2.5 flex items-center gap-2 text-right active:scale-[0.97] transition"
+              >
+                <span className="w-1.5 self-stretch my-2.5 rounded-full shrink-0" style={{ background: c }} />
+                <span className="min-w-0">
+                  <span className="block font-readex font-semibold text-[20px] lg:text-[24px] leading-none text-[#17150F]">{v}</span>
+                  <span className="block text-[10px] lg:text-[11.5px] leading-tight mt-1 text-[#6F695D]">{t}</span>
+                </span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -1102,22 +1177,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 )}
               </div>
             )}
-
-            {/* عدّاد النهارده — رقم كبير، وتحته كلمة، وشارة صغيرة واحدة */}
-            <div className="grid grid-cols-3 gap-2">
-              {([['ريكويست جديد النهارده', todayNewLeads, 'new'], ['أكشن اتسجّل النهارده', todayDone, 'actions'], [viewingsLabel, todayViewings, 'viewings']] as [string, number, 'new' | 'actions' | 'viewings'][]).map(([t, v, k]) => (
-                <button
-                  key={k}
-                  onClick={() => (k === 'actions' ? setActionsLogOpen(true) : setCounterOpen(k))}
-                  className="text-right rounded-[20px] p-3 flex flex-col gap-1 border transition active:scale-[0.97]"
-                  style={{ background: T.surface, borderColor: T.line, color: T.ink }}
-                >
-                  <span className="font-readex font-semibold text-[26px] leading-none">{v}</span>
-                  <span className="text-[11px] leading-snug" style={{ color: T.muted }}>{t}</span>
-                  <span className="self-start mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: k === 'viewings' ? stageTone('visit_done').bg : k === 'new' ? T.accent : T.ink, color: '#fff' }}>التفاصيل</span>
-                </button>
-              ))}
-            </div>
 
             {isAdmin && canEdit && leads.filter((l: any) => l.deleteRequest && !l.deleteRequest.resolved).length > 0 && (
               <div className="bg-[#FBEDEA] border border-[#E9B8AE] rounded-2xl p-4 space-y-2">
