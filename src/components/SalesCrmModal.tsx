@@ -257,6 +257,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   const isLeadRole = currentSalesAgent?.role === 'team_leader' || currentSalesAgent?.role === 'sales_manager' || (currentSalesAgent as any)?.isTeamLead;
   const isLead = isLeadRole || myTeam.length > 0;
   const visibleAgents = useMemo(() => (isAdmin ? agents : isLead ? [currentSalesAgent!, ...myTeam].filter(Boolean) : [currentSalesAgent!].filter(Boolean)), [isAdmin, isLead, agents, myTeam, currentSalesAgent]);
+  /* الاختيار بيرجع «الكل» مع أي تغيير في مين داخل — قبل كده الأدمن يختار
+     «ملفي» ويخرج، وفرح تدخل على نفس الجهاز تلاقي نفسها شايفة ملف محمد زهران */
+  useEffect(() => { setViewAgentId('all'); }, [isAdmin, currentAgentId]);
+  useEffect(() => {
+    if (viewAgentId !== 'all' && agents.length && !isAdmin && !visibleAgents.some((a) => a.id === viewAgentId)) setViewAgentId('all');
+  }, [viewAgentId, visibleAgents, isAdmin, agents.length]);
 
   // Scoped Leads
   const scopedLeads = useMemo(() => {

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, BellRing, Phone, MessageCircle, Clock, X, CheckCircle2 } from 'lucide-react';
+import { Bell, BellRing, Phone, MessageCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { Lead } from '../types';
 import { generateWhatsAppLink, generateCallLink } from '../utils/helpers';
 
@@ -123,17 +123,6 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
     setDue(null);
   };
 
-  /** يقفل الدفعة كلها مرة واحدة — ده اللي بيمنع الـ١٠٠ ضغطة */
-  const dismissAll = () => {
-    setSeen((prev) => {
-      const next = new Set<string>(prev);
-      dueList.forEach((l) => next.add(`${l.id}:${l.nextActionAt}`));
-      writeSeen(next);
-      return next;
-    });
-    setDue(null);
-  };
-
   const askPermission = async () => {
     if (typeof Notification === 'undefined') return;
     try {
@@ -175,99 +164,73 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
         document.body,
       )}
 
-      {/* البوب-أب نفسه */}
-      {due && createPortal(
-        <div dir="rtl" className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          {/* الضغط بره أو على X = اقفل الدفعة كلها. ده اللي الواحد قاصده لما يقفل. */}
-          <button aria-label="إغلاق" className="absolute inset-0 bg-black/60" onClick={dismissAll} />
-          <section
-            role="dialog"
-            aria-modal="true"
-            className="relative w-full sm:max-w-md bg-[#F6F4EF] rounded-t-3xl sm:rounded-3xl overflow-hidden"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-          >
-            <div className="bg-[#141414] text-white px-5 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="w-9 h-9 rounded-full bg-[#C2412D] flex items-center justify-center">
-                  <Bell size={17} />
-                </span>
-                <div>
-                  <p className="font-bold text-base leading-tight">
-                    {dueList.length > 1 ? `${dueList.length} متابعة مستحقة` : 'متابعة مستحقة دلوقتي'}
-                  </p>
-                  <p className="text-[11px] text-white/60">
-                    {dueList.length > 1 ? 'ده أقدم واحد فيهم' : 'الميعاد اللي إنت حددته عدّى'}
-                  </p>
-                </div>
-              </div>
-              <button onClick={dismissAll} aria-label="إغلاق" className="p-2 cursor-pointer"><X size={18} /></button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div>
-                <p className="text-2xl font-extrabold text-[#141414]">{due.name}</p>
-                <p className="font-mono text-base text-[#6B665C]" dir="ltr">{due.phone}</p>
-              </div>
-
-              {due.followUpNote && (
-                <p className="text-sm text-[#4A463F] bg-white border border-[#ECE8DF] rounded-2xl px-4 py-3 leading-relaxed">
-                  {due.followUpNote}
-                </p>
-              )}
-
-              <div className="grid grid-cols-2 gap-2">
-                <a
-                  href={generateCallLink(due.phone)}
-                  className="py-3.5 rounded-2xl bg-[#141414] text-white font-bold text-sm flex items-center justify-center gap-2"
-                >
-                  <Phone size={16} /> اتصال
-                </a>
-                <a
-                  href={generateWhatsAppLink(due.phone, undefined, undefined, `مرحباً ${due.name}،`)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-3.5 rounded-2xl bg-[#1E7A45] text-white font-bold text-sm flex items-center justify-center gap-2"
-                >
-                  <MessageCircle size={16} /> واتساب
-                </a>
-              </div>
-
-              <button
-                onClick={() => { const l = due; dismiss(l); onOpenLead(l); }}
-                className="w-full py-3.5 rounded-2xl bg-[#A07A26] text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <CheckCircle2 size={16} /> سجّل النتيجة والأكشن الجاي
-              </button>
-
-              {/* واحد ولا الدفعة كلها — من غير التاني كنت بتدوس ١٠٠ مرة */}
-              <div className={dueList.length > 1 ? 'grid grid-cols-2 gap-2' : ''}>
-                <button
-                  onClick={() => dismiss(due)}
-                  className="w-full py-2.5 text-[#6B665C] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Clock size={13} /> مش دلوقتي
-                </button>
-                {dueList.length > 1 && (
-                  <button
-                    onClick={dismissAll}
-                    className="w-full py-2.5 rounded-2xl bg-[#ECE8DF] text-[#141414] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <X size={13} /> اقفلهم كلهم ({dueList.length})
-                  </button>
-                )}
-              </div>
-              {dueList.length > 1 && (
-                <p className="text-[10px] text-[#8C877D] text-center leading-5">
-                  القفل بيخفيهم من الشاشة دي لحد ما تعمل ريفريش — المتابعات نفسها بتفضل في مكانها.
-                </p>
-              )}
-            </div>
-          </section>
-        </div>,
-        document.body,
-      )}
+      {/* كارت التنبيه: بيطلع على جنب ومش بيوقف الشاشة. «مش دلوقتي» بتتفتح بعد ٨ ثواني
+          عشان يلحق يقرا الملاحظة/الفيدباك قبل ما يأجّل */}
+      {due && createPortal(<DueCard key={`${due.id}:${due.nextActionAt}`} lead={due} more={dueList.length - 1}
+        onLater={() => dismiss(due)} onOpen={() => { const l = due; dismiss(l); onOpenLead(l); }} />, document.body)}
     </>
   );
 };
 
 export default FollowUpPopup;
+
+const WAIT = 8;
+const DueCard: React.FC<{ lead: Lead; more: number; onLater: () => void; onOpen: () => void }> = ({ lead, more, onLater, onOpen }) => {
+  const [left, setLeft] = useState(WAIT);
+  const [shown, setShown] = useState(false);
+  useEffect(() => { const r = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(r); }, []);
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = setTimeout(() => setLeft((x) => x - 1), 1000);
+    return () => clearTimeout(t);
+  }, [left]);
+  /* آخر حاجة اتكتبت عن العميل — غالباً الفيدباك أو كومنت المكالمة اللي فاتت */
+  const lastAct = (lead.activity || []).slice().sort((x, y) => (y.at || 0) - (x.at || 0))[0];
+  const note = lead.followUpNote || lastAct?.comment || '';
+  const since = lead.nextActionAt ? Math.max(0, Math.round((Date.now() - lead.nextActionAt) / 60000)) : 0;
+  const sinceTxt = since < 1 ? 'دلوقتي' : since < 60 ? `من ${since} دقيقة` : since < 1440 ? `من ${Math.round(since / 60)} ساعة` : `من ${Math.round(since / 1440)} يوم`;
+
+  return (
+    <section
+      dir="rtl" role="status" aria-live="polite"
+      className={`fixed z-[90] left-3 right-3 sm:right-auto sm:left-5 sm:w-[380px] bottom-3 sm:bottom-5 transition-all duration-500 ease-out ${shown ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}
+      style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
+      <div className="bg-white rounded-3xl shadow-[0_18px_50px_rgba(20,20,20,0.28)] border border-[#E8D3A6] overflow-hidden">
+        <div className="bg-gradient-to-l from-[#FBF1DA] to-[#FFFDF8] px-4 pt-3.5 pb-3 flex items-center gap-3">
+          <span className="relative w-10 h-10 rounded-2xl bg-[#A07A26] text-white flex items-center justify-center shrink-0">
+            <Bell size={18} className="animate-[wiggle_1s_ease-in-out_2]" />
+            <span className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-[#C2412D] ring-2 ring-white animate-ping" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold text-[#A07A26]">⏰ ميعاد متابعة {sinceTxt}{more > 0 ? ` · و${more} غيره` : ''}</p>
+            <p className="font-extrabold text-[17px] text-[#141414] truncate">{lead.name}</p>
+            <p className="font-mono text-xs text-[#6B665C]" dir="ltr">{lead.phone}</p>
+          </div>
+        </div>
+
+        <div className="px-4 pb-4 pt-2 space-y-2.5">
+          {note && (
+            <p className="text-[13px] text-[#3d3a35] bg-[#F6F4EF] rounded-2xl px-3 py-2 leading-relaxed max-h-28 overflow-y-auto whitespace-pre-line">
+              {note}
+            </p>
+          )}
+          <div className="grid grid-cols-3 gap-1.5">
+            <a href={generateCallLink(lead.phone)} className="py-2.5 rounded-xl bg-[#141414] text-white font-bold text-xs flex items-center justify-center gap-1.5"><Phone size={14} />اتصال</a>
+            <a href={generateWhatsAppLink(lead.phone, undefined, undefined, `مرحباً ${lead.name}،`)} target="_blank" rel="noopener noreferrer"
+              className="py-2.5 rounded-xl bg-[#1E7A45] text-white font-bold text-xs flex items-center justify-center gap-1.5"><MessageCircle size={14} />واتساب</a>
+            <button onClick={onOpen} className="py-2.5 rounded-xl bg-[#A07A26] text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"><CheckCircle2 size={14} />سجّل</button>
+          </div>
+          <button
+            disabled={left > 0}
+            onClick={onLater}
+            className="relative w-full py-2 rounded-xl bg-[#F6F4EF] text-[#6B665C] font-bold text-xs flex items-center justify-center gap-1.5 overflow-hidden disabled:cursor-not-allowed"
+          >
+            {left > 0 && <span className="absolute inset-y-0 right-0 bg-[#ECE4D2] transition-all duration-1000 ease-linear" style={{ width: `${((WAIT - left) / WAIT) * 100}%` }} />}
+            <span className="relative flex items-center gap-1.5"><Clock size={13} />{left > 0 ? `اقرا الأول… مش دلوقتي بعد ${left}` : 'مش دلوقتي'}</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
