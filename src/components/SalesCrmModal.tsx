@@ -1976,7 +1976,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
         {activeTab === 'leaderboard' && (
           <div className="p-4 sm:p-5">
-            <LeaderboardTab agents={agents} leads={leads} />
+            <LeaderboardTab agents={agents} leads={leads} isAdmin={isAdmin} currentAgentId={currentSalesAgent?.id} />
           </div>
         )}
 
