@@ -100,6 +100,9 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
 
   const mineVisits = visits.filter((v) => mine.some((p) => p.code === v.code));
   const weekViews = new Set(mineVisits.map((v) => v.visitor)).size;
+  /* «مشاهدة» = كل مرة الشقة اتفتحت من أول ما اتنشرت (العدّاد القديم على الشقة نفسها).
+     «زائر مختلف» بيتعدّ من ساعة ما بدأنا نسجّل كل زائر لوحده، فطبيعي يبقى أقل */
+  const totalViews = Math.max(mineVisits.length, mine.reduce((s2, p) => s2 + (p.clicks?.views || 0), 0));
   const weekAsks = mineVisits.filter((v) => v.requested).length || mine.reduce((s2, p) => s2 + (p.clicks?.whatsapp || 0) + (p.clicks?.call || 0), 0);
   const reviewSubs = subs.filter((s) => s.status === 'pending');
 
@@ -145,7 +148,8 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card tone="dark" className="lg:col-span-3">
             <span className="text-sm text-[#D9B864]">{isBroker ? 'شغلك لحد النهارده' : 'على وحداتك لحد النهارده'}</span>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Stat n={fmt(totalViews)} l="مشاهدة" light />
               <Stat n={fmt(weekViews)} l="زائر مختلف" light />
               <Stat n={fmt(weekAsks)} l="طلب تواصل" color="#7ED3A0" light />
               <Stat n={String(viewings.length)} l="معاينة" color="#D9B864" light />
@@ -176,7 +180,7 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
                   {(() => { const st = statsOf(p.code); return (
                     <div className="grid grid-cols-3 border-t border-[#F0ECE4] pt-3">
                       <Stat n={fmt(st.visitors)} l="زائر مختلف" />
-                      <Stat n={fmt(st.visits)} l="زيارة" color="#6B665C" />
+                      <Stat n={fmt(Math.max(st.visits, p.clicks?.views || 0))} l="مشاهدة" color="#6B665C" />
                       <Stat n={fmt(st.requests || (p.clicks?.whatsapp || 0) + (p.clicks?.call || 0))} l="طلب تواصل" color="#1E7A45" />
                     </div>
                   ); })()}
