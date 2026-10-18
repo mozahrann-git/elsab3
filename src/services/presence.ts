@@ -1,5 +1,6 @@
 /*
-  «إنت موجود؟» — تذكير عشوائي في ساعات الشغل.
+  «إنت موجود؟» — بيطلع بس لما السيلز مايلمسش الموقع نص ساعة في وقت الشغل
+  (الكلام اللي تحت عن الميعاد العشوائي كل ساعة كان النظام القديم — checkTimes لسه موجودة).
 
   - كل ساعة شغل فيها تذكير واحد، في دقيقة عشوائية مختلفة لكل سيلز وكل يوم
     (محسوبة من اسمه والتاريخ — كل جهاز بيطلع نفس المواعيد من غير ما تتخزن).
@@ -42,12 +43,24 @@ export function checkTimes(agentId: string, day: string, startHour: number, clos
   return out;
 }
 
+/* النظام الجديد: التذكير بيطلع بس لما السيلز يبقى مالمسش الموقع نص ساعة
+   في وقت الشغل. لما يطلع بيتسجّل (عشان الإدارة تشوف «مستني»)، ولما يرد
+   بيتسجّل بعد قد إيه. slot = دقيقة ظهوره (رقم فريد في اليوم). */
+export const IDLE_MIN = 30;
+
+export async function openIdleCheck(agentId: string, agentName: string, day: string, slot: number, dueAt: number, idleSince: number) {
+  const id = `${agentId}_${day}_${slot}`;
+  await setDoc(doc(db, 'presence_checks', id), cleanFirestoreData({
+    id, agentId, agentName, day, slot, dueAt, idleSince, answeredAt: 0, delayMin: 0,
+  }), { merge: true });
+}
+
 export async function answerCheck(agentId: string, agentName: string, day: string, slot: number, dueAt: number) {
   const now = Date.now();
   const id = `${agentId}_${day}_${slot}`;
   await setDoc(doc(db, 'presence_checks', id), cleanFirestoreData({
     id, agentId, agentName, day, slot, dueAt, answeredAt: now, delayMin: Math.max(0, Math.round((now - dueAt) / 60000)),
-  }));
+  }), { merge: true });
 }
 
 export function subscribePresenceOfDay(day: string, cb: (l: PresenceCheck[]) => void, agentId?: string) {
@@ -59,22 +72,19 @@ export function subscribePresenceOfDay(day: string, cb: (l: PresenceCheck[]) => 
 
 export interface PresenceSummary { due: number; answered: number; missed: number; waiting: boolean; avgDelay: number | null; lastAt: number | null }
 
-/** ملخص يوم سيلز: كام تذكير جه وقته، رد على كام، ومتوسط سرعة رده */
-export function summarize(agentId: string, day: string, startHour: number, closeHour: number, checks: PresenceCheck[], now = Date.now()): PresenceSummary {
-  const sched = checkTimes(agentId, day, startHour, closeHour).filter((s) => s.dueAt <= now);
-  const mine = checks.filter((c) => c.agentId === agentId && c.day === day);
-  const answeredSlots = new Set(mine.map((c) => c.slot));
-  const unanswered = sched.filter((s) => !answeredSlots.has(s.slot));
-  /* آخر تذكير لسه مارّدش عليه ومافيش بعده = «مستني»، مش «مارّدش» */
-  const last = sched[sched.length - 1];
-  const waiting = !!last && !answeredSlots.has(last.slot) && cairoDay(now) === day;
-  const delays = mine.map((c) => c.delayMin);
+/** ملخص يوم سيلز: كام مرة طلعله «موجود؟» (بعد نص ساعة من غير شغل)، رد على كام، ومتوسط سرعة رده */
+export function summarize(agentId: string, day: string, _startHour: number, _closeHour: number, checks: PresenceCheck[], now = Date.now()): PresenceSummary {
+  const mine = checks.filter((c) => c.agentId === agentId && c.day === day).sort((x, y) => x.dueAt - y.dueAt);
+  const answered = mine.filter((c) => c.answeredAt > 0);
+  const last = mine[mine.length - 1];
+  const waiting = !!last && !(last.answeredAt > 0) && cairoDay(now) === day;
+  const delays = answered.map((c) => c.delayMin);
   return {
-    due: sched.length,
-    answered: mine.length,
-    missed: unanswered.length - (waiting ? 1 : 0),
+    due: mine.length,
+    answered: answered.length,
+    missed: mine.length - answered.length - (waiting ? 1 : 0),
     waiting,
     avgDelay: delays.length ? Math.round(delays.reduce((s, x) => s + x, 0) / delays.length) : null,
-    lastAt: mine.length ? Math.max(...mine.map((c) => c.answeredAt)) : null,
+    lastAt: answered.length ? Math.max(...answered.map((c) => c.answeredAt)) : null,
   };
 }

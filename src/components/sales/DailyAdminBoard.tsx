@@ -140,13 +140,13 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
                     {(() => {
                       if (p.off) return <span className="text-[#8C877D]">—</span>;
                       const ps = summarize(a.id, shownDay, settings.startHour, settings.closeHour, presence, nowT);
-                      if (!ps.due) return <span className="text-[10px] text-[#8C877D]">لسه</span>;
+                      if (!ps.due) return <span className="text-[10px] font-bold text-[#1E7A45] whitespace-nowrap">شغال · ماوقفش ✓</span>;
                       const tone = ps.missed === 0 && (ps.avgDelay ?? 0) <= 10 ? 'text-[#1E7A45]' : ps.answered === 0 ? 'text-[#C2412D]' : 'text-[#A07A26]';
                       return (
                         <div className="space-y-0.5 whitespace-nowrap">
-                          <p className={`font-mono font-bold ${tone}`}>{ps.answered} / {ps.due}</p>
+                          <p className={`font-bold ${tone}`}>وقف {ps.due} مرة</p>
                           <p className="text-[10px] text-[#6B665C]">
-                            {ps.avgDelay !== null ? `بيرد في ${ps.avgDelay} د` : 'مارّدش خالص'}
+                            {ps.avgDelay !== null ? `رد بعد ${ps.avgDelay} د في المتوسط` : 'مارّدش خالص'}
                             {ps.missed ? ` · فاته ${ps.missed}` : ''}
                           </p>
                           {ps.waiting && <p className="text-[10px] font-bold text-[#C2412D]">مستني رده دلوقتي</p>}
@@ -291,7 +291,7 @@ const SettingsModal: React.FC<{ settings: DailySettings; agents: SalesAgent[]; o
           </label>
         ))}
         <label className="text-[11px] font-bold text-[#6B665C] space-y-1">
-          الشغل بيبدأ الساعة (تذكير «موجود؟» من بعدها)
+          الشغل بيبدأ الساعة («موجود؟» بيطلع لو مالمسش السيستم نص ساعة من بعدها)
           <input type="number" min={6} max={14} value={start} onChange={(e) => setStart(Math.min(14, Math.max(6, Number(e.target.value) || 11)))}
             className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-sm font-mono text-[#141414]" />
         </label>
