@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Lead, 
   SalesAgent, 
@@ -44,6 +44,9 @@ import { saveDraft, loadDraft, clearDraft } from '../utils/uiSession';
 import { LionLogo } from './LionLogo';
 import { UnitPreview } from './crm/UnitPreview';
 import { PresencePrompt } from './sales/PresencePrompt';
+import { OWNER_DESK, planOwnerDesk } from '../services/ownerDesk';
+import { subscribeTrips, subscribeFieldFeedback, FieldTrip, FieldFeedback } from '../services/portalService';
+import { saveSalesAgentToDb } from '../services/firebaseService';
 import { formatPrice, formatNumber, generateCallLink, generateWhatsAppLink, waLink } from '../utils/helpers';
 import { SpinWheelModal } from './SpinWheelModal';
 import { LeadDetailsModal } from './LeadDetailsModal';
@@ -463,6 +466,33 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
      فعميل اتعمل عليه ٥ أكشن كان بيتحسب ١ */
   const todayDone = useMemo(() => actionsOn(scopedLeads, cairoDay()).length, [scopedLeads]);
   const [actionsLogOpen, setActionsLogOpen] = useState(false);
+  /* ملف «محمد زهران»: نسخة من كل عميل عاين وفيدباكه اتأكد — بتتعمل
+     أوتوماتيك لما الإدارة تفتح الـCRM، والعميل الأصلي بيفضل مع السيلز */
+  const [deskTrips, setDeskTrips] = useState<FieldTrip[]>([]);
+  const [deskFbs, setDeskFbs] = useState<FieldFeedback[]>([]);
+  useEffect(() => (isAdmin ? subscribeTrips(setDeskTrips) : undefined), [isAdmin]);
+  useEffect(() => (isAdmin ? subscribeFieldFeedback(setDeskFbs) : undefined), [isAdmin]);
+  const deskDone = useRef(new Set<string>());
+  useEffect(() => {
+    if (!isAdmin || !leads.length || !deskFbs.length) return;
+    if (!agents.some((a) => a.id === OWNER_DESK.id) && !deskDone.current.has('agent')) {
+      deskDone.current.add('agent');
+      saveSalesAgentToDb(OWNER_DESK).catch((e) => console.warn('[OwnerDesk] agent', e));
+    }
+    const plan = planOwnerDesk(leads, deskFbs, deskTrips);
+    plan.create.forEach((l) => {
+      const k = `${l.id}:${((l as any).ownerFbIds || []).join(',')}`;
+      if (deskDone.current.has(k)) return;
+      deskDone.current.add(k);
+      onAddLead(l);
+    });
+    plan.update.forEach((l) => {
+      const k = `${l.id}:${((l as any).ownerFbIds || []).join(',')}`;
+      if (deskDone.current.has(k)) return;
+      deskDone.current.add(k);
+      onUpdateLead(l);
+    });
+  }, [isAdmin, leads, deskFbs, deskTrips, agents]);
   /* متابعات الفريق: مقفولة، ولما تتفتح السيلز مرتّبين بالأنشط */
   const [teamOpen, setTeamOpen] = useState(false);
   const rankedAgents = useMemo(() => {
