@@ -170,6 +170,16 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   });
   useEffect(() => { try { sessionStorage.setItem('crm_tab', activeTab); } catch { /* */ } }, [activeTab]);
   /* كل مرة غرفة العمليات تتفتح بتبدأ من «مسار العملاء» — الريفرش بس هو اللي بيرجّعك لنفس التاب */
+  /* تكبير وتصغير كروت مسار العملاء — كل جهاز بيفتكر اختياره */
+  const PIPE_ZOOM = [0.62, 0.8, 1, 1.15];
+  const [pipeZoom, setPipeZoomRaw] = useState<number>(() => {
+    try { const v = Number(localStorage.getItem('crm_pipe_zoom')); return v >= 0 && v <= 3 && localStorage.getItem('crm_pipe_zoom') !== null ? v : 2; } catch { return 2; }
+  });
+  const setPipeZoom = (v: number) => {
+    const n = Math.max(0, Math.min(3, v));
+    setPipeZoomRaw(n);
+    try { localStorage.setItem('crm_pipe_zoom', String(n)); } catch { /* */ }
+  };
   /* بنصفّر لما تتقفل فعلاً (كانت مفتوحة وقفلت) — مش أول ما الصفحة تحمّل
      وهي لسه مقفولة، عشان الريفرش يفضل يرجّعك لنفس التاب */
   const wasOpen = useRef(isOpen);
@@ -1355,13 +1365,21 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               })}
             </div>
 
-            {/* دليل ألوان التنبيه — اللون معاه كلمة دايماً */}
+            {/* دليل ألوان التنبيه — اللون معاه كلمة دايماً، وجنبه تكبير/تصغير الكروت */}
             <div className="flex items-center gap-1.5 flex-wrap text-[11px] px-1">
               {([['#C2410C', 'ليد فريش'], ['#4A5568', 'كامبين قديم'], ['#1F5FB0', 'تحديث من سارة']] as const).map(([c, t]) => (
                 <span key={c} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-semibold" style={{ borderColor: T.line, background: T.surface, color: T.ink }}>
                   <span className="w-2 h-2 rounded-full" style={{ background: c }} />{t}
                 </span>
               ))}
+              <span className="mr-auto flex items-center h-9 rounded-full border p-0.5" style={{ borderColor: T.line, background: T.surface }} role="group" aria-label="حجم الكروت">
+                <button type="button" onClick={() => setPipeZoom(pipeZoom - 1)} disabled={pipeZoom === 0} aria-label="صغّر الكروت"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[18px] font-bold leading-none disabled:opacity-30 active:scale-90 transition" style={{ color: T.ink }}>−</button>
+                <button type="button" onClick={() => setPipeZoom(2)} title="الحجم العادي"
+                  className="min-w-[46px] h-8 px-1 rounded-full text-[11.5px] font-bold font-mono" style={{ color: pipeZoom === 2 ? T.muted : T.ink, background: pipeZoom === 2 ? 'transparent' : '#F1EADC' }}>{Math.round(PIPE_ZOOM[pipeZoom] * 100)}%</button>
+                <button type="button" onClick={() => setPipeZoom(pipeZoom + 1)} disabled={pipeZoom === 3} aria-label="كبّر الكروت"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[18px] font-bold leading-none disabled:opacity-30 active:scale-90 transition" style={{ color: T.ink }}>+</button>
+              </span>
             </div>
 
             {/* لوحة المراحل */}
@@ -1375,8 +1393,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   return (
                     <div
                       key={st.id}
-                      className="rounded-[28px] p-2.5 flex flex-col gap-2.5 min-h-[440px] w-[84vw] sm:w-[320px] shrink-0 snap-center border"
-                      style={{ background: 'rgba(255,253,248,.55)', borderColor: T.line }}
+                      className={`rounded-[28px] p-2.5 flex flex-col gap-2.5 shrink-0 snap-center border ${pipeZoom === 0 ? 'min-h-[300px] w-[84vw] sm:w-[300px]' : 'min-h-[440px] w-[84vw] sm:w-[320px]'}`}
+                      style={{ background: 'rgba(255,253,248,.55)', borderColor: T.line, zoom: PIPE_ZOOM[pipeZoom] } as React.CSSProperties}
                     >
                       <div className="flex items-center justify-between px-2.5 pt-1.5">
                         <div className="flex items-center gap-2">
@@ -1388,7 +1406,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                         </span>
                       </div>
 
-                      <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[65vh] no-scrollbar">
+                      <div className={`${pipeZoom === 0 ? 'space-y-1.5' : 'space-y-2.5'} flex-1 overflow-y-auto no-scrollbar`} style={{ maxHeight: `${Math.round(65 / PIPE_ZOOM[pipeZoom])}vh` }}>
                         {stageLeads.length === 0 ? (
                           <div className="py-12 text-center text-xs rounded-[22px] border border-dashed" style={{ color: T.muted, borderColor: T.line }}>
                             مفيش عملاء في المرحلة دي
@@ -1406,6 +1424,26 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                               ? { bg: tone.hex, fg: '#FFFFFF', soft: 'rgba(255,255,255,.8)', line: 'rgba(255,255,255,.25)', chip: 'rgba(255,255,255,.18)', dark: true }
                               : sTone;
                           const circle = 'w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95';
+                          /* أصغر حجم: شريط مختصر — الاسم والميعاد والسعر بس، والدوسة بتفتح الملف */
+                          if (pipeZoom === 0) return (
+                            <button
+                              key={lead.id}
+                              type="button"
+                              onClick={() => setSelectedLeadForDetails(lead)}
+                              className={`w-full text-right rounded-[18px] px-3.5 py-3 flex flex-col gap-1.5 transition active:scale-[.98] ${late ? 'crm-late' : ''}`}
+                              style={{ background: c.bg, color: c.fg, boxShadow: '0 1px 0 rgba(0,0,0,.04), 0 8px 18px -14px rgba(0,0,0,.45)' }}
+                            >
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="font-readex font-semibold text-[21px] leading-snug truncate">{lead.name}</span>
+                                <span className="font-readex font-semibold text-[17px] shrink-0">{lead.budgetMax ? `${(lead.budgetMax / 1000000).toFixed(1)}M` : ''}</span>
+                              </span>
+                              <span className="flex items-center gap-1.5 text-[15.5px] font-bold" style={{ color: late ? '#fff' : c.soft }}>
+                                {late ? <AlertTriangle size={16} /> : <Clock size={16} />}
+                                <span className="truncate">{b.text || st.defaultBadge}</span>
+                                {tone.tone !== 'none' && <span className="mr-auto text-[13.5px] px-2.5 py-0.5 rounded-full shrink-0" style={{ background: c.chip }}>{tone.label}</span>}
+                              </span>
+                            </button>
+                          );
                           return (
                             <div
                               key={lead.id}
