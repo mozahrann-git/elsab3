@@ -166,9 +166,20 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
       const t = sessionStorage.getItem('crm_tab') as CrmTab | null;
       if (t && ['daily', 'pipeline', 'followups', 'matching', 'content', 'leaderboard', 'notebook'].includes(t) && (t !== 'notebook' || ownerDesk)) return t;
     } catch { /* الوضع الخاص */ }
-    return isAdmin ? 'pipeline' : 'daily';
+    return 'pipeline';
   });
   useEffect(() => { try { sessionStorage.setItem('crm_tab', activeTab); } catch { /* */ } }, [activeTab]);
+  /* كل مرة غرفة العمليات تتفتح بتبدأ من «مسار العملاء» — الريفرش بس هو اللي بيرجّعك لنفس التاب */
+  /* بنصفّر لما تتقفل فعلاً (كانت مفتوحة وقفلت) — مش أول ما الصفحة تحمّل
+     وهي لسه مقفولة، عشان الريفرش يفضل يرجّعك لنفس التاب */
+  const wasOpen = useRef(isOpen);
+  useEffect(() => {
+    if (wasOpen.current && !isOpen) {
+      setActiveTab('pipeline');
+      try { sessionStorage.removeItem('crm_tab'); } catch { /* */ }
+    }
+    wasOpen.current = isOpen;
+  }, [isOpen]);
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   /* الموبايل: البحث أيقونة في الشريط فوق، بتفتح خانة تحته */
@@ -789,8 +800,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               }}
               className={`w-full p-2.5 rounded-xl text-right flex items-center justify-between text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'daily'
-                  ? 'bg-[#A07A26] text-white shadow-xs'
-                  : 'text-stone-300 hover:bg-white/5 hover:text-white'
+                  ? 'bg-gradient-to-l from-[#E9B949] to-[#F6DE9A] text-[#17150F] ring-2 ring-white/70'
+                  : 'bg-gradient-to-l from-[#E9B949]/90 to-[#F6DE9A]/80 text-[#17150F]'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -974,8 +985,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               const alert = n > 0 && (id === 'followups' || id === 'notebook');
               return (
                 <button key={id} onClick={() => { setActiveTab(id as CrmTab); setIsMobileMenuOpen(false); }}
-                  className={`relative h-[76px] rounded-[20px] p-3 flex flex-col justify-between text-right transition active:scale-[.97] ${on ? 'bg-[#17150F] text-[#F5F0E6]' : 'bg-[#FFFDF8] border border-[#E7DFCF]'}`}>
-                  <span className={on ? 'text-[#E9C46A]' : 'text-[#8E6C1F]'}>{icon}</span>
+                  className={`relative h-[76px] rounded-[20px] p-3 flex flex-col justify-between text-right transition active:scale-[.97] ${id === 'daily' ? `bg-gradient-to-l from-[#E9B949] to-[#F6DE9A] text-[#17150F] ${on ? 'ring-2 ring-[#17150F]' : ''}` : on ? 'bg-[#17150F] text-[#F5F0E6]' : 'bg-[#FFFDF8] border border-[#E7DFCF]'}`}>
+                  <span className={id === 'daily' ? 'text-[#17150F]' : on ? 'text-[#E9C46A]' : 'text-[#8E6C1F]'}>{icon}</span>
                   <span className="text-[13px] font-bold leading-tight">{label}</span>
                   {n > 0 && (
                     <span className={`absolute top-2.5 left-2.5 min-w-6 h-6 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${alert ? 'bg-[#D3262B] text-white' : on ? 'bg-white/15 text-white' : 'bg-[#F1EADC] text-[#6F695D]'}`}>{n}</span>
@@ -1135,11 +1146,14 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={`h-10 px-4 rounded-[14px] text-[13px] font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 flex items-center ${
-                activeTab === tab.id
+                tab.id === 'daily'
+                  ? `bg-gradient-to-l from-[#E9B949] to-[#F6DE9A] text-[#17150F] font-bold shadow-[0_6px_16px_-8px_rgba(169,132,47,.9)] ${activeTab === 'daily' ? 'ring-2 ring-[#17150F] ring-offset-2 ring-offset-[#F5F0E6]' : ''}`
+                  : activeTab === tab.id
                   ? 'bg-[#17150F] text-[#F5F0E6]'
                   : 'bg-white border border-[#E7DFCF] text-[#17150F]'
               }`}
             >
+              {tab.id === 'daily' && <Sparkles size={14} className="ml-1.5" />}
               {tab.label}
               {tab.id === 'notebook' && dueNotes.length > 0 && (
                 <span className="mr-1.5 px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px]">{dueNotes.length}</span>
