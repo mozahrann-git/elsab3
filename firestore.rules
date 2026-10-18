@@ -14,13 +14,13 @@ service cloud.firestore {
     function isCoord()    { return roleIs('coordinator'); }
     function isOps()      { return hasAccess() && acc().role in ['admin', 'coordinator']; }
     function isBroker()   { return roleIs('broker'); }
-    function isBoss()     { return roleIs('company_owner'); }   // أونر الشركة: عرض بس
+    function isBoss()     { return roleIs('company_owner'); }   // أونر الشركة: عرض + تعديل وحذف الشقق
     function isMkt()      { return roleIs('marketing'); }
     function isOwner()    { return roleIs('owner'); }
     /* صلاحية تعديل الشقق: الأدمن والمنسقة دايماً، وأي حساب
        سيلز الأدمن داله الصلاحية صراحة من شاشة الحسابات.
        قبل كده كان أي سيلز يقدر يعدّل أي شقة — دي كانت واسعة. */
-    function canEditProps() { return isAdmin() || isCoord()
+    function canEditProps() { return isAdmin() || isCoord() || isBoss()
                               || (roleIs('sales') && acc().canEditProperties == true); }
     function myBrokerId() { return acc().brokerId; }
     function myCodes()    { return acc().propertyCodes; }
@@ -55,7 +55,7 @@ service cloud.firestore {
          ولا حاجة تانية في الشقة تتغيّر. */
       allow update: if onlyKeys(['clicks']);
       match /private/{docId} {
-        allow read, write: if isStaff() || isCoord();
+        allow read, write: if isStaff() || isCoord() || isBoss();
         // البروكر يسجّل رقم المالك (ميقدرش يقراه تاني)
         allow create, update: if isBroker() && request.resource.data.brokerId == myBrokerId();
       }

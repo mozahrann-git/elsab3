@@ -28,6 +28,8 @@ interface Props {
   onLogout: () => void;
   onAddUnit: () => void;
   onOpenCrm: () => void;
+  /** يفتح إدارة الشقق (تعديل وحذف) */
+  onOpenProperties?: () => void;
 }
 
 const STAGES: { id: string; label: string }[] = [
@@ -36,7 +38,7 @@ const STAGES: { id: string; label: string }[] = [
   { id: 'negotiation', label: 'تفاوض' }, { id: 'closed', label: 'صفقة مغلقة' }, { id: 'lost', label: 'مؤجل' },
 ];
 
-export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, agents, submissions, logoUrl, onClose, onLogout, onAddUnit, onOpenCrm }) => {
+export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, agents, submissions, logoUrl, onClose, onLogout, onAddUnit, onOpenCrm, onOpenProperties }) => {
   const [tab, setTab] = useState('overview');
   const [viewings, setViewings] = useState<UnitViewing[]>([]);
   const [feedback, setFeedback] = useState<OwnerFeedback[]>([]);
@@ -76,9 +78,10 @@ export const CompanyOwnerPanel: React.FC<Props> = ({ access, properties, leads, 
         { key: 'feedback', label: 'الفيدباك', icon: <MessageSquareText size={18} /> },
         { key: 'crm', label: 'الطلبات والـ CRM', icon: <Users size={18} /> },
         { key: 'partners', label: 'البروكرز والملاك', icon: <Building2 size={18} /> },
+        ...(onOpenProperties ? [{ key: 'props', label: 'تعديل الشقق', icon: <Building2 size={18} /> }] : []),
         { key: 'add', label: 'إضافة شقة', icon: <Home size={18} /> },
       ]}
-      active={tab} onTab={setTab} onClose={onClose}
+      active={tab} onTab={(k) => (k === 'props' ? onOpenProperties?.() : setTab(k))} onClose={onClose}
       footer={<button onClick={onLogout} className="w-full px-4 py-3 rounded-xl text-sm text-[#F0776A] hover:bg-white/10 text-right flex items-center gap-2"><LogOut size={16} />خروج</button>}
     >
       {tab === 'overview' && (

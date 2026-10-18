@@ -509,7 +509,8 @@ export default function App() {
 
   /* مين يقدر يعدّل الشقق: الأدمن، أو حساب سيلز الأدمن داله
      الصلاحية صراحة من شاشة الحسابات. */
-  const canManageProperties = isAdminLoggedIn || staffAccess?.canEditProperties === true;
+  /* أونر الشركة كمان بيعدّل ويحذف الشقق (الشقق والإضافة بس، مش باقي لوحة الإدارة) */
+  const canManageProperties = isAdminLoggedIn || staffAccess?.canEditProperties === true || staffAccess?.role === 'company_owner';
 
   const handleAdminLogin = (status: boolean) => {
     setIsAdminLoggedIn(status);
@@ -2614,7 +2615,8 @@ export default function App() {
         isOpen={isAdminDashboardOpen}
         /* الحساب اللي ليه حق تعديل الشقق بس — مش أدمن كامل */
         propertiesOnly={!isAdminLoggedIn}
-        onClose={() => setIsAdminDashboardOpen(false)}
+        /* أونر الشركة بيرجع للوحته بعد ما يقفل إدارة الشقق */
+        onClose={() => { setIsAdminDashboardOpen(false); if (!isAdminLoggedIn && staffAccess?.role === 'company_owner') setActivePortal('company'); }}
         properties={properties}
         onAddProperty={handleAddProperty}
         onUpdateProperty={handleUpdateProperty}
@@ -2743,7 +2745,8 @@ export default function App() {
           onClose={() => setActivePortal(null)}
           onLogout={() => { signOutToGuest().catch(() => {}); setActivePortal(null); setStaffAccess(null); }}
           onAddUnit={() => { setActivePortal(null); setIsResaleSubmitOpen(true); }}
-          onOpenCrm={() => { setActivePortal(null); setIsCrmOpen(true); }} />
+          onOpenCrm={() => { setActivePortal(null); setIsCrmOpen(true); }}
+          onOpenProperties={() => { setActivePortal(null); setIsAdminDashboardOpen(true); }} />
       )}
       {activePortal === 'coordinator' && staffAccess && (
         <CoordinatorPanel name={staffAccess.name || ''} isAdmin={staffAccess.role === 'admin'} properties={properties} submissions={ownerSubmissions} logoUrl={customLogoUrl}
