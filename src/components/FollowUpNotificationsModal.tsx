@@ -60,7 +60,9 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
     || agents.find((a) => a.id === myId)?.name
     || 'الإدارة';
   const [filterType, setFilterType] = useState<'all' | 'urgent' | 'today' | 'upcoming'>('all');
-  const [rawScope, setRawScope] = useState<'my_leads' | 'all_team'>('my_leads');
+  /* العملاء جايين متفلترين أصلاً على اللي إنت شايفه (الفريق أو سيلز معين).
+     الإدارة مالهاش عملاء باسمها، فـ«عملائي» عندها كان بيطلع صفر دايماً. */
+  const [rawScope, setRawScope] = useState<'my_leads' | 'all_team'>(canSeeTeam ? 'all_team' : 'my_leads');
   /* حتى لو الحالة اتغيّرت بأي طريقة، السيلز بيفضل على عملاءه هو */
   const filterScope: 'my_leads' | 'all_team' = canSeeTeam ? rawScope : 'my_leads';
   const setFilterScope = (v: 'my_leads' | 'all_team') => { if (canSeeTeam) setRawScope(v); };
@@ -281,7 +283,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                 <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8C877D]" />
               </div>
 
-              {canSeeTeam && (
+              {canSeeTeam && myId && (
               <div className="flex bg-[#F6F4EF] p-1 rounded-xl border border-[#ECE8DF] text-[11px] font-bold shrink-0">
                 <button
                   onClick={() => setFilterScope('my_leads')}
@@ -289,7 +291,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                     filterScope === 'my_leads' ? 'bg-white text-[#141414] shadow-2xs' : 'text-[#6B665C]'
                   }`}
                 >
-                  عميلاتي
+                  عملائي
                 </button>
                 <button
                   onClick={() => setFilterScope('all_team')}

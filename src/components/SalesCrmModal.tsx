@@ -65,7 +65,7 @@ import { cairoDay } from '../services/dailyTasks';
 import { matchDetailed, briefLine, briefGaps, readBrief, payModeOf, resaleFits, projectsFit, resaleCeiling, PayMode } from '../services/clientBrief';
 import { toggleValue } from '../utils/multiFilter';
 import { toneStyle, viewingUpdateText, markViewingSeen } from '../utils/leadTone';
-import { humanDuration, followUpBadge, followUpState } from '../utils/followUpAlerts';
+import { humanDuration, followUpBadge, followUpState, buildAlerts } from '../utils/followUpAlerts';
 import { OwnerLinkCard } from './crm/OwnerLinkCard';
 import { QuickBriefRow } from './crm/QuickBriefRow';
 import { ProjectMatchPanel } from './crm/ProjectMatchPanel';
@@ -323,8 +323,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   // Pending Follow-ups Count
   const pendingFollowUpsCount = useMemo(() => {
-    const end = new Date(); end.setHours(23, 59, 59, 999);
-    return scopedLeads.filter((l) => (l.nextActionAt && l.nextActionAt <= end.getTime() && l.followUpStatus !== 'completed') || (l.status === 'new' && !l.nextActionAt)).length;
+    /* نفس حساب شاشة التنبيهات بالظبط (المتأخر + النهارده) — عشان الرقم على الجرس يطابق اللي جوه */
+    return buildAlerts(scopedLeads).filter((a) => a.urgency !== 'upcoming').length;
   }, [scopedLeads]);
 
   // Selected Lead for Smart Matching — من عملاء الشخص الداخل بس
@@ -2369,6 +2369,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         leads={scopedLeads}
         agents={agents}
         currentAgent={currentAgent}
+        currentAgentId={currentAgentId}
+        canSeeTeam={isAdmin || isLead}
         onUpdateLead={onUpdateLead}
         onSelectLead={(lead) => {
           setSelectedLeadForDetails(lead);
