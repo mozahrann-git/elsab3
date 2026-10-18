@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Play, Pause, Check, Phone } from 'lucide-react';
-import { FieldFeedback, FieldAgent, BrokerFeedback, subscribeFieldFeedback, subscribeFieldAgents, salesConfirmFeedback, subscribeBrokerFeedbackForSales, groupFeedback, groupTitle } from '../../services/portalService';
+import { FieldFeedback, FieldAgent, BrokerFeedback, subscribeFieldFeedbackForSales, subscribeFieldAgents, salesConfirmFeedback, subscribeBrokerFeedbackForSales, groupFeedback, groupTitle } from '../../services/portalService';
 import { generateCallLink } from '../../utils/helpers';
 
 /*
@@ -93,7 +93,7 @@ export const SalesFeedbackInbox: React.FC<{ isOpen: boolean; onClose: () => void
   const [err, setErr] = useState('');
   const [shown, setShown] = useState(false);
   useEffect(() => (isOpen ? subscribeBrokerFeedbackForSales(agentId || null, !!isAdmin, setBrokerFbs) : undefined), [isOpen, agentId, isAdmin]);
-  useEffect(() => { if (!isOpen) return; const a = subscribeFieldFeedback(setFbs); const b = subscribeFieldAgents(setAgents); return () => { a(); b(); }; }, [isOpen]);
+  useEffect(() => { if (!isOpen) return; const a = subscribeFieldFeedbackForSales(agentId || null, !!isAdmin, setFbs); const b = subscribeFieldAgents(setAgents); return () => { a(); b(); }; }, [isOpen, agentId, isAdmin]);
   useEffect(() => { if (!isOpen) { setShown(false); return; } const r = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(r); }, [isOpen]);
   if (!isOpen) return null;
 

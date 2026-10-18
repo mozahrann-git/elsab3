@@ -488,6 +488,12 @@ export async function submitFieldFeedback(trip: FieldTrip, u: TripUnit, data: { 
   }));
 }
 export function subscribeFieldFeedback(cb: (l: FieldFeedback[]) => void) { return listen<FieldFeedback>(collection(db, 'field_feedback'), cb); }
+/* السيلز مايقدرش يطلب الفيدباك كله — القواعد بتسمحله بتاعه بس، فالطلب الكامل
+   كان بيترفض كله ويرجع فاضي. لازم نطلب بتاعه بالاسم زي فيدباك البروكرز. */
+export function subscribeFieldFeedbackForSales(agentId: string | null, all: boolean, cb: (l: FieldFeedback[]) => void) {
+  const q = all ? collection(db, 'field_feedback') : query(collection(db, 'field_feedback'), where('salesAgentId', '==', agentId || '-'));
+  return listen<FieldFeedback>(q, cb);
+}
 const redoKey = (code: string) => `redo.${String(code).replace(/[.\s]/g, '_')}`;
 export async function saraConfirmFeedback(f: FieldFeedback, edits: Partial<FieldFeedback>) {
   await updateDoc(doc(db, 'field_feedback', f.id), cleanFirestoreData({ ...edits, stage: 'sara_confirmed', saraAt: Date.now() }));
