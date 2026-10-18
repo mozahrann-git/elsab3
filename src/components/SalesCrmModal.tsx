@@ -44,7 +44,7 @@ import { saveDraft, loadDraft, clearDraft } from '../utils/uiSession';
 import { LionLogo } from './LionLogo';
 import { UnitPreview } from './crm/UnitPreview';
 import { PresencePrompt } from './sales/PresencePrompt';
-import { crmTheme as T, stageTone } from '../theme/crmTheme';
+import { crmTheme as T, stageTone, LATE_TONE } from '../theme/crmTheme';
 import { Notebook } from './crm/Notebook';
 import { OwnerNote, subscribeNotes, isDue } from '../services/notebook';
 import { OWNER_DESK, planOwnerDesk } from '../services/ownerDesk';
@@ -555,7 +555,25 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   /* بعد الحفظ رايح فين: مكالمة الاكتشاف ولا المطابقة على طول.
      لازم يفضل فوق الـ return اللي تحت — أي hook تحته بيكسر الصفحة. */
 
+  /* لون الكارت في كل مكان في الـCRM: المتأخر أحمر، وبعده تنبيه (فريش/كامبين/سارة)، وبعده لون المرحلة */
+  const cardLook = (lead: Lead, fallback = '') => {
+    const b = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || fallback);
+    const late = b.tone === 'late';
+    const tone = toneStyle(lead);
+    const c = late ? LATE_TONE
+      : tone.tone !== 'none'
+        ? { bg: tone.hex, fg: '#FFFFFF', soft: 'rgba(255,255,255,.8)', line: 'rgba(255,255,255,.25)', chip: 'rgba(255,255,255,.18)', dark: true }
+        : stageTone(lead.status);
+    return { b, late, tone, c };
+  };
+
   /* لازم قبل أي return — React بيقع لو عدد الـhooks اتغيّر بين رسمة والتانية */
+  /* الثيم الموحّد بيتفعّل على الصفحة كلها وهي مفتوحة — عشان النوافذ اللي بتتفتح فوقها تاخده كمان */
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.classList.add('crm-skin');
+    return () => document.body.classList.remove('crm-skin');
+  }, [isOpen]);
   const [undoMove, setUndoMove] = useState<{ prev: Lead; text: string } | null>(null);
   const undoTimer = useRef<any>(null);
   if (!isOpen) return null;
@@ -959,10 +977,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`h-10 px-4 rounded-[14px] text-[13px] font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 flex items-center ${
                 activeTab === tab.id
-                  ? 'bg-[#141414] text-white shadow-2xs'
-                  : 'bg-white border border-[#ECE8DF] text-[#6B665C] hover:text-[#141414]'
+                  ? 'bg-[#17150F] text-[#F5F0E6]'
+                  : 'bg-white border border-[#E7DFCF] text-[#17150F]'
               }`}
             >
               {tab.label}
@@ -1225,25 +1243,25 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                           const tone = toneStyle(lead);
                           /* لون الكارت = المرحلة. التنبيهات (فريش / كامبين / تحديث سارة) بتغطّي عليه
                              لأنها حاجة لازم تتشاف — ومعاها كلمتها دايماً */
-                          const c = tone.tone !== 'none'
-                            ? { bg: tone.hex, fg: '#FFFFFF', soft: 'rgba(255,255,255,.8)', line: 'rgba(255,255,255,.25)', chip: 'rgba(255,255,255,.18)', dark: true }
-                            : sTone;
                           const b = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || st.defaultBadge);
                           const late = b.tone === 'late';
+                          /* المتأخر بيقلب أحمر كله — أهم من أي لون تاني */
+                          const c = late ? LATE_TONE
+                            : tone.tone !== 'none'
+                              ? { bg: tone.hex, fg: '#FFFFFF', soft: 'rgba(255,255,255,.8)', line: 'rgba(255,255,255,.25)', chip: 'rgba(255,255,255,.18)', dark: true }
+                              : sTone;
                           const circle = 'w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95';
                           return (
                             <div
                               key={lead.id}
-                              className="rounded-[22px] p-3.5 flex flex-col gap-2 transition"
+                              className={`rounded-[22px] p-3.5 flex flex-col gap-2 transition ${late ? 'crm-late' : ''}`}
                               style={{ background: c.bg, color: c.fg, boxShadow: '0 1px 0 rgba(0,0,0,.04), 0 12px 26px -16px rgba(0,0,0,.45)' }}
                             >
                               {/* الميعاد + تنبيه الكارت */}
                               <div className="flex items-center justify-between gap-2">
                                 <span className="inline-flex items-center gap-1.5 h-[26px] px-2.5 rounded-full text-[11.5px] font-bold"
-                                  style={late
-                                    ? (c.dark ? { background: '#FFFFFF', color: T.late } : { background: T.late, color: '#FFFFFF' })
-                                    : { background: c.chip, color: c.fg }}>
-                                  <Clock size={12} />
+                                  style={late ? { background: '#FFFFFF', color: LATE_TONE.bg } : { background: c.chip, color: c.fg }}>
+                                  {late ? <AlertTriangle size={12} /> : <Clock size={12} />}
                                   {b.text || st.defaultBadge}
                                 </span>
                                 {tone.tone !== 'none' ? (
@@ -1350,14 +1368,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         {/* ========================================================= */}
         {activeTab === 'followups' && (
           <div className="space-y-4 sm:space-y-5 flex-1 pt-1">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-[#ECE8DF] p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="font-readex font-bold text-base sm:text-lg text-[#141414]">
-                  مسار المتابعات اليومية (Follow-up Pipeline)
-                </h3>
-                <p className="text-xs text-[#6B665C]">
-                  جدول المواعيد والاتصالات المستحقة لمستشاري المبيعات
-                </p>
+                <h3 className="font-readex font-semibold text-[26px] leading-tight text-[#17150F]">المتابعات</h3>
+                <p className="text-[13px] text-[#6F695D]">مين ميعاده جه، ومين اتأخر — الأحمر الأول</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
                 {(isAdmin || isLead) && (
@@ -1369,7 +1383,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 )}
                 <button
                   onClick={() => setLateOnly((v) => !v)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border ${lateOnly ? 'bg-[#C2412D] text-white border-[#C2412D]' : 'bg-[#FBEDEA] text-[#C2412D] border-[#E9B8AE]'}`}
+                  className={`h-10 px-4 rounded-[14px] text-[13px] font-bold border ${lateOnly ? 'bg-[#D3262B] text-white border-[#D3262B]' : 'bg-white text-[#D3262B] border-[#F0C2BF]'}`}
                 >
                   {lateOnly ? `اعرض الكل` : `المتأخر (${lateCount})`}
                 </button>
@@ -1397,196 +1411,117 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               {shownFollowUps
                 .map((lead) => {
                 const stageObj = CRM_PIPELINE_STAGES.find((s) => s.id === lead.status) || CRM_PIPELINE_STAGES[0];
-                const tone = toneStyle(lead);
+                const { b, late, tone, c } = cardLook(lead, stageObj.defaultBadge);
+                const pill = 'h-9 px-3 rounded-full text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition active:scale-95 cursor-pointer';
                 return (
-                  <div 
+                  <div
                     key={lead.id}
-                    className={`rounded-2xl p-4 shadow-2xs space-y-3 transition-all ${tone.card}`}
+                    className={`rounded-[24px] p-4 space-y-3 ${late ? 'crm-late' : ''}`}
+                    style={{ background: c.bg, color: c.fg, boxShadow: '0 1px 0 rgba(0,0,0,.04), 0 14px 30px -18px rgba(0,0,0,.5)' }}
                   >
-                    {/* نفس ألوان البايبلاين بالظبط — الكارت الواحد بلون واحد في كل مكان */}
-                    {tone.tone === 'viewing_update' && (
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${tone.chip}`}>
-                          {tone.label} · {viewingUpdateText(lead)}
-                        </span>
-                        <button
-                          onClick={() => onUpdateLead(markViewingSeen(lead))}
-                          className="text-[10px] font-extrabold bg-white text-[#1F5FB0] px-2.5 py-0.5 rounded-full cursor-pointer"
-                        >
-                          شفته
-                        </button>
-                      </div>
-                    )}
-                    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 ${tone.divider}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-2xl font-bold flex items-center justify-center font-readex text-sm ${tone.avatar}`}>
-                          {lead.name.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className={`font-readex font-bold text-sm ${tone.ink}`}>{lead.name}</h4>
-                            <span className={`font-mono text-xs dir-ltr ${tone.inkSoft}`}>{lead.phone}</span>
-                            {(tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
-                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 ${tone.chip}`}>
-                                <Flame size={10} /> {tone.label}
-                              </span>
-                            )}
-                            {/* كاش ولا تقسيط — الإجابة موجودة من الاكتشاف،
-                                بس مكانتش بتبان غير لما تفتح الملف */}
-                            {paymentOf(lead) && (
-                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                                paymentOf(lead) === 'cash'
-                                  ? 'bg-[#EEF5F0] text-[#1E7A45]'
-                                  : paymentOf(lead) === 'installment'
-                                    ? 'bg-[#EAF1F8] text-[#1F5C8B]'
-                                    : 'bg-[#FBF1E4] text-[#A07A26]'
-                              }`}>
-                                {PAY_LABEL[paymentOf(lead)!]}
-                              </span>
-                            )}
-                          </div>
-                          {lead.campaignName && (tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
-                            <p className="text-[11px] font-bold text-white/85">من كامبين: {lead.campaignName}</p>
-                          )}
-                          <p className={`text-xs ${tone.inkSoft}`}>
-                            المستشار المسؤول: <strong className={tone.ink}>{lead.assignedAgentName || 'سارة حنفي'}</strong>
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Current Stage Button that opens quick stage switcher */}
-                      <button
-                        onClick={() => setLeadToChangeStatus(lead)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 self-start sm:self-auto cursor-pointer ${stageObj.bgTag} ${stageObj.badgeColor} border-current/20`}
-                      >
-                        <span>{stageObj.pickerLabel}</span>
-                        <ChevronDown size={13} />
+                    {/* الميعاد + المرحلة */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-xs font-bold"
+                        style={late ? { background: '#FFFFFF', color: LATE_TONE.bg } : { background: c.chip }}>
+                        {late ? <AlertTriangle size={13} /> : <Clock size={13} />}
+                        {b.text || lead.followUpScheduledAt || '—'}
+                      </span>
+                      <button onClick={() => setLeadToChangeStatus(lead)}
+                        className="h-7 px-3 rounded-full text-xs font-bold flex items-center gap-1 cursor-pointer" style={{ background: c.chip }}>
+                        {stageObj.label}<ChevronDown size={13} />
                       </button>
                     </div>
-{!compactView && (<>
-                    {/* Follow-up Fields Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-[#F6F4EF] p-3 rounded-xl border border-[#ECE8DF]">
-                      <div>
-                        <span className="text-[#8C877D] text-[10px] block font-bold">موعد المتابعة:</span>
-                        <span className="font-bold text-[#141414]">{lead.followUpScheduledAt || 'اليوم بعد ساعتين'}</span>
-                      </div>
 
-                      <div>
-                        <span className="text-[#8C877D] text-[10px] block font-bold">الأولوية:</span>
-                        {(() => {
-                          const b = followUpBadge(lead.nextActionAt, lead.followUpStatus, '—');
-                          if (b.tone === 'late') {
-                            return <span className="font-extrabold text-white bg-[#9E2A1B] px-2 py-0.5 rounded-lg inline-block">{b.text}</span>;
-                          }
-                          if (b.tone === 'soon') return <span className="font-bold text-[#C2410C]">🟠 {b.text}</span>;
-                          if (b.tone === 'today') return <span className="font-bold text-[#A07A26]">🟡 {b.text}</span>;
-                          return <span className="font-bold text-[#6B665C]">{b.text}</span>;
-                        })()}
+                    {tone.tone === 'viewing_update' && (
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full" style={{ background: c.chip }}>{tone.label} · {viewingUpdateText(lead)}</span>
+                        <button onClick={() => onUpdateLead(markViewingSeen(lead))} className="text-[11px] font-extrabold bg-white text-[#1F5FB0] px-2.5 py-0.5 rounded-full cursor-pointer">شفته</button>
                       </div>
+                    )}
 
-                      <div>
-                        <span className="text-[#8C877D] text-[10px] block font-bold">الحي والميزانية:</span>
-                        <span className="font-bold text-[#141414]">
-                          {lead.preferredNeighborhood || 'الهضبة الوسطى'} ({lead.budgetMax ? `${(lead.budgetMax / 1000000).toFixed(1)}M` : '—'})
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-[#8C877D] text-[10px] block font-bold">كود الشقة المهتم بها:</span>
-                        <span className="font-mono font-bold text-[#A07A26]">
-                          {lead.interestedPropertyCode ? `#${lead.interestedPropertyCode}` : 'طلب عام'}
-                        </span>
+                    {/* الاسم */}
+                    <div className="flex items-start gap-3">
+                      <span className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center font-readex font-bold text-base" style={{ background: c.dark ? 'rgba(255,255,255,.2)' : T.ink, color: c.dark ? '#fff' : T.ground }}>
+                        {lead.name.charAt(0)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <button onClick={() => setSelectedLeadForDetails(lead)} className="text-right font-readex font-semibold text-[19px] leading-snug cursor-pointer">{lead.name}</button>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span className="font-mono text-xs" dir="ltr" style={{ color: c.soft }}>{lead.phone}</span>
+                          {(tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1" style={{ background: c.chip }}><Flame size={10} /> {tone.label}</span>
+                          )}
+                          {paymentOf(lead) && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: c.chip }}>{PAY_LABEL[paymentOf(lead)!]}</span>
+                          )}
+                        </div>
+                        {lead.campaignName && (tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
+                          <p className="text-[11px] font-bold" style={{ color: c.soft }}>من كامبين: {lead.campaignName}</p>
+                        )}
+                        <p className="text-xs mt-0.5" style={{ color: c.soft }}>مع <strong style={{ color: c.fg }}>{lead.assignedAgentName || 'سارة حنفي'}</strong></p>
                       </div>
                     </div>
+{!compactView && (<>
+                    {/* الطلب في سطر */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-2 text-xs rounded-2xl p-3" style={{ background: c.chip }}>
+                      <div><span className="text-[10px] block font-bold" style={{ color: c.soft }}>موعد المتابعة</span><span className="font-bold">{lead.followUpScheduledAt || '—'}</span></div>
+                      <div><span className="text-[10px] block font-bold" style={{ color: c.soft }}>الحالة</span><span className="font-bold">{b.text || '—'}</span></div>
+                      <div><span className="text-[10px] block font-bold" style={{ color: c.soft }}>الحي والميزانية</span><span className="font-bold">{lead.preferredNeighborhood || 'الهضبة الوسطى'} ({lead.budgetMax ? `${(lead.budgetMax / 1000000).toFixed(1)}M` : '—'})</span></div>
+                      <div><span className="text-[10px] block font-bold" style={{ color: c.soft }}>الكود</span><span className="font-mono font-bold">{lead.interestedPropertyCode ? `#${lead.interestedPropertyCode}` : 'طلب عام'}</span></div>
+                    </div>
 
-                    {/* الطلب — بيتعدّل من هنا على طول، من غير ما تفتح شاشة تانية */}
-                    <QuickBriefRow lead={lead} onUpdateLead={onUpdateLead} byName={actorName} />
+                    {/* الطلب — بيتعدّل من هنا على طول */}
+                    <div className="rounded-2xl p-2" style={{ background: T.surface, color: T.ink }}>
+                      <QuickBriefRow lead={lead} onUpdateLead={onUpdateLead} byName={actorName} />
+                    </div>
 
-                    {/* Field Viewing Report Box in List View */}
                     {lead.fieldViewingComment && (
-                      <div className="p-3 bg-amber-50/90 border border-amber-200/90 rounded-2xl space-y-1.5 shadow-2xs">
-                        <div className="flex items-center justify-between text-xs font-bold text-amber-950 flex-wrap gap-1">
-                          <span className="flex items-center gap-1.5">
-                            <Eye size={14} className="text-amber-700 shrink-0" />
-                            <span>تقرير وكومنت المعاينة الميدانية من البروكر ({lead.fieldViewingBrokerName || 'الوسيط العقاري'}):</span>
-                          </span>
+                      <div className="rounded-2xl p-3 space-y-1.5" style={{ background: c.chip }}>
+                        <div className="flex items-center justify-between text-xs font-bold flex-wrap gap-1">
+                          <span className="flex items-center gap-1.5"><Eye size={14} />كومنت المعاينة ({lead.fieldViewingBrokerName || 'الوسيط'})</span>
                           {lead.fieldViewingOutcome && (
-                            <span className="px-2.5 py-0.5 bg-amber-200 text-amber-950 text-xs rounded-lg font-black">
-                              النتيجة: {lead.fieldViewingOutcome === 'interested' ? 'العميل مهتم وجاد للتفاوض' : lead.fieldViewingOutcome === 'made_offer' ? 'قدّم عرض سعر' : lead.fieldViewingOutcome === 'not_suitable' ? 'غير مناسبة' : lead.fieldViewingOutcome}
+                            <span className="px-2.5 py-0.5 bg-white text-[#17150F] text-[11px] rounded-full font-black">
+                              {lead.fieldViewingOutcome === 'interested' ? 'مهتم وجاد' : lead.fieldViewingOutcome === 'made_offer' ? 'قدّم عرض سعر' : lead.fieldViewingOutcome === 'not_suitable' ? 'غير مناسبة' : lead.fieldViewingOutcome}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-stone-900 leading-relaxed font-semibold bg-white/80 p-2.5 rounded-xl border border-amber-200/50">
-                          « {lead.fieldViewingComment} »
-                        </p>
-                        <div className="text-[10px] text-stone-500 flex items-center justify-between pt-0.5">
-                          <span>منسقة المعاينة: <strong className="text-stone-700">{lead.coordinatorName || 'سارة حنفي'}</strong></span>
-                          {lead.fieldViewingRecordedAt && <span>توقيت التسجيل: {lead.fieldViewingRecordedAt}</span>}
+                        <p className="text-[13px] leading-relaxed font-semibold">« {lead.fieldViewingComment} »</p>
+                        <div className="text-[10px] flex items-center justify-between" style={{ color: c.soft }}>
+                          <span>منسقة المعاينة: <strong>{lead.coordinatorName || 'سارة حنفي'}</strong></span>
+                          {lead.fieldViewingRecordedAt && <span>{lead.fieldViewingRecordedAt}</span>}
                         </div>
                       </div>
                     )}
-
 </>)}
-                    {/* Notes & Actions Bar */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                      <p className={`text-xs text-[#6B665C] truncate max-w-xl ${compactView ? 'hidden sm:block' : ''}`}>
-                        📝 <strong className="text-[#141414]">آخر ملاحظة:</strong> {lead.followUpNote || lead.notes?.[0] || 'لا توجد ملاحظات مسجلة بعد'}
-                      </p>
+                    {/* آخر ملاحظة + الأزرار */}
+                    <p className={`text-[13px] leading-relaxed line-clamp-2 ${compactView ? 'hidden sm:block' : ''}`} style={{ color: c.soft }}>
+                      <strong style={{ color: c.fg }}>آخر ملاحظة: </strong>{lead.followUpNote || lead.notes?.[0] || 'مفيش ملاحظات لسه'}
+                    </p>
 
-                      <div className="flex flex-wrap items-center gap-2 justify-end self-stretch sm:self-auto">
-                        <a
-                          href={generateWhatsAppLink(lead.phone, undefined, undefined, `مرحباً أستاذ ${lead.name}، بخصوص الشقق المعروضة بالهضبة الوسطى`)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 whitespace-nowrap shrink-0"
-                        >
-                          <MessageCircle size={14} />
-                          <span>واتساب</span>
-                        </a>
-
-                        <a
-                          href={generateCallLink(lead.phone)}
-                          className="px-3 py-1.5 bg-[#141414] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1 whitespace-nowrap shrink-0"
-                        >
-                          <Phone size={14} />
-                          <span>اتصال</span>
-                        </a>
-
-                        {/* زرار واحد: المطابقة ومعاه العدد — نفس الرقم اللي في صفحة المطابقة */}
-                        {(() => {
-                          const n = (followUpMatches.get(lead.id) || []).length;
-                          return (
-                            <button
-                              onClick={() => { setMatchingLeadId(lead.id); setActiveTab('matching'); }}
-                              className="px-3 py-1.5 bg-[#A07A26] text-white text-xs font-bold rounded-xl whitespace-nowrap shrink-0"
-                            >
-                              المطابقة · {n ? `${n} شقة` : 'مفيش مناسب'}
-                            </button>
-                          );
-                        })()}
-                        <button
-                          onClick={() => setSelectedLeadForDetails(lead)}
-                          className="px-3 py-1.5 bg-[#F6F4EF] hover:bg-[#ECE8DF] text-[#141414] text-xs font-bold rounded-xl border border-[#ECE8DF] whitespace-nowrap shrink-0"
-                        >
-                          تفاصيل الملف
-                        </button>
-                        {isAdmin && canEdit ? (
-                          <button onClick={() => adminDeleteLead(lead)}
-                            className="px-2.5 py-1.5 bg-[#FBEDEA] hover:bg-[#F7DED8] text-[#C2412D] text-xs font-bold rounded-xl border border-[#E9B8AE] whitespace-nowrap shrink-0">
-                            حذف
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <a href={generateWhatsAppLink(lead.phone, undefined, undefined, `مرحباً أستاذ ${lead.name}، بخصوص الشقق المعروضة بالهضبة الوسطى`)} target="_blank" rel="noreferrer"
+                        className={pill} style={{ background: c.chip }}><MessageCircle size={14} />واتساب</a>
+                      <a href={generateCallLink(lead.phone)} className={pill} style={{ background: c.chip }}><Phone size={14} />اتصال</a>
+                      {(() => {
+                        const n = (followUpMatches.get(lead.id) || []).length;
+                        return (
+                          <button onClick={() => { setMatchingLeadId(lead.id); setActiveTab('matching'); }} className={pill}
+                            style={c.dark ? { background: '#FFFFFF', color: c.bg } : { background: T.ink, color: T.ground }}>
+                            المطابقة · {n ? `${n} شقة` : 'مفيش مناسب'}
                           </button>
-                        ) : (lead as any).deleteRequest && !(lead as any).deleteRequest.resolved ? (
-                          <span className="px-2.5 py-1.5 bg-[#FBEDEA] text-[#9A2E1F] text-[11px] font-bold rounded-xl">طلب المسح مستني الإدارة</span>
-                        ) : (
-                          <button onClick={() => {
-                            const reason = window.prompt('ليه عايز تمسح العميل ده؟');
-                            if (reason && reason.trim()) onUpdateLead({ ...lead, deleteRequest: { by: actorName, reason: reason.trim(), at: Date.now() } } as any);
-                          }} className="px-2.5 py-1.5 bg-white text-[#C2412D] text-[11px] font-bold rounded-xl border border-[#E9B8AE]">
-                            اطلب مسح
-                          </button>
-                        )}
-                      </div>
-
+                        );
+                      })()}
+                      <button onClick={() => setSelectedLeadForDetails(lead)} className={pill} style={{ background: c.chip }}>الملف</button>
+                      {isAdmin && canEdit ? (
+                        <button onClick={() => adminDeleteLead(lead)} className="text-[11px] font-bold underline underline-offset-2 opacity-80 ms-auto cursor-pointer">حذف</button>
+                      ) : (lead as any).deleteRequest && !(lead as any).deleteRequest.resolved ? (
+                        <span className="text-[11px] font-bold ms-auto" style={{ color: c.soft }}>طلب المسح مستني الإدارة</span>
+                      ) : (
+                        <button onClick={() => {
+                          const reason = window.prompt('ليه عايز تمسح العميل ده؟');
+                          if (reason && reason.trim()) onUpdateLead({ ...lead, deleteRequest: { by: actorName, reason: reason.trim(), at: Date.now() } } as any);
+                        }} className="text-[11px] font-bold underline underline-offset-2 opacity-80 ms-auto cursor-pointer">اطلب مسح</button>
+                      )}
                     </div>
                   </div>
                 );

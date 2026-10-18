@@ -2,6 +2,8 @@ import { LeadActionPanel } from './LeadActionPanel';
 import { ViewingRequestForm } from './crm/ViewingRequestForm';
 import { WhenPicker, formatWhen, relTime } from './common/WhenPicker';
 import React, { useState } from 'react';
+import { followUpBadge } from '../utils/followUpAlerts';
+import { stageTone, LATE_TONE } from '../theme/crmTheme';
 import { Lead, Property, SalesAgent, LeadStatus } from '../types';
 import { BudgetChangeBox } from './crm/BudgetChangeBox';
 import { 
@@ -175,34 +177,51 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs overflow-hidden font-ibm" dir="rtl">
       <div 
-        className="relative w-full max-w-3xl bg-[#F6F4EF] rounded-3xl p-5 sm:p-7 shadow-2xl my-auto text-right text-[#141414] space-y-4 max-h-[94vh] flex flex-col overflow-hidden border border-[#ECE8DF]"
+        className="relative w-full max-w-3xl bg-[#F5F0E6] rounded-[28px] p-5 sm:p-7 shadow-2xl my-auto text-right text-[#141414] space-y-4 max-h-[94vh] flex flex-col overflow-hidden border border-[#ECE8DF]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="flex items-start justify-between pb-2 border-b border-[#ECE8DF] shrink-0">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-bold font-readex text-[#141414]">{lead.name}</h2>
-              <span className={`text-xs font-bold px-3 py-0.5 rounded-xl border ${STAGES.find(s => s.id === lead.status)?.badgeStyle || 'bg-white border-[#ECE8DF] text-[#6B665C]'}`}>
-                {STAGES.find(s => s.id === lead.status)?.label || lead.status}
-              </span>
+        {/* رأس الملف: بلون المرحلة (أو أحمر لو متأخر) وخط المراحل — نفس كارت العميل في المسار */}
+        {(() => {
+          const late = followUpBadge(lead.nextActionAt, lead.followUpStatus, '').tone === 'late';
+          const c = late ? LATE_TONE : stageTone(lead.status);
+          const steps: [string, string[]][] = [
+            ['جديد', ['new', 'contacted', 'sent_details']], ['معاينة', ['visit_requested', 'visit_booked', 'visit_done']],
+            ['تفاوض', ['negotiation']], ['اتقفلت', ['closed']],
+          ];
+          const at = steps.findIndex(([, ids]) => ids.includes(lead.status));
+          const badge = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || '');
+          return (
+            <div className="-mx-5 -mt-5 sm:-mx-7 sm:-mt-7 px-5 sm:px-7 pt-5 pb-4 rounded-t-[28px] shrink-0 space-y-3" style={{ background: c.bg, color: c.fg }}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-xs font-bold" style={late ? { background: '#fff', color: LATE_TONE.bg } : { background: c.chip }}>
+                    {STAGES.find(s => s.id === lead.status)?.label || lead.status}{badge.text ? ` · ${badge.text}` : ''}
+                  </span>
+                  <h2 className="text-[26px] leading-tight font-semibold font-readex">{lead.name}</h2>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs" style={{ color: c.soft }}>
+                    <span className="font-mono font-bold dir-ltr" style={{ color: c.fg }}>{lead.phone}</span>
+                    <span>·</span>
+                    <span>{lead.source === 'facebook_group' ? 'جروب فيسبوك' : lead.source === 'website_whatsapp' ? 'واتساب المنصة' : lead.source === 'referral' ? 'ترشيح' : lead.source === 'campaign' ? 'حملة' : lead.source === 'direct' ? 'مباشر' : 'مكالمة باردة'}</span>
+                    {lead.assignedAgentName && (<><span>·</span><span>مع {lead.assignedAgentName}</span></>)}
+                  </div>
+                </div>
+                <button onClick={onClose} aria-label="إغلاق" className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center cursor-pointer" style={{ border: `1px solid ${c.line}` }}>
+                  <X size={18} />
+                </button>
+              </div>
+              {lead.status !== 'lost' && at >= 0 && (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {steps.map(([label], i) => (
+                    <div key={label} className="space-y-1">
+                      <span className="block h-[5px] rounded-full" style={{ background: i <= at ? c.fg : c.line }} />
+                      <span className="block text-[11px]" style={{ fontWeight: i === at ? 700 : 500, opacity: i === at ? 1 : 0.7 }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[#6B665C]">
-              <span className="font-mono text-[#141414] font-bold dir-ltr">{lead.phone}</span>
-              <span>·</span>
-              <span>المصدر: {lead.source === 'facebook_group' ? 'جروب فيسبوك' : lead.source === 'website_whatsapp' ? 'واتساب المنصة' : 'مكالمة باردة'}</span>
-              <span>·</span>
-              <span className="font-mono">{lead.createdAt}</span>
-            </div>
-          </div>
-
-          <button 
-            onClick={onClose} 
-            className="p-2 text-stone-400 hover:text-stone-800 hover:bg-white rounded-xl transition-colors cursor-pointer"
-          >
-            <X size={20} />
-          </button>
-        </div>
+          );
+        })()}
 
         {/* Quick Contact & Action Buttons */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 shrink-0">

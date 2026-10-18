@@ -170,3 +170,34 @@ input[type="range"].range-rtl {
 @keyframes wiggle { 0%,100% { transform: rotate(0) } 20% { transform: rotate(-14deg) } 40% { transform: rotate(12deg) } 60% { transform: rotate(-8deg) } 80% { transform: rotate(5deg) } }
 
 @keyframes fadeUp { from { opacity: 0; transform: translate(-50%, 14px) } to { opacity: 1; transform: translate(-50%, 0) } }
+
+/* ================================================================
+   غرفة العمليات — الثيم الموحّد (بيتفعل على body وهي مفتوحة)
+   بيغطي كل التبويبات والنوافذ اللي بتتفتح فوقها، من غير ما كل
+   شاشة تتكتب من الأول. الألوان من src/theme/crmTheme.ts.
+   ================================================================ */
+.crm-skin { --crm-ground:#F5F0E6; --crm-surface:#FFFDF8; --crm-ink:#17150F; --crm-muted:#6F695D; --crm-line:#E7DFCF; --crm-accent:#A9842F; --crm-late:#D3262B; }
+.crm-skin .bg-white { background-color: var(--crm-surface); }
+.crm-skin .bg-\[\#F6F4EF\], .crm-skin .bg-\[\#F5F2EB\] { background-color: #F1EADC; }
+.crm-skin .bg-\[\#FBF8F1\], .crm-skin .bg-\[\#FAF4E5\] { background-color: #F8F0DD; }
+.crm-skin .border-\[\#ECE8DF\], .crm-skin .border-\[\#E4DFD4\], .crm-skin .border-stone-200 { border-color: var(--crm-line); }
+.crm-skin .bg-\[\#141414\] { background-color: var(--crm-ink); }
+.crm-skin .text-\[\#141414\] { color: var(--crm-ink); }
+.crm-skin .text-\[\#6B665C\], .crm-skin .text-\[\#8C877D\] { color: var(--crm-muted); }
+.crm-skin .bg-\[\#A07A26\] { background-color: var(--crm-accent); }
+.crm-skin .text-\[\#A07A26\] { color: #8E6C1F; }
+.crm-skin .rounded-xl { border-radius: 14px; }
+.crm-skin .rounded-2xl { border-radius: 20px; }
+.crm-skin .rounded-3xl { border-radius: 28px; }
+.crm-skin .shadow-2xs, .crm-skin .shadow-xs { box-shadow: 0 1px 0 rgba(0,0,0,.03), 0 10px 26px -18px rgba(23,21,15,.35); }
+.crm-skin input:not([type=checkbox]):not([type=radio]):not([type=range]), .crm-skin textarea, .crm-skin select { border-radius: 14px; }
+.crm-skin input:focus, .crm-skin textarea:focus, .crm-skin select:focus { outline: none; box-shadow: 0 0 0 3px rgba(169,132,47,.22); border-color: var(--crm-accent); }
+.crm-skin button, .crm-skin a { -webkit-tap-highlight-color: transparent; }
+.crm-skin button:not(:disabled):active { transform: scale(.98); }
+.crm-skin h1, .crm-skin h2, .crm-skin h3, .crm-skin h4 { letter-spacing: -0.2px; }
+
+/* الكارت المتأخر: حلقة حمرا بتنبض بهدوء */
+.crm-late { position: relative; }
+.crm-late::after { content: ''; position: absolute; inset: -3px; border-radius: inherit; border: 2px solid rgba(211,38,43,.55); animation: crmLate 1.8s ease-out infinite; pointer-events: none; }
+@keyframes crmLate { 0% { opacity: .9; transform: scale(1) } 100% { opacity: 0; transform: scale(1.03) } }
+@media (prefers-reduced-motion: reduce) { .crm-late::after { animation: none; } }
