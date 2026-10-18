@@ -1847,9 +1847,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* Matched Properties Cards List (Exact layout from Screenshot 1) */}
             <div className={`space-y-3 sm:space-y-3.5 pt-1 ${showResale ? '' : 'hidden'}`}>
-              {matchedProperties.map((prop) => (
+              {[...matchedProperties, ...outDistrictProps].map((prop, i) => (
+                <React.Fragment key={prop.id}>
+                {/* اللي برّه الأحياء بيظهروا كروت كاملة برضه — تحت فاصل واضح */}
+                {i === matchedProperties.length && (
+                  <div className="pt-3 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#E9B949]" />
+                    <p className="text-[13px] font-bold text-[#7A5E12]">برّه الأحياء اللي طلبها ({outDistrictProps.length}) — اسأله الأول قبل ما تبعت</p>
+                  </div>
+                )}
                 <div
-                  key={prop.id}
+                  key={`card-${prop.id}`}
                   id={`matched-prop-${prop.code}`}
                   className={`bg-white border rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 shadow-2xs space-y-3 transition-all ${
                     highlightedPropCode === prop.code
@@ -1935,6 +1943,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     </button>
                   </div>
                 </div>
+                </React.Fragment>
               ))}
             </div>
 
