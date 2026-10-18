@@ -123,6 +123,18 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
     setDue(null);
   };
 
+  /* لما المتأخرين يعدّوا ٢٠ — قفلهم كلهم مرة واحدة (لحد الريفرش الجاي) */
+  const dismissAll = () => {
+    setSeen((prev) => {
+      const next = new Set<string>(prev);
+      dueList.forEach((l) => next.add(`${l.id}:${l.nextActionAt}`));
+      if (due) next.add(`${due.id}:${due.nextActionAt}`);
+      writeSeen(next);
+      return next;
+    });
+    setDue(null);
+  };
+
   const askPermission = async () => {
     if (typeof Notification === 'undefined') return;
     try {
@@ -167,7 +179,8 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
       {/* كارت التنبيه: بيطلع على جنب ومش بيوقف الشاشة. «مش دلوقتي» بتتفتح بعد ٨ ثواني
           عشان يلحق يقرا الملاحظة/الفيدباك قبل ما يأجّل */}
       {due && createPortal(<DueCard key={`${due.id}:${due.nextActionAt}`} lead={due} more={dueList.length - 1}
-        onLater={() => dismiss(due)} onOpen={() => { const l = due; dismiss(l); onOpenLead(l); }} />, document.body)}
+        onLater={() => dismiss(due)} onOpen={() => { const l = due; dismiss(l); onOpenLead(l); }}
+        onCloseAll={dueList.length > 20 ? dismissAll : undefined} />, document.body)}
     </>
   );
 };
@@ -175,7 +188,7 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
 export default FollowUpPopup;
 
 const WAIT = 8;
-const DueCard: React.FC<{ lead: Lead; more: number; onLater: () => void; onOpen: () => void }> = ({ lead, more, onLater, onOpen }) => {
+const DueCard: React.FC<{ lead: Lead; more: number; onLater: () => void; onOpen: () => void; onCloseAll?: () => void }> = ({ lead, more, onLater, onOpen, onCloseAll }) => {
   const [left, setLeft] = useState(WAIT);
   const [shown, setShown] = useState(false);
   useEffect(() => { const r = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(r); }, []);
@@ -229,6 +242,11 @@ const DueCard: React.FC<{ lead: Lead; more: number; onLater: () => void; onOpen:
             {left > 0 && <span className="absolute inset-y-0 right-0 bg-[#ECE4D2] transition-all duration-1000 ease-linear" style={{ width: `${((WAIT - left) / WAIT) * 100}%` }} />}
             <span className="relative flex items-center gap-1.5"><Clock size={13} />{left > 0 ? `اقرا الأول… مش دلوقتي بعد ${left}` : 'مش دلوقتي'}</span>
           </button>
+          {onCloseAll && (
+            <button onClick={onCloseAll} className="w-full py-2 rounded-xl border border-[#E8D3A6] text-[#8E6C1F] font-bold text-xs cursor-pointer">
+              اقفلهم كلهم ({more + 1})
+            </button>
+          )}
         </div>
       </div>
     </section>
