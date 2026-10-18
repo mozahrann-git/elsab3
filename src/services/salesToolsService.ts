@@ -18,6 +18,8 @@ export interface SalesForms {
   offerUnits: number;
   offerHours: number;
   videosPerWeek: number;
+  /** أكواد الشقق اللي الأدمن اختارها للفيديو — السيلز بيختار منها بس */
+  videoPool?: string[];
 }
 export const DEFAULT_FORMS: SalesForms = {
   minAnswers: 5, offerUnits: 5, offerHours: 72, videosPerWeek: 2,
@@ -151,6 +153,8 @@ export interface ContentSlot {
   script?: { hook?: string; points?: string; question?: string };
   shoot?: { dates: string[]; status: 'requested' | 'confirmed' | 'shot' | 'delivered'; at?: string; crew?: string; finalUrl?: string };
   publishedAt?: number; platform?: string; linkId?: string;
+  /** الفيديو اللي السيلز صوّره ورفعه */
+  videoUrl?: string;
   stats?: { views?: number; linkHits?: number; leads?: number };
   createdAt: number;
 }

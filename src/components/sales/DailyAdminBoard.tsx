@@ -10,6 +10,7 @@ import {
   uploadNumbers, numbersCalledOn, remainingNumbers, CallNumber, OUTCOME_LABEL, errText,
 } from '../../services/dailyTasks';
 import { ContentSlot, subscribeSlots, weekKey } from '../../services/salesToolsService';
+import { PresenceCheck, subscribePresenceOfDay, summarize } from '../../services/presence';
 import { thumbUrl } from '../../services/mediaStorage';
 import { parseLine } from '../crm/CampaignLeadsModal';
 import { Bar } from './DailyTab';
@@ -57,6 +58,11 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
   useEffect(() => subscribeAdsOfDay(shownDay, setAds, setErr), [shownDay]);
   useEffect(() => subscribePendingAds(setPending, setErr), []);
   useEffect(() => subscribeSlots(setSlots), []);
+  /* «إنت موجود؟» — اليوم بالتقويم (مش يوم الشغل المرحّل) */
+  const [presence, setPresence] = useState<PresenceCheck[]>([]);
+  useEffect(() => subscribePresenceOfDay(shownDay, setPresence), [shownDay]);
+  const [nowT, setNowT] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNowT(Date.now()), 60000); return () => clearInterval(t); }, []);
 
   const team = useMemo(
     () => agents.filter((a) => settings.agentIds.includes(a.id)).sort((a, b) => a.name.localeCompare(b.name, 'ar')),
@@ -115,7 +121,7 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
           <table className="w-full text-right text-xs">
             <thead className="bg-[#F6F4EF] text-[#6B665C]">
               <tr>
-                {['السيلز', 'الإنجاز', 'مكالمات', 'طلبات', 'إعلانات', 'متابعات', 'معاينات الأسبوع', 'فيديو الأسبوع', ''].map((h) => (
+                {['السيلز', 'الإنجاز', 'موجود؟', 'مكالمات', 'طلبات', 'إعلانات', 'متابعات', 'معاينات الأسبوع', 'فيديو الأسبوع', ''].map((h) => (
                   <th key={h} className="px-3 py-2.5 font-bold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -129,6 +135,25 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
                   </td>
                   <td className="px-3 py-3">
                     <span className={`font-mono font-black text-sm ${p.off ? 'text-[#8C877D]' : score >= 100 ? 'text-[#1E7A45]' : score >= 50 ? 'text-[#A07A26]' : 'text-[#C2412D]'}`}>{p.off ? '—' : `${score}%`}</span>
+                  </td>
+                  <td className="px-3 py-3">
+                    {(() => {
+                      if (p.off) return <span className="text-[#8C877D]">—</span>;
+                      const ps = summarize(a.id, shownDay, settings.startHour, settings.closeHour, presence, nowT);
+                      if (!ps.due) return <span className="text-[10px] text-[#8C877D]">لسه</span>;
+                      const tone = ps.missed === 0 && (ps.avgDelay ?? 0) <= 10 ? 'text-[#1E7A45]' : ps.answered === 0 ? 'text-[#C2412D]' : 'text-[#A07A26]';
+                      return (
+                        <div className="space-y-0.5 whitespace-nowrap">
+                          <p className={`font-mono font-bold ${tone}`}>{ps.answered} / {ps.due}</p>
+                          <p className="text-[10px] text-[#6B665C]">
+                            {ps.avgDelay !== null ? `بيرد في ${ps.avgDelay} د` : 'مارّدش خالص'}
+                            {ps.missed ? ` · فاته ${ps.missed}` : ''}
+                          </p>
+                          {ps.waiting && <p className="text-[10px] font-bold text-[#C2412D]">مستني رده دلوقتي</p>}
+                          {ps.lastAt && <p className="text-[10px] text-[#8C877D]">آخر رد {new Date(ps.lastAt).toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' })}</p>}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-3"><Cell done={p.calls.done} target={T.calls} sub={`رد ${p.calls.answered} · مهتم ${p.calls.interested}`} /></td>
                   <td className="px-3 py-3"><Cell done={p.requests.done} target={T.requests} sub={`مهم ${p.requests.important} · محيّر ${p.requests.undecided}`} /></td>
@@ -220,6 +245,7 @@ const SettingsModal: React.FC<{ settings: DailySettings; agents: SalesAgent[]; o
   const [ids, setIds] = useState<string[]>(settings.agentIds);
   const [t, setT] = useState<DailyTargets>(settings.targets);
   const [close, setClose] = useState(settings.closeHour);
+  const [start, setStart] = useState(settings.startHour);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const list = agents.filter((a) => a.isActive !== false || ids.includes(a.id));
@@ -227,7 +253,7 @@ const SettingsModal: React.FC<{ settings: DailySettings; agents: SalesAgent[]; o
   const save = async () => {
     setBusy(true); setErr('');
     try {
-      await saveDailySettings({ agentIds: ids, targets: { ...t, ads: (t.adsResale || 0) + (t.adsOffPlan || 0) }, closeHour: close });
+      await saveDailySettings({ agentIds: ids, targets: { ...t, ads: (t.adsResale || 0) + (t.adsOffPlan || 0) }, closeHour: close, startHour: start });
       onClose();
     } catch (e) { setErr(errText(e)); setBusy(false); }
   };
@@ -256,6 +282,11 @@ const SettingsModal: React.FC<{ settings: DailySettings; agents: SalesAgent[]; o
               className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-sm font-mono text-[#141414]" />
           </label>
         ))}
+        <label className="text-[11px] font-bold text-[#6B665C] space-y-1">
+          الشغل بيبدأ الساعة (تذكير «موجود؟» من بعدها)
+          <input type="number" min={6} max={14} value={start} onChange={(e) => setStart(Math.min(14, Math.max(6, Number(e.target.value) || 11)))}
+            className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-sm font-mono text-[#141414]" />
+        </label>
         <label className="text-[11px] font-bold text-[#6B665C] space-y-1">
           اليوم بيتقفل الساعة (٢٤ ساعة)
           <input type="number" min={12} max={24} value={close} onChange={(e) => setClose(Math.min(24, Math.max(12, Number(e.target.value) || 19)))}

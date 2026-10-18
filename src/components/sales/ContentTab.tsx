@@ -1,21 +1,46 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Copy, Plus, Send, Sparkles, Link2, Video, Settings2, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Copy, Plus, Link2, Settings2, Trash2, Check, Upload, Video, X } from 'lucide-react';
 import { Property, SalesAgent } from '../../types';
 import {
   SalesForms, DEFAULT_FORMS, subscribeSalesForms, saveSalesForms, AdField, DiscoveryQuestion,
   ContentSlot, subscribeSlots, claimSlot, updateSlot, deleteSlot, weekKey,
   TrackedLink, subscribeLinks, createTrackedLink, linkUrl, adTagOf,
 } from '../../services/salesToolsService';
-import { WhenPicker, WhenValue, formatWhen } from '../common/WhenPicker';
+import { uploadFile } from '../../services/mediaStorage';
+import { realImages } from '../../utils/propertyMedia';
 
 /*
-  تبويب المحتوى: شقة الأسبوع بالدور + أفكار من بيانات الشقة + سكربت + طلب تصوير،
-  ومساعد كتابة الإعلان بخانات موجّهة + لينك متتبّع لكل إعلان.
+  تبويب المحتوى:
+  - فيديو الأسبوع: الأدمن بيحدد الشقق، كل سيلز بياخد فيديوهين منها في الأسبوع،
+    السكربت بيطلع جاهز من بيانات الشقة، وهو بيصوّر بموبايله ويرفع. ٣ خطوات بس.
+  - مساعد الإعلان زي ما هو.
 */
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 const Card: React.FC<{ children: React.ReactNode; tone?: 'gold' | 'dark'; className?: string }> = ({ children, tone, className = '' }) => (
   <section className={`rounded-2xl border p-4 flex flex-col gap-3 ${tone === 'gold' ? 'bg-[#FBF8F1] border-[#E8D3A6]' : tone === 'dark' ? 'bg-[#141414] text-white border-transparent' : 'bg-white border-[#ECE8DF]'} ${className}`}>{children}</section>
 );
+const imgOf = (p?: Property) => (p ? (realImages(p)[0] || p.images?.[0] || '') : '');
+
+/* السكربت الجاهز من بيانات الشقة — الأرقام الحقيقية بس */
+function scriptFor(p: Property, properties: Property[]) {
+  const peers = properties.filter((x) => x.id !== p.id && x.neighborhood === p.neighborhood && x.area > 0 && x.price > 0 && x.category !== 'off_plan');
+  const ppm = p.area ? p.price / p.area : 0;
+  const avg = peers.length >= 3 ? peers.reduce((s, x) => s + x.price / x.area, 0) / peers.length : 0;
+  const diff = avg && ppm ? Math.round(((ppm - avg) / avg) * 100) : 0;
+  const feat = (p.features || []).filter(Boolean);
+  const hook = diff <= -5
+    ? `شقة في ${p.neighborhood} متر بـ ${fmt(ppm)} — أقل من متوسط الحي بـ ${Math.abs(diff)}٪`
+    : feat[0]
+      ? `${p.area} متر في ${p.neighborhood}… و${feat[0]}`
+      : `${p.area} متر في ${p.neighborhood} بـ ${fmt(p.price)} جنيه — تعالى أوريك`;
+  const points = [
+    `${p.area} م² · ${p.bedrooms} غرف${p.bathrooms ? ` · ${p.bathrooms} حمام` : ''}${p.floor ? ` · ${p.floor}` : ''}`,
+    [p.finishingLabel, p.view].filter(Boolean).join(' · ') || 'التشطيب والفيو — صوّرهم كويس',
+    feat.slice(1, 3).join(' · ') || 'أحلى حاجة شفتها بعينك في الشقة',
+  ];
+  const question = 'لو عايز تعاينها ابعتلي «معاينة» وأنا أظبطلك ميعاد';
+  return { hook, points, question };
+}
 
 export const ContentTab: React.FC<{
   properties: Property[];
@@ -28,89 +53,108 @@ export const ContentTab: React.FC<{
   const [links, setLinks] = useState<TrackedLink[]>([]);
   const [tab, setTab] = useState<'video' | 'ad'>('video');
   const [editForms, setEditForms] = useState(false);
+  const [poolOpen, setPoolOpen] = useState(false);
   useEffect(() => subscribeSalesForms(setForms), []);
   useEffect(() => subscribeSlots(setSlots), []);
   useEffect(() => subscribeLinks(currentAgent?.id || null, isAdmin, setLinks), [currentAgent?.id, isAdmin]);
 
   const wk = weekKey();
   const myId = currentAgent?.id || '';
-  const mine = slots.filter((s) => s.weekKey === wk && s.agentId === myId);
-  const takenCodes = slots.filter((s) => s.weekKey === wk).map((s) => s.code);
-  const quota = forms.videosPerWeek;
-
-  // الدور: مين اختار من زمان
-  const lastPick: Record<string, number> = {};
-  slots.forEach((s) => { lastPick[s.agentId] = Math.max(lastPick[s.agentId] || 0, s.createdAt); });
-  const turnOrder = [...agents].filter((a) => a.isActive !== false).sort((a, b) => (lastPick[a.id] || 0) - (lastPick[b.id] || 0));
-  const myTurn = turnOrder[0]?.id === myId;
-
-  const exposure = (p: Property) => (p.clicks?.views || 0) + slots.filter((s) => s.code === p.code).length * 50;
-  const available = useMemo(() => properties
-    .filter((p) => p.category !== 'off_plan' && !(p as any).viewingsPaused && (p as any).allowPublish !== false && !takenCodes.includes(p.code))
-    .sort((a, b) => exposure(a) - exposure(b)).slice(0, 12), [properties, takenCodes, slots]);
-
-  const districtAvg = (p: Property) => {
-    const peers = properties.filter((x) => x.neighborhood === p.neighborhood && x.area > 0);
-    return peers.length ? peers.reduce((s, x) => s + x.price / x.area, 0) / peers.length : 0;
-  };
-  const ideasFor = (p: Property) => {
-    const avg = districtAvg(p), ppm = p.area ? p.price / p.area : 0;
-    const diff = avg ? Math.round(((ppm - avg) / avg) * 100) : 0;
-    return [
-      diff < 0 ? `سعرها أقل من متوسط ${p.neighborhood} بـ ${Math.abs(diff)}% — رقم بيوقف السكرول` : `${fmt(ppm)} للمتر في ${p.neighborhood} — اشرح ليه`,
-      (p.features || [])[0] ? `ابدأ من: ${(p.features || [])[0]}` : 'الميزة اللي شوفتها بعينك ومش في الصور',
-      'العيب اللي لازم يعرفه قبل ما ينزل يعاين — بيبني ثقة',
-    ];
-  };
+  const weekSlots = slots.filter((s) => s.weekKey === wk);
+  const mine = weekSlots.filter((s) => s.agentId === myId);
+  const quota = forms.videosPerWeek || 2;
+  const pool = forms.videoPool || [];
+  const byCode = (c: string) => properties.find((p) => p.code === c);
+  const takenBy = (code: string) => weekSlots.find((s) => s.code === code);
+  const choices = pool.map(byCode).filter((p): p is Property => !!p);
 
   return (
     <div className="space-y-4" dir="rtl">
       <div className="flex flex-wrap gap-2 items-center">
         <button onClick={() => setTab('video')} className={`px-4 py-2 rounded-xl text-sm font-bold ${tab === 'video' ? 'bg-[#141414] text-white' : 'bg-white border border-[#ECE8DF]'}`}>فيديو الأسبوع</button>
         <button onClick={() => setTab('ad')} className={`px-4 py-2 rounded-xl text-sm font-bold ${tab === 'ad' ? 'bg-[#141414] text-white' : 'bg-white border border-[#ECE8DF]'}`}>مساعد الإعلان</button>
-        {isAdmin && <button onClick={() => setEditForms(!editForms)} className="mr-auto px-3 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold flex items-center gap-1.5"><Settings2 size={14} />تعديل الخانات والأسئلة</button>}
+        {isAdmin && tab === 'video' && <button onClick={() => setPoolOpen(true)} className="mr-auto px-3 py-2 rounded-xl bg-[#A07A26] text-white text-xs font-bold flex items-center gap-1.5"><Video size={14} />اختار شقق الفيديو ({pool.length})</button>}
+        {isAdmin && tab === 'ad' && <button onClick={() => setEditForms(!editForms)} className="mr-auto px-3 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold flex items-center gap-1.5"><Settings2 size={14} />تعديل الخانات</button>}
       </div>
 
-      {isAdmin && editForms && <FormsEditor forms={forms} onClose={() => setEditForms(false)} />}
+      {isAdmin && editForms && tab === 'ad' && <FormsEditor forms={forms} onClose={() => setEditForms(false)} />}
+      {poolOpen && <PoolPicker properties={properties} pool={pool} quota={quota} onClose={() => setPoolOpen(false)} />}
 
       {tab === 'video' ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card tone={myTurn ? 'gold' : undefined}>
-            <div className="flex justify-between items-center">
-              <p className="font-bold">الدور دلوقتي</p>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#141414] text-white">{turnOrder[0]?.name || '—'}</span>
-            </div>
-            <p className="text-sm text-[#6B665C]">فيديوهاتك الأسبوع ده: <b className={mine.length >= quota ? 'text-[#1E7A45]' : 'text-[#C2412D]'}>{mine.length} / {quota}</b></p>
-            {mine.length < quota && (
-              <>
-                <p className="text-sm font-bold">اختار شقتك (الأقل ظهوراً الأول)</p>
-                <div className="flex flex-wrap gap-2">
-                  {available.map((p) => (
-                    <button key={p.id} onClick={() => claimSlot({ weekKey: wk, agentId: myId, agentName: currentAgent?.name || '', propertyId: p.id, code: p.code, title: `${p.neighborhood} · ${p.area}م²` })}
-                      className="px-3 py-2 rounded-xl bg-white border border-[#E4DFD4] text-xs font-semibold">
-                      {p.code} · {p.neighborhood}
-                    </button>
-                  ))}
-                  {!available.length && <span className="text-xs text-[#8C877D]">كل الشقق اتحجزت الأسبوع ده</span>}
+        <div className="space-y-4">
+          {/* السيلز: فيديوهاته */}
+          {currentAgent && (
+            <>
+              <Card tone={mine.length >= quota ? undefined : 'gold'}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-bold">فيديوهاتك الأسبوع ده</p>
+                  <span className={`text-sm font-bold px-3 py-1 rounded-full ${mine.filter((s) => s.videoUrl).length >= quota ? 'bg-[#EEF5F0] text-[#1E7A45]' : 'bg-[#FBEDEA] text-[#C2412D]'}`}>
+                    {mine.filter((s) => s.videoUrl).length} / {quota} اترفعوا
+                  </span>
                 </div>
-              </>
-            )}
-          </Card>
+                <p className="text-xs text-[#6B665C]">١) اختار شقة ← ٢) صوّرها بموبايلك بالسكربت ← ٣) ارفع الفيديو وخد لينكك</p>
+              </Card>
 
-          {mine.map((s) => {
-            const p = properties.find((x) => x.id === s.propertyId);
-            return <SlotCard key={s.id} slot={s} ideas={p ? ideasFor(p) : []} agentName={currentAgent?.name || ''} agentId={myId} />;
-          })}
+              {mine.map((s) => (
+                <VideoCard key={s.id} slot={s} property={byCode(s.code)} properties={properties} agentId={myId} agentName={currentAgent.name} />
+              ))}
 
+              {mine.length < quota && (
+                <Card>
+                  <p className="font-bold">١) اختار شقة ({quota - mine.length} باقي)</p>
+                  {!choices.length ? (
+                    <p className="text-xs text-[#8C877D] bg-[#F6F4EF] rounded-xl p-3">الإدارة لسه ماحددتش شقق الفيديو.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {choices.map((p) => {
+                        const t = takenBy(p.code);
+                        return (
+                          <button key={p.id} disabled={!!t}
+                            onClick={() => claimSlot({ weekKey: wk, agentId: myId, agentName: currentAgent.name, propertyId: p.id, code: p.code, title: `${p.neighborhood} · ${p.area}م²` })}
+                            className="text-right rounded-xl border border-[#ECE8DF] overflow-hidden bg-white disabled:opacity-40 hover:border-[#A07A26]">
+                            <div className="aspect-[4/3] bg-[#F6F4EF]">{imgOf(p) && <img src={imgOf(p)} alt="" className="w-full h-full object-cover" loading="lazy" />}</div>
+                            <div className="p-2 space-y-0.5">
+                              <p className="text-xs font-bold font-mono">{p.code}</p>
+                              <p className="text-[11px] text-[#6B665C]">{p.neighborhood} · {p.area}م² · {p.bedrooms} غرف</p>
+                              <p className="text-[11px] font-bold">{fmt(p.price)} ج</p>
+                              {t && <p className="text-[10px] font-bold text-[#C2412D]">خدها {t.agentName}</p>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+              )}
+            </>
+          )}
+
+          {/* الأدمن: التزام الفريق */}
           {isAdmin && (
-            <Card className="lg:col-span-2">
-              <p className="font-bold">التزام الفريق الأسبوع ده</p>
+            <Card>
+              <p className="font-bold">الفريق الأسبوع ده</p>
               {agents.filter((a) => a.isActive !== false).map((a) => {
-                const n = slots.filter((s) => s.weekKey === wk && s.agentId === a.id).length;
+                const ss = weekSlots.filter((s) => s.agentId === a.id);
+                const up = ss.filter((s) => s.videoUrl).length;
                 return (
-                  <div key={a.id} className="flex justify-between items-center border-t border-[#F0ECE4] pt-2 text-sm">
-                    <span className="font-bold">{a.name}</span>
-                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${n >= quota ? 'bg-[#EEF5F0] text-[#1E7A45]' : n ? 'bg-[#EFE6D2] text-[#6E5418]' : 'bg-[#FBEDEA] text-[#C2412D]'}`}>{n} / {quota}</span>
+                  <div key={a.id} className="border-t border-[#F0ECE4] pt-2 space-y-1.5">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-bold">{a.name}</span>
+                      <span className={`text-xs font-bold px-2 py-1 rounded-lg ${up >= quota ? 'bg-[#EEF5F0] text-[#1E7A45]' : up ? 'bg-[#EFE6D2] text-[#6E5418]' : 'bg-[#FBEDEA] text-[#C2412D]'}`}>{up} / {quota}</span>
+                    </div>
+                    {ss.map((s) => {
+                      const l = links.find((x) => x.id === s.linkId);
+                      return (
+                        <div key={s.id} className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-mono font-bold">{s.code}</span>
+                          {s.videoUrl
+                            ? <a href={s.videoUrl} target="_blank" rel="noreferrer" className="px-2 py-0.5 rounded-lg bg-[#141414] text-white font-bold">▶ الفيديو</a>
+                            : <span className="px-2 py-0.5 rounded-lg bg-[#F6F4EF] text-[#8C877D]">لسه ماترفعش</span>}
+                          {l && <span className="text-[#6B665C]">{l.hits} فتحة · {l.waClicks} واتساب</span>}
+                          <button onClick={() => { if (window.confirm(`تشيل ${s.code} من ${a.name}؟`)) deleteSlot(s.id); }} className="text-[#C2412D]" aria-label="شيل"><Trash2 size={12} /></button>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -124,79 +168,125 @@ export const ContentTab: React.FC<{
   );
 };
 
-// ---------- كارت شقة الأسبوع: أفكار + سكربت + طلب تصوير + النتيجة ----------
-const SlotCard: React.FC<{ slot: ContentSlot; ideas: string[]; agentName: string; agentId: string }> = ({ slot, ideas, agentName, agentId }) => {
-  const [hook, setHook] = useState(slot.script?.hook || '');
-  const [points, setPoints] = useState(slot.script?.points || '');
-  const [question, setQuestion] = useState(slot.script?.question || '');
-  const [when, setWhen] = useState<WhenValue | null>(null);
+// ---------- الأدمن بيختار شقق الفيديو ----------
+const PoolPicker: React.FC<{ properties: Property[]; pool: string[]; quota: number; onClose: () => void }> = ({ properties, pool, quota, onClose }) => {
+  const [sel, setSel] = useState<string[]>(pool);
+  const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
-  const st = slot.shoot?.status;
-
-  const saveScript = async () => { setBusy(true); try { await updateSlot(slot.id, { script: { hook, points, question } }); } finally { setBusy(false); } };
-  const requestShoot = async () => {
-    if (!when) return;
+  const list = properties
+    .filter((p) => p.code && p.category !== 'off_plan')
+    .filter((p) => !q.trim() || `${p.code} ${p.neighborhood} ${p.title}`.toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a, b) => Number(sel.includes(b.code)) - Number(sel.includes(a.code)) || (a.clicks?.views || 0) - (b.clicks?.views || 0));
+  const toggle = (c: string) => setSel((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]));
+  const save = async () => {
     setBusy(true);
-    try {
-      await updateSlot(slot.id, { script: { hook, points, question }, shoot: { dates: [when.label, ...(slot.shoot?.dates || [])].slice(0, 3), status: 'requested' } });
-    } finally { setBusy(false); }
+    try { await saveSalesForms({ videoPool: sel }); onClose(); }
+    catch (e: any) { alert(`ماتحفظش — ${String(e?.code || '').includes('permission') ? 'الصلاحيات رافضة' : 'جرّب تاني'}`); }
+    finally { setBusy(false); }
   };
-  const publish = async () => {
-    setBusy(true);
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-3xl rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b border-[#ECE8DF] flex items-center justify-between gap-2">
+          <div>
+            <p className="font-bold text-sm">شقق الفيديو — اختار {sel.length}</p>
+            <p className="text-[11px] text-[#8C877D]">السيلز هيختار منها بس، كل واحد {quota} في الأسبوع. الأقل مشاهدة فوق.</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F6F4EF]"><X size={16} /></button>
+        </div>
+        <div className="p-3 border-b border-[#ECE8DF]">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="دوّر بالكود أو الحي" className="w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-2.5 text-sm" />
+        </div>
+        <div className="overflow-y-auto p-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {list.map((p) => {
+            const on = sel.includes(p.code);
+            return (
+              <button key={p.id} onClick={() => toggle(p.code)} className={`relative text-right rounded-xl border-2 overflow-hidden ${on ? 'border-[#A07A26]' : 'border-[#ECE8DF]'}`}>
+                <div className="aspect-[4/3] bg-[#F6F4EF]">{imgOf(p) && <img src={imgOf(p)} alt="" className="w-full h-full object-cover" loading="lazy" />}</div>
+                {on && <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-[#A07A26] text-white flex items-center justify-center"><Check size={14} /></span>}
+                <div className="p-2">
+                  <p className="text-xs font-bold font-mono">{p.code}</p>
+                  <p className="text-[11px] text-[#6B665C]">{p.neighborhood} · {p.area}م² · {fmt(p.price)}</p>
+                  <p className="text-[10px] text-[#8C877D]">{p.clicks?.views || 0} مشاهدة</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="p-3 border-t border-[#ECE8DF] flex gap-2">
+          <button disabled={busy} onClick={save} className="flex-1 py-3 rounded-xl bg-[#141414] text-white font-bold disabled:opacity-50">احفظ ({sel.length} شقة)</button>
+          {sel.length > 0 && <button onClick={() => setSel([])} className="px-4 py-3 rounded-xl bg-[#F6F4EF] font-bold text-sm">شيل الكل</button>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---------- كارت الفيديو: سكربت جاهز + رفع + لينك ----------
+const VideoCard: React.FC<{ slot: ContentSlot; property?: Property; properties: Property[]; agentId: string; agentName: string }> = ({ slot, property: p, properties, agentId, agentName }) => {
+  const auto = useMemo(() => (p ? scriptFor(p, properties) : null), [p, properties]);
+  const [busy, setBusy] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const done = !!slot.videoUrl;
+  const script = auto ? `${auto.hook}\n\n• ${auto.points.join('\n• ')}\n\n${auto.question}` : '';
+
+  const onFile = async (file?: File) => {
+    if (!file) return;
+    setBusy('بيرفع... 0٪');
     try {
-      const id = await createTrackedLink({ agentId, agentName, kind: 'video', code: slot.code, target: `/?property=${slot.code}`, title: `فيديو ${slot.code}` });
-      await updateSlot(slot.id, { publishedAt: Date.now(), linkId: id });
-    } finally { setBusy(false); }
+      const url = await uploadFile(file, 'sales_videos', `${slot.weekKey}_${agentId}_${slot.code}`, (pc) => setBusy(`بيرفع... ${pc}٪`));
+      let linkId = slot.linkId;
+      if (!linkId) linkId = await createTrackedLink({ agentId, agentName, kind: 'video', code: slot.code, target: `/?property=${slot.code}`, title: `فيديو ${slot.code}` });
+      await updateSlot(slot.id, { videoUrl: url, linkId, publishedAt: Date.now() });
+    } catch (e: any) {
+      alert(e?.message || 'الرفع مانجحش — جرّب تاني');
+    } finally { setBusy(''); if (fileRef.current) fileRef.current.value = ''; }
   };
 
   return (
-    <Card>
-      <div className="flex justify-between items-center">
-        <p className="font-bold">{slot.code} · {slot.title}</p>
-        <span className="text-[11px] font-bold px-2 py-1 rounded-lg bg-[#F6F4EF]">{st === 'delivered' ? 'المونتاج جاهز' : st === 'shot' ? 'اتصوّر' : st === 'confirmed' ? `تصوير ${slot.shoot?.at || ''}` : st === 'requested' ? 'طلب تصوير مستني' : 'جديد'}</span>
+    <Card tone={done ? undefined : 'gold'}>
+      <div className="flex gap-3">
+        {imgOf(p) && <img src={imgOf(p)} alt="" className="w-20 h-20 rounded-xl object-cover shrink-0" />}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-bold font-mono">{slot.code}</p>
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg ${done ? 'bg-[#EEF5F0] text-[#1E7A45]' : 'bg-white text-[#6E5418]'}`}>{done ? '✓ اترفع' : 'مستني تصوير'}</span>
+          </div>
+          {p && <p className="text-xs text-[#6B665C]">{p.neighborhood} · {p.area}م² · {p.bedrooms} غرف · {fmt(p.price)} ج</p>}
+          {!done && <button onClick={() => { if (window.confirm('تسيب الشقة دي وتختار غيرها؟')) deleteSlot(slot.id).catch(() => alert('ماتشالتش — كلّم الإدارة')); }} className="text-[11px] text-[#C2412D] underline mt-1">غيّر الشقة</button>}
+        </div>
       </div>
-      {ideas.length > 0 && !slot.publishedAt && (
-        <div className="space-y-1.5">
-          <p className="text-xs font-bold text-[#A07A26] flex items-center gap-1.5"><Sparkles size={13} />أفكار من بيانات الشقة</p>
-          {ideas.map((t, i) => (
-            <button key={i} onClick={() => setHook(t)} className="w-full text-right text-[13px] bg-[#F6F4EF] rounded-xl p-2.5 hover:bg-[#EFEBE3]">{t}</button>
-          ))}
+
+      {!done && auto && (
+        <div className="bg-white rounded-xl border border-[#E8D3A6] p-3 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-[#A07A26]">٢) السكربت — قوله وإنت بتصوّر</p>
+            <button onClick={() => navigator.clipboard?.writeText(script)} className="text-[11px] font-bold flex items-center gap-1"><Copy size={12} />انسخ</button>
+          </div>
+          <p className="text-sm font-bold">🎬 {auto.hook}</p>
+          {auto.points.map((t, i) => <p key={i} className="text-[13px]">• {t}</p>)}
+          <p className="text-[13px] text-[#6B665C]">❓ {auto.question}</p>
         </div>
       )}
-      <textarea value={hook} onChange={(e) => setHook(e.target.value)} rows={2} placeholder="أول جملة (توقف السكرول)" className="rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm" />
-      <textarea value={points} onChange={(e) => setPoints(e.target.value)} rows={2} placeholder="3 نقط تتكلم فيهم" className="rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm" />
-      <input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="السؤال الختامي" className="rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-3 text-sm" />
 
-      {slot.shoot?.finalUrl && (
-        <a href={slot.shoot.finalUrl} target="_blank" rel="noopener noreferrer" className="py-2.5 rounded-xl bg-[#EEF5F0] text-[#1E7A45] text-center text-sm font-bold">نزّل الفيديو المونتاج</a>
-      )}
-
-      {!slot.publishedAt ? (
-        <>
-          {st !== 'requested' && st !== 'confirmed' && <WhenPicker value={when} onChange={setWhen} quick={false} label="ميعاد التصوير اللي يناسبك" />}
-          <div className="grid grid-cols-2 gap-2">
-            <button disabled={busy} onClick={saveScript} className="py-3 rounded-xl bg-[#F6F4EF] text-sm font-bold">احفظ السكربت</button>
-            {st === 'delivered' || st === 'shot' ? (
-              <button disabled={busy} onClick={publish} className="py-3 rounded-xl bg-[#A07A26] text-white text-sm font-bold">نشرته · هات لينكي</button>
-            ) : (
-              <button disabled={busy || !when} onClick={requestShoot} className="py-3 rounded-xl bg-[#141414] text-white text-sm font-bold flex items-center justify-center gap-1.5"><Send size={14} />اطلب تصوير</button>
-            )}
-          </div>
-        </>
-      ) : (
+      {done ? (
         <div className="space-y-2">
-          <p className="text-xs font-mono bg-[#F6F4EF] rounded-lg p-2.5 break-all" dir="ltr">{slot.linkId ? linkUrl(slot.linkId) : ''}</p>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {[['مشاهدات', slot.stats?.views || 0], ['فتحات اللينك', slot.stats?.linkHits || 0], ['ليدز', slot.stats?.leads || 0]].map(([l, v]) => (
-              <div key={l as string} className="rounded-xl bg-[#F6F4EF] py-2">
-                <p className="font-bold" style={{ fontFamily: "'Readex Pro', sans-serif" }}>{v as number}</p>
-                <p className="text-[10px] text-[#6B665C]">{l as string}</p>
-              </div>
-            ))}
-          </div>
-          <input type="number" placeholder="سجّل المشاهدات بعد 48 ساعة" onBlur={(e) => e.target.value && updateSlot(slot.id, { stats: { ...(slot.stats || {}), views: Number(e.target.value) } })}
-            className="w-full rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] p-2.5 text-sm" />
+          <a href={slot.videoUrl} target="_blank" rel="noreferrer" className="block text-center py-2 rounded-xl bg-[#F6F4EF] text-sm font-bold">▶ شوف الفيديو</a>
+          {slot.linkId && (
+            <div className="flex gap-2">
+              <p className="flex-1 text-xs font-mono bg-[#F6F4EF] rounded-lg p-2.5 break-all" dir="ltr">{linkUrl(slot.linkId)}</p>
+              <button onClick={() => navigator.clipboard?.writeText(linkUrl(slot.linkId!))} className="px-3 rounded-lg bg-[#141414] text-white text-xs font-bold flex items-center gap-1"><Link2 size={12} />انسخ لينكك</button>
+            </div>
+          )}
+          <p className="text-[11px] text-[#8C877D]">انشر الفيديو وحط اللينك ده معاه — كل اللي يفتح منه بيتحسب ليك.</p>
         </div>
+      ) : (
+        <>
+          <input ref={fileRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
+          <button disabled={!!busy} onClick={() => fileRef.current?.click()} className="py-3.5 rounded-xl bg-[#141414] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-60">
+            <Upload size={16} />{busy || '٣) ارفع الفيديو'}
+          </button>
+        </>
       )}
     </Card>
   );
@@ -288,7 +378,7 @@ const FormsEditor: React.FC<{ forms: SalesForms; onClose: () => void }> = ({ for
   const save = async () => { setBusy(true); try { await saveSalesForms(d); onClose(); } finally { setBusy(false); } };
   return (
     <Card tone="gold">
-      <p className="font-bold">تعديل أسئلة الاكتشاف وخانات الإعلان</p>
+      <p className="font-bold">تعديل خانات الإعلان</p>
       <div className="grid gap-2 sm:grid-cols-4">
         {[['أقل عدد إجابات', 'minAnswers'], ['عدد شقق العرض', 'offerUnits'], ['صلاحية العرض (ساعة)', 'offerHours'], ['فيديوهات أسبوعياً', 'videosPerWeek']].map(([l, k]) => (
           <label key={k} className="text-xs font-bold space-y-1">{l}

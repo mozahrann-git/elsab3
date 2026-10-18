@@ -39,13 +39,14 @@ export interface DailySettings {
   agentIds: string[];          // مين داخل المهام (الإدارة بتختار)
   targets: DailyTargets;
   closeHour: number;           // اليوم بيتقفل الساعة كام (بتوقيت القاهرة)
+  startHour: number;           // الشغل بيبدأ الساعة كام — تذكير «موجود؟» من بعدها
 }
 export const DEFAULT_TARGETS: DailyTargets = {
   calls: 50, requests: 10, requestsImportant: 7,
   ads: 7, adsResale: 5, adsOffPlan: 2,
   viewingsWeek: 5, videosWeek: 2,
 };
-export const DEFAULT_DAILY_SETTINGS: DailySettings = { agentIds: [], targets: DEFAULT_TARGETS, closeHour: 19 };
+export const DEFAULT_DAILY_SETTINGS: DailySettings = { agentIds: [], targets: DEFAULT_TARGETS, closeHour: 19, startHour: 11 };
 
 export function subscribeDailySettings(cb: (s: DailySettings) => void, onErr?: (m: string) => void) {
   return onSnapshot(doc(db, 'settings', 'daily_tasks'), (snap) => {
@@ -54,6 +55,7 @@ export function subscribeDailySettings(cb: (s: DailySettings) => void, onErr?: (
       agentIds: Array.isArray(d.agentIds) ? d.agentIds : [],
       targets: { ...DEFAULT_TARGETS, ...(d.targets || {}) },
       closeHour: typeof d.closeHour === 'number' ? d.closeHour : 19,
+      startHour: typeof d.startHour === 'number' ? d.startHour : 11,
     });
   }, (e) => { cb(DEFAULT_DAILY_SETTINGS); onErr?.(errText(e)); });
 }

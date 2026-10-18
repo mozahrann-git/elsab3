@@ -43,6 +43,7 @@ import { CampaignLeadsModal } from './crm/CampaignLeadsModal';
 import { saveDraft, loadDraft, clearDraft } from '../utils/uiSession';
 import { LionLogo } from './LionLogo';
 import { UnitPreview } from './crm/UnitPreview';
+import { PresencePrompt } from './sales/PresencePrompt';
 import { formatPrice, formatNumber, generateCallLink, generateWhatsAppLink, waLink } from '../utils/helpers';
 import { SpinWheelModal } from './SpinWheelModal';
 import { LeadDetailsModal } from './LeadDetailsModal';
@@ -2105,6 +2106,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* «إنت موجود؟» — للسيلز بس */}
+      {!isAdmin && currentSalesAgent && <PresencePrompt agentId={currentSalesAgent.id} agentName={currentSalesAgent.name} />}
 
       {counterOpen && (
         <div className="fixed inset-0 z-[120] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={() => setCounterOpen(null)}>

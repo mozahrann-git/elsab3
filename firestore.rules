@@ -221,7 +221,8 @@ service cloud.firestore {
     match /content_slots/{id} {
       allow read: if isStaff() || isOps() || isBoss() || isMkt();
       allow create, update: if isStaff() || isOps() || isMkt();
-      allow delete: if isAdmin();
+      // السيلز يقدر يسيب شقة الفيديو ويختار غيرها طالما لسه مارفعش الفيديو
+      allow delete: if isAdmin() || (isStaff() && !('videoUrl' in resource.data));
     }
 
     // ---------- مندوبين المعاينات ----------
@@ -303,6 +304,12 @@ service cloud.firestore {
         || (isStaff() && onlyKeys(['status', 'attempts', 'lastAt', 'lastDay', 'lastBy', 'lastNote', 'leadId']));
     }
     /* عدّاد يوم كل سيلز. الإجازة الإدارة بس اللي تحطها */
+    /* «إنت موجود؟»: السيلز بيسجّل رده على نفسه بس */
+    match /presence_checks/{id} {
+      allow read: if isStaff() || isBoss();
+      allow create, update: if isStaff() && id == request.resource.data.agentId + '_' + request.resource.data.day + '_' + string(request.resource.data.slot);
+      allow delete: if isAdmin();
+    }
     match /sales_daily/{id} {
       allow read: if isStaff() || isBoss();
       allow create: if isStaff() && id == request.resource.data.agentId + '_' + request.resource.data.day
