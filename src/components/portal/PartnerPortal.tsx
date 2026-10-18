@@ -142,7 +142,7 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
         <UnitDetail unit={unit} viewings={viewings.filter((v) => v.propertyCode === unit.code)} feedback={feedback.filter((f) => f.propertyCode === unit.code)}
           changes={changes.filter((c) => c.propertyId === unit.id)} district={district(unit)} isBroker={isBroker} brokerId={access.brokerId} visitsAll={visits} onBack={() => setOpenUnit(null)} />
       ) : tab === 'units' ? (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card tone="dark" className="lg:col-span-3">
             <span className="text-sm text-[#D9B864]">{isBroker ? 'شغلك لحد النهارده' : 'على وحداتك لحد النهارده'}</span>
             <div className="grid grid-cols-3 gap-2">
@@ -159,7 +159,7 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
           {mine.map((p) => {
             const pv = viewings.find((v) => v.propertyCode === p.code && v.ownerStatus === 'pending');
             return (
-              <button key={p.id} onClick={() => setOpenUnit(p.id)} className="text-right">
+              <button key={p.id} onClick={() => setOpenUnit(p.id)} className="text-right w-full min-w-0">
                 <Card className="h-full hover:border-[#A07A26] transition">
                   <div className="flex gap-3">
                     <Thumb p={p} />
@@ -202,7 +202,7 @@ export const PartnerPortal: React.FC<Props> = ({ mode, access, properties, logoU
           {viewings.map((v) => isBroker ? <BrokerViewing key={v.id} v={v} brokerId={access.brokerId || ''} brokerName={access.name || ''} sentFeedback={myFb.find((f) => f.viewingId === v.id)} /> : <OwnerViewing key={v.id} v={v} />)}
         </div>
       ) : tab === 'money' ? (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card tone="dark" className="lg:col-span-3">
             <span className="text-sm text-[#D9B864]">عمولتك المتوقعة لو كل وحداتك اتباعت</span>
             <p className="text-4xl font-bold" style={{ fontFamily: "'Readex Pro', sans-serif" }}>{fmt(mine.reduce((s2, p) => s2 + p.price * rateOf(access), 0))} <span className="text-sm font-normal">ج.م</span></p>
@@ -473,7 +473,7 @@ const UnitDetail: React.FC<{
     { t: feedback.length ? `${feedback.length} رأي بعد المعاينة` : 'فيدباك بعد المعاينة', s: feedback.length ? 'في تبويب الآراء' : 'هيوصلك هنا', on: feedback.length > 0 },
   ];
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <button onClick={onBack} className="lg:col-span-3 text-right text-sm font-semibold text-[#A07A26]">→ كل الوحدات</button>
       <Card className="lg:col-span-3">
         <div className="flex flex-wrap justify-between items-center gap-2">
