@@ -158,7 +158,7 @@ import {
   bumpPropertyClick,
   deleteBrokerFromDb,
   subscribeToStaffAuth,
-  getStaffRole,
+  getStaffRole, getStaffRoleSafe,
   savePropertyPrivateOwner,
   signOutToGuest
 } from './services/firebaseService';
@@ -500,7 +500,10 @@ export default function App() {
         endSales();
         return;
       }
-      const role = await getStaffRole(user.email);
+      const r = await getStaffRoleSafe(user.email);
+      /* القراية فشلت (نت/سيرفر) = مش هنطلّع حد برا. بنسيب الجلسة زي ما هي */
+      if (r.failed) return;
+      const role = r.role;
       setIsAdminLoggedIn(role === 'admin');
       if (role !== 'admin' && role !== 'sales') { setIsSalesLoggedIn(false); endSales(); }
     });

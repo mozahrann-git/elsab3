@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { SalesAgent } from '../types';
 import { LionLogo } from './LionLogo';
-import { signInStaff, getStaffRole, signOutToGuest } from '../services/firebaseService';
+import { signInStaff, getStaffRole, getStaffRoleSafe, signOutToGuest } from '../services/firebaseService';
 
 interface SalesLoginModalProps {
   isOpen: boolean;
@@ -70,8 +70,10 @@ export const SalesLoginModal: React.FC<SalesLoginModalProps> = ({
 
     try {
       const user = await signInStaff(targetEmail, targetPassword);
-      const role = await getStaffRole(user.email);
-      if (role !== 'sales' && role !== 'admin') {
+      const r = await getStaffRoleSafe(user.email);
+      const role = r.role;
+      /* لو القراية نفسها فشلت والباسوورد صح والسيلز متسجّل ونشط — يدخل عادي */
+      if (!r.failed && role !== 'sales' && role !== 'admin') {
         await signOutToGuest();
         setError('الحساب ده لسه ما اتفعّلش. كلّم الإدارة.');
         setLoading(false);

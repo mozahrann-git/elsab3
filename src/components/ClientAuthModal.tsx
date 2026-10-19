@@ -18,7 +18,7 @@ import {
 import { HADABA_WOSTA_NEIGHBORHOODS } from '../data/properties';
 import { formatPrice } from '../utils/helpers';
 import { safeLocalStorageSet, safeSessionStorageSet } from '../utils/storageHelper';
-import { signInStaff, getStaffRole, signOutToGuest, getStaffAccess, StaffAccess } from '../services/firebaseService';
+import { signInStaff, getStaffRole, getStaffRoleSafe, signOutToGuest, getStaffAccess, StaffAccess } from '../services/firebaseService';
 
 interface ClientAuthModalProps {
   isOpen: boolean;
@@ -150,7 +150,8 @@ export const ClientAuthModal: React.FC<ClientAuthModalProps> = ({
             setTimeout(() => { onPortalLogin?.(acc); onClose(); }, 400);
             return;
           }
-          const role = await getStaffRole(user.email);
+          const r = await getStaffRoleSafe(user.email);
+          const role = r.role;
           if (role === 'admin') {
             try { localStorage.removeItem('hadaba_current_client'); } catch { /* ignore */ }
             setSuccessMsg('تم التحقق من حساب الإدارة بنجاح! جاري فتح لوحة التحكم...');
@@ -161,12 +162,16 @@ export const ClientAuthModal: React.FC<ClientAuthModalProps> = ({
             return;
           }
           const matchedAgent = salesAgents.find((a) => (a.email || '').toLowerCase().trim() === identifier);
-          if (role === 'sales' && matchedAgent && matchedAgent.isActive !== false) {
+          if ((role === 'sales' || r.failed) && matchedAgent && matchedAgent.isActive !== false) {
             setSuccessMsg(`أهلاً بك يا ${matchedAgent.name}! جاري الدخول لنظام المبيعات...`);
             setTimeout(() => {
               if (onLoginSalesSuccess) onLoginSalesSuccess(matchedAgent);
               onClose();
             }, 800);
+            return;
+          }
+          if (r.failed) {
+            setErrorMsg(`مشكلة في الاتصال بالسيرفر وإحنا بنتأكد من الحساب (${r.code}). جرّب تاني بعد ثواني.`);
             return;
           }
           await signOutToGuest();

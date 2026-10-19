@@ -6,7 +6,7 @@
   فبدل صفحة الخطأ:
   - أول مرة: ريفرش هادي لوحده.
   - لو اتكرر خلال ١٠ دقايق على نفس الجهاز: بنقفل الكاش المحلي ٣ أيام
-    (الموقع بيشتغل عادي، بس بيقرا من السيرفر) ونمسح الكاش القديم ونعمل ريفرش.
+    (الموقع بيشتغل عادي، بس بيقرا من السيرفر) ونعمل ريفرش.
   - لو اتكرر تاني والكاش مقفول أصلاً: بنسيب صفحة الخطأ تظهر عشان نعرف.
 */
 const CRASH_AT = 'fs_crash_at';
@@ -33,16 +33,10 @@ export function recoverFromFirestoreCrash(): boolean {
   set(CRASH_AT, now);
   const reload = () => setTimeout(() => window.location.reload(), 400);
   if (!recent) { reload(); return true; }
+  /* مابنمسحش الكاش القديم: لو في تاب تاني للموقع مفتوح، المسح بيبوّظ
+     Firestore فيه (القراية تفشل والناس تطلع برا). بنكتفي إن الجهاز ده
+     مايستخدموش الأيام الجاية. */
   set(SAFE_UNTIL, now + 3 * 86400000);
-  try {
-    const anyIdb: any = indexedDB;
-    if (anyIdb?.databases) {
-      anyIdb.databases().then((list: { name?: string }[]) => {
-        list.filter((d) => d.name && d.name.startsWith('firestore/')).forEach((d) => { try { indexedDB.deleteDatabase(d.name!); } catch { /* */ } });
-      }).catch(() => {}).finally(reload);
-      return true;
-    }
-  } catch { /* */ }
   reload();
   return true;
 }

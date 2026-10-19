@@ -6,6 +6,7 @@ import {
   collection, 
   doc, 
   getDoc, 
+  getDocFromServer,
   getDocs, 
   setDoc, 
   deleteDoc, 
@@ -153,6 +154,29 @@ export async function getStaffRole(email?: string | null): Promise<'admin' | 'sa
     console.warn('[Auth] role lookup failed:', err);
     return null;
   }
+}
+
+/* نفس اللي فوق، بس بتفرّق بين «الحساب مش موظف» و«القراية نفسها فشلت».
+   قبل كده أي فشل في القراية (النت، أو Firestore معلّق) كان بيتحسب «مش موظف»
+   فالسيلز يطلع برا لوحده أو يتقاله «الحساب مش متفعّل» وهو متفعّل.
+   بنجرّب ٣ مرات (آخرها من السيرفر مباشرة) قبل ما نقول فشلت. */
+export async function getStaffRoleSafe(email?: string | null): Promise<{ role: 'admin' | 'sales' | null; failed: boolean; code?: string }> {
+  if (!email) return { role: null, failed: false };
+  const ref = doc(db, 'staff_access', email.trim().toLowerCase());
+  let lastErr: any = null;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const snap = i < 2 ? await getDoc(ref) : await getDocFromServer(ref);
+      if (!snap.exists()) return { role: null, failed: false };
+      const role = (snap.data() as any).role;
+      return { role: role === 'admin' || role === 'sales' ? role : null, failed: false };
+    } catch (err: any) {
+      lastErr = err;
+      console.warn('[Auth] role lookup attempt failed:', err?.code || err);
+      await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+    }
+  }
+  return { role: null, failed: true, code: String(lastErr?.code || lastErr?.message || 'unknown').slice(0, 60) };
 }
 
 /** بيانات الحساب كاملة من staff_access: الدور + ربطه بالبروكر أو بوحدات المالك */

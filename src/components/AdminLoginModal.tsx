@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { SalesAgent } from '../types';
 import { safeLocalStorageSet, safeSessionStorageSet } from '../utils/storageHelper';
-import { signInStaff, getStaffRole, signOutToGuest, getStaffAccess, StaffAccess } from '../services/firebaseService';
+import { signInStaff, getStaffRole, getStaffRoleSafe, signOutToGuest, getStaffAccess, StaffAccess } from '../services/firebaseService';
 import { LionLogo } from './LionLogo';
 
 interface AdminLoginModalProps {
@@ -76,7 +76,13 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         onClose();
         return;
       }
-      const role = await getStaffRole(user.email);
+      const r = await getStaffRoleSafe(user.email);
+      if (r.failed) {
+        setError(`مشكلة في الاتصال بالسيرفر وإحنا بنتأكد من الحساب (${r.code}). جرّب تاني بعد ثواني.`);
+        setLoading(false);
+        return;
+      }
+      const role = r.role;
 
       if (role === 'admin') {
         onLoginSuccess ? onLoginSuccess() : onSuccessLogin?.();
