@@ -9,7 +9,7 @@ import {
 } from '../../services/salesToolsService';
 import {
   DailySettings, DEFAULT_DAILY_SETTINGS, subscribeDailySettings, workDay, workWeek,
-  AdPost, subscribeMyAds, subscribeAdsOfDay, distribute, advertisableResale, advertisableProjects,
+  AdPost, subscribeMyAds, subscribeAdsOfDay, distribute, distributeFor, assignKey, saveDailySettings, advertisableResale, advertisableProjects,
 } from '../../services/dailyTasks';
 import { Project, subscribeProjects } from '../../services/projectService';
 import { AdsPanel } from './DailyTab';
@@ -186,7 +186,7 @@ export const ContentTab: React.FC<{
             <AdsPanel agentId={myId} agentName={currentAgent.name} agentPhone={currentAgent.phone} day={adDay} week={adWeek}
               settings={settings} properties={properties} projects={projects} myAds={myAds} />
           )}
-          {isAdmin && <AdsSplit agents={agents} settings={settings} properties={properties} projects={projects} week={adWeek} dayAds={dayAds} />}
+          {isAdmin && <AdsSplit agents={agents} settings={settings} properties={properties} projects={projects} week={adWeek} day={adDay} dayAds={dayAds} />}
           {currentAgent && links.length > 0 && (
             <Card>
               <p className="font-bold flex items-center gap-2"><Link2 size={16} className="text-[#A07A26]" />لينكاتك المتتبّعة</p>
@@ -334,43 +334,68 @@ const VideoCard: React.FC<{ slot: ContentSlot; property?: Property; properties: 
 
 // ---------- مساعد الإعلان ----------
 
-/* الإدارة: الشقق اتوزعت على مين الأسبوع ده، وكل واحد نشر كام النهارده.
-   التوزيع أوتوماتيك: كل شقة ريسيل منشورة ومش مباعة بتروح لسيلز واحد من
-   اللي داخلين المهام اليومية (بالدور حسب الكود)، وكل أسبوع بيلف خطوة. */
-const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; properties: Property[]; projects: Project[]; week: string; dayAds: AdPost[] }> = ({ agents, settings, properties, projects, week, dayAds }) => {
-  const resale = useMemo(() => distribute(advertisableResale(properties), settings.agentIds, week), [properties, settings.agentIds, week]);
-  const proj = useMemo(() => distribute(advertisableProjects(projects), settings.agentIds, week), [projects, settings.agentIds, week]);
+/* الإدارة: مين معاه أنهي شقق للإعلان.
+   أوتوماتيك بالدور، أو يدوي: الإدارة تختار لكل سيلز شققه للأسبوع ده أو الشهر ده،
+   ومايظهرلوش غيرها. نفس الأعداد اليومية (ريسيل وتحت الإنشاء) زي ما هي. */
+const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; properties: Property[]; projects: Project[]; week: string; day: string; dayAds: AdPost[] }> = ({ agents, settings, properties, projects, day, dayAds }) => {
+  const allResale = useMemo(() => advertisableResale(properties), [properties]);
+  const allProj = useMemo(() => advertisableProjects(projects), [projects]);
+  const resale = useMemo(() => distributeFor(allResale, settings, day), [allResale, settings, day]);
+  const proj = useMemo(() => distributeFor(allProj, settings, day), [allProj, settings, day]);
   const team = settings.agentIds.map((id) => agents.find((a) => a.id === id)).filter((a): a is SalesAgent => !!a);
   const T = settings.targets;
+  const cur = settings.adAssign;
+  const [period, setPeriod] = useState<'week' | 'month'>(cur?.period || 'week');
+  const key = assignKey(period, day);
+  const liveMap: Record<string, string[]> = cur && cur.key === key ? cur.map || {} : {};
   const [open, setOpen] = useState('');
+  const [pick, setPick] = useState<{ id: string; codes: Set<string>; q: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const takenBy = (code: string, except: string) => Object.entries(liveMap).find(([id, cs]) => id !== except && cs.includes(code))?.[0];
+  const save = async (map: Record<string, string[]>) => {
+    setBusy(true); setMsg('');
+    try { await saveDailySettings({ adAssign: { period, key, map } }); setMsg('اتحفظ ✓'); }
+    catch { setMsg('الحفظ ماوصلش — جرّب تاني'); }
+    finally { setBusy(false); }
+  };
+  const nameOf = (id?: string) => agents.find((a) => a.id === id)?.name || '';
   return (
     <div className="rounded-[28px] bg-white border border-[#E7DFCF] p-4 sm:p-5 space-y-3">
-      <div>
-        <p className="font-readex font-semibold text-[19px]">التوزيع الأسبوع ده</p>
-        <p className="text-[12.5px] text-[#6F695D] mt-0.5 leading-relaxed">
-          أوتوماتيك على اللي داخلين المهام اليومية: كل شقة ريسيل منشورة ومش مباعة بتروح لسيلز واحد بس، وكل أسبوع التوزيع بيلف.
-          مين داخل بتحدده من «يومي» ← الإعدادات.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <p className="font-readex font-semibold text-[19px]">توزيع شقق الإعلانات</p>
+          <p className="text-[12.5px] text-[#6F695D] mt-0.5 leading-relaxed">اختار لكل سيلز شققه — مايظهرلوش غيرها. اللي ماتختارلوش بياخد أوتوماتيك من الباقي.</p>
+        </div>
+        <div className="flex p-1 rounded-[14px] bg-[#F5F0E6] border border-[#E7DFCF]">
+          {([['week', 'الأسبوع ده'], ['month', 'الشهر ده']] as const).map(([k, t]) => (
+            <button key={k} onClick={() => setPeriod(k)} className={`h-9 px-3 rounded-[10px] text-[12px] font-bold ${period === k ? 'bg-[#17150F] text-[#F5F0E6]' : 'text-[#6F695D]'}`}>{t}</button>
+          ))}
+        </div>
       </div>
+      {cur && cur.key !== key && Object.keys(cur.map || {}).length > 0 && (
+        <p className="text-[11.5px] text-[#7A5E12] bg-[#FFF4D9] rounded-2xl px-3 py-2">فيه توزيع يدوي متحفظ لـ{cur.period === 'week' ? 'أسبوع' : 'شهر'} تاني ({cur.key}). أول ما تختار هنا هيتحفظ للفترة دي بدله.</p>
+      )}
+      {msg && <p className="text-[12px] font-bold text-[#22483A]">{msg}</p>}
       {!team.length && <p className="text-[13px] text-[#6F695D] bg-[#F5F0E6] rounded-2xl p-4">مفيش حد داخل المهام اليومية لسه.</p>}
       {team.map((a) => {
         const r = resale.get(a.id) || [], p = proj.get(a.id) || [];
+        const manual = !!liveMap[a.id]?.length;
         const mine = dayAds.filter((x) => x.agentId === a.id && x.status !== 'rejected');
         const rr = mine.filter((x) => x.kind === 'resale').length, pp = mine.filter((x) => x.kind === 'offplan').length;
         const ok = rr >= T.adsResale && pp >= T.adsOffPlan;
         return (
-          <div key={a.id} className="rounded-[20px] bg-[#F5F0E6] p-3">
-            <button onClick={() => setOpen(open === a.id ? '' : a.id)} className="w-full flex items-center justify-between gap-2 text-right">
-              <span className="min-w-0">
-                <span className="block font-semibold text-[14.5px] truncate">{a.name}</span>
-                <span className="block text-[11.5px] text-[#6F695D]">معاه {r.length} ريسيل · {p.length} مشروع</span>
-              </span>
-              <span className={`shrink-0 text-[12px] font-bold px-3 py-1.5 rounded-full ${ok ? 'bg-[#22483A] text-white' : 'bg-white text-[#17150F]'}`}>
-                النهارده {rr}/{T.adsResale} · {pp}/{T.adsOffPlan}
-              </span>
-            </button>
+          <div key={a.id} className="rounded-[20px] bg-[#F5F0E6] p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <button onClick={() => setOpen(open === a.id ? '' : a.id)} className="min-w-0 text-right">
+                <span className="block font-semibold text-[14.5px] truncate">{a.name} <span className={`text-[10.5px] px-2 py-0.5 rounded-full ${manual ? 'bg-[#17150F] text-white' : 'bg-white text-[#6F695D]'}`}>{manual ? 'يدوي' : 'أوتوماتيك'}</span></span>
+                <span className="block text-[11.5px] text-[#6F695D]">معاه {r.length} ريسيل · {p.length} مشروع · النهارده {rr}/{T.adsResale} · {pp}/{T.adsOffPlan}{ok ? ' ✓' : ''}</span>
+              </button>
+              <button onClick={() => setPick({ id: a.id, codes: new Set(liveMap[a.id] || [...r, ...p].map((x) => x.code)), q: '' })}
+                className="shrink-0 h-9 px-3 rounded-[12px] bg-[#17150F] text-[#F5F0E6] text-[12px] font-bold">اختار شققه</button>
+            </div>
             {open === a.id && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {[...r.map((x) => x.code), ...p.map((x) => x.code)].map((c) => (
                   <span key={c} className={`font-mono text-[11px] px-2 py-1 rounded-lg ${mine.some((m) => m.code === c) ? 'bg-[#22483A] text-white' : 'bg-white'}`}>{c}</span>
                 ))}
@@ -379,6 +404,46 @@ const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; proper
           </div>
         );
       })}
+
+      {pick && (() => {
+        const q = pick.q.trim().toLowerCase();
+        const row = (code: string, sub: string, k: string) => {
+          if (q && !code.toLowerCase().includes(q) && !sub.toLowerCase().includes(q)) return null;
+          const on = pick.codes.has(code);
+          const other = takenBy(code, pick.id);
+          return (
+            <button key={k} onClick={() => { const n = new Set(pick.codes); on ? n.delete(code) : n.add(code); setPick({ ...pick, codes: n }); }}
+              className={`text-right rounded-[14px] border px-3 py-2 ${on ? 'bg-[#17150F] text-white border-[#17150F]' : 'bg-white border-[#E7DFCF]'}`}>
+              <span className="block font-mono font-bold text-[13px]">{on ? '✓ ' : ''}{code}</span>
+              <span className={`block text-[10.5px] truncate ${on ? 'text-white/70' : 'text-[#6F695D]'}`}>{sub}{other ? ` · مع ${nameOf(other)}` : ''}</span>
+            </button>
+          );
+        };
+        const nR = allResale.filter((x) => pick.codes.has(x.code)).length, nP = allProj.filter((x) => pick.codes.has(x.code)).length;
+        return (
+          <div className="fixed inset-0 z-[80] bg-black/50 flex items-end sm:items-center justify-center" dir="rtl" onClick={() => setPick(null)}>
+            <div className="bg-[#F5F0E6] w-full sm:max-w-2xl max-h-[90dvh] rounded-t-[28px] sm:rounded-[28px] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 space-y-2 border-b border-[#E7DFCF]">
+                <p className="font-readex font-semibold text-[17px]">شقق {nameOf(pick.id)} · {period === 'week' ? 'الأسبوع ده' : 'الشهر ده'}</p>
+                <p className="text-[12px] text-[#6F695D]">مختار {nR} ريسيل · {nP} تحت الإنشاء — المطلوب كل يوم {T.adsResale} ريسيل و{T.adsOffPlan} تحت الإنشاء</p>
+                <input value={pick.q} onChange={(e) => setPick({ ...pick, q: e.target.value })} placeholder="دوّر بالكود أو الحي…" className="w-full h-11 px-4 rounded-[14px] bg-white border border-[#E7DFCF] text-sm" />
+              </div>
+              <div className="overflow-y-auto p-3 space-y-3">
+                <p className="text-[12px] font-bold">ريسيل</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">{allResale.map((x) => row(x.code, `${x.neighborhood || ''} · ${x.area || ''}م²`, x.id))}</div>
+                <p className="text-[12px] font-bold">تحت الإنشاء</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">{allProj.map((x) => row(x.code, `${x.name || ''}`, x.id))}</div>
+              </div>
+              <div className="p-3 border-t border-[#E7DFCF] grid grid-cols-[1fr_auto] gap-2">
+                <button disabled={busy || !pick.codes.size} onClick={async () => { await save({ ...liveMap, [pick.id]: [...pick.codes] }); setPick(null); }}
+                  className="h-12 rounded-[16px] bg-[#17150F] text-[#F5F0E6] font-bold disabled:opacity-40">احفظ ({pick.codes.size} شقة)</button>
+                <button disabled={busy} onClick={async () => { const m = { ...liveMap }; delete m[pick.id]; await save(m); setPick(null); }}
+                  className="h-12 px-4 rounded-[16px] bg-white border border-[#E7DFCF] text-[12.5px] font-bold">رجّعه أوتوماتيك</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

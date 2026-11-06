@@ -40,6 +40,10 @@ export interface DailySettings {
   targets: DailyTargets;
   closeHour: number;           // اليوم بيتقفل الساعة كام (بتوقيت القاهرة)
   startHour: number;           // الشغل بيبدأ الساعة كام — تذكير «موجود؟» من بعدها
+  /* توزيع شقق الإعلانات يدوي: الإدارة بتختار لكل سيلز شققه للأسبوع أو الشهر.
+     key = أول يوم في الأسبوع (YYYY-MM-DD) أو الشهر (YYYY-MM). لما الفترة تخلص
+     بيرجع أوتوماتيك. اللي مالوش اختيار بياخد من الباقي أوتوماتيك. */
+  adAssign?: { period: 'week' | 'month'; key: string; map: Record<string, string[]> };
 }
 export const DEFAULT_TARGETS: DailyTargets = {
   calls: 50, requests: 10, requestsImportant: 7,
@@ -56,6 +60,7 @@ export function subscribeDailySettings(cb: (s: DailySettings) => void, onErr?: (
       targets: { ...DEFAULT_TARGETS, ...(d.targets || {}) },
       closeHour: typeof d.closeHour === 'number' ? d.closeHour : 19,
       startHour: typeof d.startHour === 'number' ? d.startHour : 11,
+      adAssign: d.adAssign && typeof d.adAssign === 'object' ? d.adAssign as any : undefined,
     });
   }, (e) => { cb(DEFAULT_DAILY_SETTINGS); onErr?.(errText(e)); });
 }
@@ -139,6 +144,29 @@ export function distribute<T extends { code: string }>(items: T[], agentIds: str
   const sorted = [...items].filter((x) => x.code).sort((a, b) => a.code.localeCompare(b.code));
   const shift = weekIndex(week) % ids.length;
   sorted.forEach((it, i) => out.get(ids[(i + shift) % ids.length])!.push(it));
+  return out;
+}
+
+/** مفتاح الفترة الحالية للتوزيع اليدوي */
+export const assignKey = (period: 'week' | 'month', day: string) => (period === 'week' ? workWeek(day) : day.slice(0, 7));
+
+/** التوزيع الفعلي: يدوي للي الإدارة اختارتله (في الفترة الحالية)، والباقي أوتوماتيك */
+export function distributeFor<T extends { code: string }>(items: T[], s: DailySettings, day: string): Map<string, T[]> {
+  const week = workWeek(day);
+  const a = s.adAssign;
+  const live = a && a.key === assignKey(a.period, day) ? a.map || {} : {};
+  const manual = s.agentIds.filter((id) => Array.isArray(live[id]) && live[id].length);
+  if (!manual.length) return distribute(items, s.agentIds, week);
+  const taken = new Set<string>();
+  const out = new Map<string, T[]>();
+  manual.forEach((id) => {
+    const codes = new Set(live[id].map((c) => c.toUpperCase()));
+    const mine = items.filter((it) => codes.has(String(it.code).toUpperCase()));
+    mine.forEach((it) => taken.add(it.code));
+    out.set(id, mine);
+  });
+  const rest = s.agentIds.filter((id) => !manual.includes(id));
+  distribute(items.filter((it) => !taken.has(it.code)), rest, week).forEach((v, k) => out.set(k, v));
   return out;
 }
 

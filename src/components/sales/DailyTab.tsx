@@ -8,7 +8,7 @@ import { UnitThumb } from '../crm/UnitThumb';
 import { Lead, Property, SalesAgent, ViewingRequest } from '../../types';
 import {
   DailySettings, DEFAULT_DAILY_SETTINGS, subscribeDailySettings, workDay, workWeek, dayLabel, cairoHour,
-  distribute, advertisableResale, advertisableProjects, CallNumber, CallOutcome, OUTCOME_LABEL, MAX_NO_ANSWER,
+  distribute, distributeFor, advertisableResale, advertisableProjects, CallNumber, CallOutcome, OUTCOME_LABEL, MAX_NO_ANSWER,
   subscribeMyNumbers, logCall, SalesDay, subscribeMyDay, AdPost, AdKind, subscribeMyAds, submitAd,
   computeProgress, dayScore, errText,
 } from '../../services/dailyTasks';
@@ -358,12 +358,12 @@ export const AdsPanel: React.FC<{
   const [openUnit, setOpenUnit] = useState<AdUnit | null>(null);
 
   const mineResale = useMemo(
-    () => distribute(advertisableResale(properties), settings.agentIds, week).get(agentId) || [],
-    [properties, settings.agentIds, week, agentId],
+    () => distributeFor(advertisableResale(properties), settings, day).get(agentId) || [],
+    [properties, settings, day, agentId],
   );
   const mineProjects = useMemo(
-    () => distribute(advertisableProjects(projects), settings.agentIds, week).get(agentId) || [],
-    [projects, settings.agentIds, week, agentId],
+    () => distributeFor(advertisableProjects(projects), settings, day).get(agentId) || [],
+    [projects, settings, day, agentId],
   );
   const adOf = (code: string) => myAds.find((a) => a.code === code);
   const rank = (u: AdUnit) => { const st = adOf(u.code)?.status; return st === 'rejected' ? 0 : !st ? 1 : st === 'pending' ? 2 : 3; };
