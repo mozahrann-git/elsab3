@@ -43,7 +43,10 @@ export const LeadActionPanel: React.FC<{
   const label = (id: string) => stages.find((s) => s.id === id)?.label || id;
   // الصفقة المغلقة والمؤجل/غير مهتم بس هما اللي مش محتاجين ميعاد جاي
   const closing = stage === ('closed' as LeadStatus) || stage === ('lost' as LeadStatus);
-  const canSave = !!kind && !!comment.trim() && (closing || !!next);
+  /* السؤال بيظهر بس لعميل في «تمت المعاينة» وفاضل فيها: الكومنت هنا غالباً متابعة،
+     فلازم يقول هل دي معاينة جديدة فعلاً — عشان مايتعدّش معاينة والعميل ماجاش */
+  const ask = lead.status === ('visit_done' as LeadStatus) && stage === lead.status;
+  const canSave = (!ask || !!kind) && !!comment.trim() && (closing || !!next);
 
   /* تسجيل سريع: دوسة واحدة بتسجّل المكالمة ونتيجتها.
      ٥٠ مكالمة في اليوم مستحيلة لو كل واحدة محتاجة كومنت
@@ -75,11 +78,11 @@ export const LeadActionPanel: React.FC<{
       at: Date.now(), by: byName,
       /* اسم المرحلة مابيتكتبش غير لو اتنقل فعلاً — عشان كومنت على عميل في «تمت المعاينة»
          مايتعدّش معاينة جديدة */
-      outcome: kind === 'viewing' ? 'معاينة جديدة · تمت المعاينة'
+      outcome: ask && kind === 'viewing' ? 'معاينة جديدة · تمت المعاينة'
+        : postponed ? `${ask ? '📝 متابعة · ' : ''}تأجيل من ${formatWhen(lead.nextActionAt!)} لـ ${formatWhen(next!.at)}`
         : moved ? `نقل إلى: ${label(stage)}`
-        : postponed ? `${kind === 'note' ? '📝 ملاحظة · ' : ''}تأجيل من ${formatWhen(lead.nextActionAt!)} لـ ${formatWhen(next!.at)}`
-        : kind === 'note' ? '📝 ملاحظة' : 'أكشن جديد',
-      comment: comment.trim(), nextAt: next?.at, kind: kind || undefined,
+        : ask ? '📝 متابعة بعد المعاينة' : `في: ${label(stage)}`,
+      comment: comment.trim(), nextAt: next?.at, kind: ask ? (kind || undefined) : undefined,
     };
     onUpdateLead({
       ...lead,
@@ -106,24 +109,26 @@ export const LeadActionPanel: React.FC<{
       <select value={stage} onChange={(e) => setStage(e.target.value as LeadStatus)} className="w-full rounded-xl bg-white border border-[#E4DFD4] p-3 text-sm font-bold">
         {stages.map((s) => <option key={s.id} value={s.id}>{s.id === lead.status ? `${s.label} (الحالية)` : `نقل إلى: ${s.label}`}</option>)}
       </select>
-      <div className="space-y-1.5">
-        <p className="text-xs font-bold text-[#141414]">ده إيه؟ (إجباري)</p>
-        <div className="grid grid-cols-3 gap-1.5">
-          {([['action', '📞 أكشن جديد', 'كلّمته/بعتله فعلاً'], ['viewing', '👁️ معاينة جديدة', 'نزل معاينة النهارده'], ['note', '📝 مجرد ملاحظة', 'أو تأجيل التذكير']] as const).map(([k, t, d]) => (
-            <button key={k} type="button" onClick={() => setKind(k)}
-              className={`rounded-xl p-2 text-right border transition ${kind === k ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>
-              <span className="block text-[12px] font-bold">{t}</span>
-              <span className={`block text-[10px] ${kind === k ? 'text-white/70' : 'text-[#8C877D]'}`}>{d}</span>
-            </button>
-          ))}
+      {ask && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-bold text-[#141414]">العميل نزل معاينة جديدة فعلاً؟ (إجباري)</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {([['viewing', '👁️ أيوه، معاينة جديدة', 'تتحسب معاينة'], ['note', '📝 لأ، مجرد متابعة', 'كومنت أو تأجيل التذكير']] as const).map(([k, t, d]) => (
+              <button key={k} type="button" onClick={() => setKind(k)}
+                className={`rounded-xl p-2 text-right border transition ${kind === k ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>
+                <span className="block text-[12px] font-bold">{t}</span>
+                <span className={`block text-[10px] ${kind === k ? 'text-white/70' : 'text-[#8C877D]'}`}>{d}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="اكتب اللي حصل (إجباري)" className="w-full rounded-xl bg-white border border-[#E4DFD4] p-3 text-sm" />
       {!closing && <WhenPicker value={next} onChange={setNext} label="ميعاد المتابعة الجاية (إجباري)" />}
       <button type="button" disabled={!canSave} onClick={save} className="w-full rounded-xl py-3 bg-[#141414] text-white font-bold disabled:opacity-40">
         {stage !== lead.status ? `نقل إلى ${label(stage)} وحفظ` : 'حفظ الكومنت'}
       </button>
-      {!canSave && <p className="text-[11px] text-[#C2412D]">{!kind ? 'اختار: أكشن ولا معاينة ولا ملاحظة' : !comment.trim() ? 'اكتب اللي حصل الأول' : 'حدد ميعاد المتابعة الجاية'}{closing ? '' : ' · (الصفقة المغلقة والمؤجل بس من غير ميعاد)'}</p>}
+      {!canSave && <p className="text-[11px] text-[#C2412D]">{ask && !kind ? 'قول هل دي معاينة جديدة ولا متابعة' : !comment.trim() ? 'اكتب اللي حصل الأول' : 'حدد ميعاد المتابعة الجاية'}{closing ? '' : ' · (الصفقة المغلقة والمؤجل بس من غير ميعاد)'}</p>}
       {saved && <p className="text-sm font-bold text-[#1E7A45]">✓ {saved}</p>}
       {act.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-[#E8D3A6]">
