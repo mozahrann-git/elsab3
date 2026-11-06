@@ -8,7 +8,7 @@ import { UnitThumb } from '../crm/UnitThumb';
 import { Lead, Property, SalesAgent, ViewingRequest } from '../../types';
 import {
   DailySettings, DEFAULT_DAILY_SETTINGS, subscribeDailySettings, workDay, workWeek, dayLabel, cairoHour,
-  distribute, distributeFor, advertisableResale, advertisableProjects, CallNumber, CallOutcome, OUTCOME_LABEL, MAX_NO_ANSWER,
+  distribute, distributeFor, starReasons, STAR_LABEL, advertisableResale, advertisableProjects, CallNumber, CallOutcome, OUTCOME_LABEL, MAX_NO_ANSWER,
   subscribeMyNumbers, logCall, SalesDay, subscribeMyDay, AdPost, AdKind, subscribeMyAds, submitAd,
   computeProgress, dayScore, errText,
 } from '../../services/dailyTasks';
@@ -357,8 +357,9 @@ export const AdsPanel: React.FC<{
   const [kind, setKind] = useState<AdKind>('resale');
   const [openUnit, setOpenUnit] = useState<AdUnit | null>(null);
 
+  const stars = useMemo(() => starReasons(advertisableResale(properties)), [properties]);
   const mineResale = useMemo(
-    () => distributeFor(advertisableResale(properties), settings, day).get(agentId) || [],
+    () => distributeFor(advertisableResale(properties), settings, day, (c) => stars.has(c)).get(agentId) || [],
     [properties, settings, day, agentId],
   );
   const mineProjects = useMemo(
@@ -366,7 +367,8 @@ export const AdsPanel: React.FC<{
     [projects, settings, day, agentId],
   );
   const adOf = (code: string) => myAds.find((a) => a.code === code);
-  const rank = (u: AdUnit) => { const st = adOf(u.code)?.status; return st === 'rejected' ? 0 : !st ? 1 : st === 'pending' ? 2 : 3; };
+  /* المرفوض الأول، وبعده اللي لسه ماتنشرش — والمميز ⭐ قبل العادي جوه كل مجموعة */
+  const rank = (u: AdUnit) => { const st = adOf(u.code)?.status; return (st === 'rejected' ? 0 : !st ? 1 : st === 'pending' ? 2 : 3) * 2 + (stars.has(u.code) ? 0 : 1); };
   const units: AdUnit[] = (kind === 'resale'
     ? mineResale.map((p) => ({ code: p.code, kind: 'resale' as const, title: `${p.neighborhood} · ${p.area}م² · ${p.bedrooms} غرف`, image: p.images?.[0], prop: p }))
     : mineProjects.map((p) => ({ code: p.code, kind: 'offplan' as const, title: `${p.kind === 'compound' ? 'كمبوند' : 'عمارة'} ${p.name} · ${p.neighborhood}`, image: p.images?.[0], project: p }))
@@ -435,6 +437,7 @@ export const AdsPanel: React.FC<{
               </div>
               <div className="p-3 space-y-0.5">
                 <p className="font-mono font-bold text-[13.5px]">{u.code}</p>
+                {stars.has(u.code) && <p className="text-[11px] font-bold text-[#A9842F]">⭐ {stars.get(u.code)!.map((w) => STAR_LABEL[w]).join(' · ')}</p>}
                 <p className="text-[11.5px] text-[#6F695D] truncate">{u.title}</p>
                 {price > 0 && <p className="text-[12px] font-bold font-mono">{price.toLocaleString('en-US')}</p>}
               </div>

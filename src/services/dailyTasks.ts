@@ -43,7 +43,13 @@ export interface DailySettings {
   /* توزيع شقق الإعلانات يدوي: الإدارة بتختار لكل سيلز شققه للأسبوع أو الشهر.
      key = أول يوم في الأسبوع (YYYY-MM-DD) أو الشهر (YYYY-MM). لما الفترة تخلص
      بيرجع أوتوماتيك. اللي مالوش اختيار بياخد من الباقي أوتوماتيك. */
-  adAssign?: { period: 'week' | 'month'; key: string; map: Record<string, string[]> };
+  adAssign?: {
+    period: 'week' | 'month'; key: string;
+    /* manual = شقق بالكود لكل سيلز · hood = أحياء لكل سيلز · smart = بالتساوي مع توزيع المميز بالعدل */
+    mode?: 'manual' | 'hood' | 'smart';
+    map: Record<string, string[]>;
+    hoods?: Record<string, string[]>;
+  };
 }
 export const DEFAULT_TARGETS: DailyTargets = {
   calls: 50, requests: 10, requestsImportant: 7,
@@ -66,6 +72,10 @@ export function subscribeDailySettings(cb: (s: DailySettings) => void, onErr?: (
 }
 export async function saveDailySettings(s: Partial<DailySettings>) {
   await setDoc(doc(db, 'settings', 'daily_tasks'), cleanFirestoreData(s), { merge: true });
+}
+/* التوزيع بيتكتب كله من جديد (مش دمج) — عشان «رجّعه أوتوماتيك» يمسح اختيار السيلز فعلاً */
+export async function saveAdAssign(v: NonNullable<DailySettings['adAssign']>) {
+  await setDoc(doc(db, 'settings', 'daily_tasks'), { adAssign: cleanFirestoreData(v) }, { mergeFields: ['adAssign'] });
 }
 
 /* ============================================================
@@ -150,24 +160,76 @@ export function distribute<T extends { code: string }>(items: T[], agentIds: str
 /** مفتاح الفترة الحالية للتوزيع اليدوي */
 export const assignKey = (period: 'week' | 'month', day: string) => (period === 'week' ? workWeek(day) : day.slice(0, 7));
 
-/** التوزيع الفعلي: يدوي للي الإدارة اختارتله (في الفترة الحالية)، والباقي أوتوماتيك */
-export function distributeFor<T extends { code: string }>(items: T[], s: DailySettings, day: string): Map<string, T[]> {
+/* ---------- الشقق المميزة ⭐ ----------
+   لقطة: سعر المتر أقل من متوسط الحي بـ١٠٪+ (لو في الحي ٣ شقق تانية على الأقل)
+   جديدة: اتنشرت الأسبوع ده · فيها فيديو */
+export type StarWhy = 'deal' | 'new' | 'video';
+export const STAR_LABEL: Record<StarWhy, string> = { deal: 'لقطة', new: 'جديدة', video: 'فيها فيديو' };
+export function starReasons(all: Property[], now = Date.now()): Map<string, StarWhy[]> {
+  const ppm = (p: any) => (Number(p.price) > 0 && Number(p.area) > 0 ? Number(p.price) / Number(p.area) : 0);
+  const byHood = new Map<string, number[]>();
+  all.forEach((p: any) => { const v = ppm(p); if (v) byHood.set(p.neighborhood, [...(byHood.get(p.neighborhood) || []), v]); });
+  const week = workWeek(cairoDay(now));
+  const out = new Map<string, StarWhy[]>();
+  all.forEach((p: any) => {
+    const why: StarWhy[] = [];
+    const v = ppm(p);
+    const peers = (byHood.get(p.neighborhood) || []).filter((x) => x !== v);
+    if (v && peers.length >= 3) {
+      const avg = peers.reduce((t, x) => t + x, 0) / peers.length;
+      if (v <= avg * 0.9) why.push('deal');
+    }
+    const t = Date.parse(p.createdAt || '');
+    if (t && workWeek(cairoDay(t)) === week) why.push('new');
+    if (String(p.videoUrl || '').trim()) why.push('video');
+    if (why.length) out.set(p.code, why);
+  });
+  return out;
+}
+
+/** التوزيع الفعلي حسب طريقة الإدارة (يدوي / بالحي / بالتساوي الذكي) في الفترة الحالية، والباقي أوتوماتيك */
+export function distributeFor<T extends { code: string; neighborhood?: string }>(items: T[], s: DailySettings, day: string, isStar?: (code: string) => boolean): Map<string, T[]> {
   const week = workWeek(day);
   const a = s.adAssign;
-  const live = a && a.key === assignKey(a.period, day) ? a.map || {} : {};
-  const manual = s.agentIds.filter((id) => Array.isArray(live[id]) && live[id].length);
+  const live = !!a && a.key === assignKey(a.period, day);
+  const mode = (live && a!.mode) || 'manual';
+  if (live && mode === 'smart') {
+    /* المميز الأول بالدور، وبعده الباقي بالدور — كله نفس العدد والمميز متقسّم بالعدل */
+    const ids = [...s.agentIds].sort();
+    const out = new Map<string, T[]>(); ids.forEach((id) => out.set(id, []));
+    if (!ids.length) return out;
+    const byCode = (x: T, y: T) => x.code.localeCompare(y.code);
+    const list = items.filter((x) => x.code);
+    const ordered = [...list.filter((x) => isStar?.(x.code)).sort(byCode), ...list.filter((x) => !isStar?.(x.code)).sort(byCode)];
+    const shift = weekIndex(week) % ids.length;
+    ordered.forEach((it, i) => out.get(ids[(i + shift) % ids.length])!.push(it));
+    return out;
+  }
+  const pickers: Record<string, (it: T) => boolean> = {};
+  if (live && mode === 'hood') {
+    Object.entries(a!.hoods || {}).forEach(([id, hs]) => { if (hs?.length) { const set = new Set(hs); pickers[id] = (it) => set.has(String(it.neighborhood || '')); } });
+  } else if (live) {
+    Object.entries(a!.map || {}).forEach(([id, cs]) => { if (cs?.length) { const set = new Set(cs.map((c) => c.toUpperCase())); pickers[id] = (it) => set.has(String(it.code).toUpperCase()); } });
+  }
+  const manual = s.agentIds.filter((id) => pickers[id]);
   if (!manual.length) return distribute(items, s.agentIds, week);
   const taken = new Set<string>();
   const out = new Map<string, T[]>();
   manual.forEach((id) => {
-    const codes = new Set(live[id].map((c) => c.toUpperCase()));
-    const mine = items.filter((it) => codes.has(String(it.code).toUpperCase()));
+    const mine = items.filter(pickers[id]);
     mine.forEach((it) => taken.add(it.code));
     out.set(id, mine);
   });
   const rest = s.agentIds.filter((id) => !manual.includes(id));
   distribute(items.filter((it) => !taken.has(it.code)), rest, week).forEach((v, k) => out.set(k, v));
   return out;
+}
+
+/** الشقق اللي مع أكتر من سيلز: كود ← مين */
+export function duplicatesOf(...maps: Map<string, { code: string }[]>[]): Map<string, string[]> {
+  const who = new Map<string, string[]>();
+  maps.forEach((m) => m.forEach((list, id) => list.forEach((it) => who.set(it.code, [...(who.get(it.code) || []), id]))));
+  return new Map([...who].filter(([, ids]) => new Set(ids).size > 1).map(([c, ids]) => [c, [...new Set(ids)]]));
 }
 
 /** الشقق اللي تنفع تتعلن: ريسيل منشورة ومش واقفة ومش مباعة */
