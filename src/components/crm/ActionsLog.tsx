@@ -35,6 +35,7 @@ export function actionsOn(leads: Lead[], day: string): ActionRow[] {
     (l.activity || []).forEach((a) => {
       if (typeof a.at !== 'number' || cairoDay(a.at) !== day) return;
       if ((a.by || '').trim() === 'النظام') return;   // تسجيلات أوتوماتيك مش شغل حد
+      if ((a as any).kind === 'note') return;           // ملاحظة/تأجيل مش أكشن
       out.push({
         at: a.at, by: (a.by || '—').trim(), outcome: a.outcome || '', comment: a.comment || '', nextAt: a.nextAt,
         leadId: l.id, leadName: l.name, leadPhone: l.phone, assignedName: l.assignedAgentName,

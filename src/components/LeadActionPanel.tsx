@@ -22,6 +22,9 @@ export interface LeadActivity {
   nextAt?: number; transferTo?: string;
   /* موجودة في التسجيل السريع بس — التسجيل الكامل بيسيبها فاضية */
   call?: CallOutcome;
+  /* نوع التسجيل: أكشن فعلي، معاينة جديدة، ولا مجرد ملاحظة/تأجيل تذكير.
+     الملاحظة مابتتحسبش أكشن ولا معاينة. القديم من غير نوع = زي ما كان. */
+  kind?: 'action' | 'viewing' | 'note';
 }
 
 export const LeadActionPanel: React.FC<{
@@ -34,12 +37,13 @@ export const LeadActionPanel: React.FC<{
   const [comment, setComment] = useState('');
   const [next, setNext] = useState<WhenValue | null>(null);
   const [saved, setSaved] = useState('');
+  const [kind, setKind] = useState<'action' | 'viewing' | 'note' | ''>('');
   const act = (lead.activity || []) as LeadActivity[];
   const nextAt = lead.nextActionAt || undefined;
   const label = (id: string) => stages.find((s) => s.id === id)?.label || id;
   // الصفقة المغلقة والمؤجل/غير مهتم بس هما اللي مش محتاجين ميعاد جاي
   const closing = stage === ('closed' as LeadStatus) || stage === ('lost' as LeadStatus);
-  const canSave = !!comment.trim() && (closing || !!next);
+  const canSave = !!kind && !!comment.trim() && (closing || !!next);
 
   /* تسجيل سريع: دوسة واحدة بتسجّل المكالمة ونتيجتها.
      ٥٠ مكالمة في اليوم مستحيلة لو كل واحدة محتاجة كومنت
@@ -69,8 +73,13 @@ export const LeadActionPanel: React.FC<{
     const postponed = !!(lead.nextActionAt && next && next.at > lead.nextActionAt);
     const entry: LeadActivity = {
       at: Date.now(), by: byName,
-      outcome: postponed ? `تأجيل من ${formatWhen(lead.nextActionAt!)} لـ ${formatWhen(next!.at)}` : moved ? `نقل إلى: ${label(stage)}` : `في: ${label(stage)}`,
-      comment: comment.trim(), nextAt: next?.at,
+      /* اسم المرحلة مابيتكتبش غير لو اتنقل فعلاً — عشان كومنت على عميل في «تمت المعاينة»
+         مايتعدّش معاينة جديدة */
+      outcome: kind === 'viewing' ? 'معاينة جديدة · تمت المعاينة'
+        : moved ? `نقل إلى: ${label(stage)}`
+        : postponed ? `${kind === 'note' ? '📝 ملاحظة · ' : ''}تأجيل من ${formatWhen(lead.nextActionAt!)} لـ ${formatWhen(next!.at)}`
+        : kind === 'note' ? '📝 ملاحظة' : 'أكشن جديد',
+      comment: comment.trim(), nextAt: next?.at, kind: kind || undefined,
     };
     onUpdateLead({
       ...lead,
@@ -85,7 +94,7 @@ export const LeadActionPanel: React.FC<{
       followUpStatus: closing ? 'completed' : next ? 'pending' : lead.followUpStatus,
     });
     setSaved(next ? `اتسجّل، والتنبيه ${formatWhen(next.at)}` : 'اتسجّل');
-    setComment(''); setNext(null);
+    setComment(''); setNext(null); setKind('');
   };
 
   return (
@@ -97,12 +106,24 @@ export const LeadActionPanel: React.FC<{
       <select value={stage} onChange={(e) => setStage(e.target.value as LeadStatus)} className="w-full rounded-xl bg-white border border-[#E4DFD4] p-3 text-sm font-bold">
         {stages.map((s) => <option key={s.id} value={s.id}>{s.id === lead.status ? `${s.label} (الحالية)` : `نقل إلى: ${s.label}`}</option>)}
       </select>
+      <div className="space-y-1.5">
+        <p className="text-xs font-bold text-[#141414]">ده إيه؟ (إجباري)</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {([['action', '📞 أكشن جديد', 'كلّمته/بعتله فعلاً'], ['viewing', '👁️ معاينة جديدة', 'نزل معاينة النهارده'], ['note', '📝 مجرد ملاحظة', 'أو تأجيل التذكير']] as const).map(([k, t, d]) => (
+            <button key={k} type="button" onClick={() => setKind(k)}
+              className={`rounded-xl p-2 text-right border transition ${kind === k ? 'bg-[#141414] text-white border-[#141414]' : 'bg-white border-[#E4DFD4]'}`}>
+              <span className="block text-[12px] font-bold">{t}</span>
+              <span className={`block text-[10px] ${kind === k ? 'text-white/70' : 'text-[#8C877D]'}`}>{d}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="اكتب اللي حصل (إجباري)" className="w-full rounded-xl bg-white border border-[#E4DFD4] p-3 text-sm" />
       {!closing && <WhenPicker value={next} onChange={setNext} label="ميعاد المتابعة الجاية (إجباري)" />}
       <button type="button" disabled={!canSave} onClick={save} className="w-full rounded-xl py-3 bg-[#141414] text-white font-bold disabled:opacity-40">
         {stage !== lead.status ? `نقل إلى ${label(stage)} وحفظ` : 'حفظ الكومنت'}
       </button>
-      {!canSave && <p className="text-[11px] text-[#C2412D]">{!comment.trim() ? 'اكتب اللي حصل الأول' : 'حدد ميعاد المتابعة الجاية'}{closing ? '' : ' · (الصفقة المغلقة والمؤجل بس من غير ميعاد)'}</p>}
+      {!canSave && <p className="text-[11px] text-[#C2412D]">{!kind ? 'اختار: أكشن ولا معاينة ولا ملاحظة' : !comment.trim() ? 'اكتب اللي حصل الأول' : 'حدد ميعاد المتابعة الجاية'}{closing ? '' : ' · (الصفقة المغلقة والمؤجل بس من غير ميعاد)'}</p>}
       {saved && <p className="text-sm font-bold text-[#1E7A45]">✓ {saved}</p>}
       {act.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-[#E8D3A6]">

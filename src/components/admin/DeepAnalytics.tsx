@@ -101,6 +101,7 @@ export const DeepAnalytics: React.FC<{ leads: Lead[]; properties: Property[] }> 
       (l.activity || []).forEach((a) => {
         if (typeof a.at !== 'number' || a.at < since) return;
         if ((a.by || '').trim() === 'النظام') return;
+        if ((a as any).kind === 'note') return;
         actions++; r.actions++;
         if (/تمت المعاينة/.test(a.outcome || '')) { viewings++; r.viewings++; }
         if (/صفقة مغلقة/.test(a.outcome || '')) { deals++; r.deals++; }

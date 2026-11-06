@@ -40,7 +40,7 @@ export const LeaderboardTab: React.FC<{ agents: SalesAgent[]; leads: Lead[]; isA
         if (rt && rt >= since) requests++;
       });
       leads.forEach((l) => (l.activity || []).forEach((x) => {
-        if (typeof x.at === 'number' && x.at >= since && (x.by || '').trim() === a.name) actions++;
+        if (typeof x.at === 'number' && x.at >= since && (x.by || '').trim() === a.name && (x as any).kind !== 'note') actions++;
       }));
       const points = deals * PTS.deal + viewings * PTS.viewing + requests * PTS.request + actions * PTS.action;
       return { id: a.id, name: a.name, deals, viewings, requests, actions, points };

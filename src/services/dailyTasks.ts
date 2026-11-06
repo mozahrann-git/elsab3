@@ -386,7 +386,7 @@ export function computeProgress(args: {
   };
 
   // المتابعات: اللي اتعمل عليه أكشن النهارده، واللي لسه ميعاده جه ومحدش لمسه
-  const touched = new Set(mine.filter((l) => (l.activity || []).some((a) => wd(a.at) === day)).map((l) => l.id));
+  const touched = new Set(mine.filter((l) => (l.activity || []).some((a) => wd(a.at) === day && (a as any).kind !== 'note')).map((l) => l.id));
   const isToday = day === workDay(now, closeHour);
   const left = isToday
     ? mine.filter((l) => !touched.has(l.id) && l.status !== 'closed' && l.status !== 'lost'
