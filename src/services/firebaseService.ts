@@ -49,6 +49,7 @@ try {
 
 // Initialize Firebase App instance
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+export const firebaseApp = app;
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);
