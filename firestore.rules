@@ -301,7 +301,8 @@ service cloud.firestore {
       allow read: if isStaff() || isBoss();
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
-        || (isStaff() && onlyKeys(['status', 'attempts', 'lastAt', 'lastDay', 'lastBy', 'lastNote', 'leadId']));
+        || (isStaff() && onlyKeys(['status', 'attempts', 'lastAt', 'lastDay', 'lastBy', 'lastNote', 'leadId',
+                                   'noAnswers', 'nextAt', 'reason', 'recallAt', 'wonAfter', 'history']));
     }
     /* عدّاد يوم كل سيلز. الإجازة الإدارة بس اللي تحطها */
     /* دفتر الإدارة: ملاحظات ومهام وفرص — للأدمن بس */

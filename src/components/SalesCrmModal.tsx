@@ -2018,7 +2018,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             ) : (
               <DailyTab
                 properties={properties} leads={leads} currentAgent={currentSalesAgent}
-                viewingRequests={viewingRequests} onAddLead={onAddLead}
+                viewingRequests={viewingRequests} onAddLead={onAddLead} onUpdateLead={onUpdateLead}
                 onGo={(t) => setActiveTab(t)}
               />
             )}

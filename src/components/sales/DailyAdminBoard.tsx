@@ -14,6 +14,7 @@ import { PresenceCheck, subscribePresenceOfDay, summarize } from '../../services
 import { thumbUrl } from '../../services/mediaStorage';
 import { parseLine, phonesInLine } from '../crm/CampaignLeadsModal';
 import { Bar } from './DailyTab';
+import { CallRegistry } from './CallRegistry';
 
 /*
   لوحة المهام للإدارة: كل سيلز وعمل إيه في اليوم، ومراجعة سكرين شوتات
@@ -82,6 +83,7 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
 
   const [showSettings, setShowSettings] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [showReg, setShowReg] = useState(false);
   const [detail, setDetail] = useState<{ a: SalesAgent; p: Progress } | null>(null);
   const [shot, setShot] = useState<string>('');
 
@@ -105,6 +107,7 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowUpload(true)} className="px-3 py-2 rounded-xl bg-[#141414] text-white text-xs font-bold flex items-center gap-1.5"><Upload size={14} />ارفع أرقام</button>
+          <button onClick={() => setShowReg(true)} className="px-3 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold flex items-center gap-1.5"><Users size={14} />سجل الأرقام</button>
           <button onClick={() => setShowSettings(true)} className="px-3 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold flex items-center gap-1.5"><Settings2 size={14} />الإعدادات</button>
         </div>
       </div>
@@ -191,6 +194,7 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
       </div>
 
       {showSettings && <SettingsModal settings={settings} agents={agents} onClose={() => setShowSettings(false)} />}
+      {showReg && <CallRegistry agents={agents} adminName={adminName} onClose={() => setShowReg(false)} />}
       {showUpload && <UploadModal agents={agents} settings={settings} leads={leads} onClose={() => setShowUpload(false)} />}
       {detail && <AgentDayModal a={detail.a} p={detail.p} day={shownDay} ads={ads.filter((x) => x.agentId === detail.a.id)} onShot={setShot} onClose={() => setDetail(null)} />}
       {shot && createPortal(

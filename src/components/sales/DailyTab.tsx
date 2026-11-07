@@ -5,10 +5,11 @@ import {
   X, Upload, Copy, Check, Loader2, AlertTriangle, ChevronLeft, ChevronRight, ImageIcon, Download,
 } from 'lucide-react';
 import { UnitThumb } from '../crm/UnitThumb';
+import { RequestForm } from './ClientRequestsPanel';
 import { Lead, Property, SalesAgent, ViewingRequest } from '../../types';
 import {
   DailySettings, DEFAULT_DAILY_SETTINGS, subscribeDailySettings, workDay, workWeek, dayLabel, cairoHour,
-  distribute, distributeFor, starReasons, STAR_LABEL, advertisableResale, advertisableProjects, CallNumber, CallOutcome, OUTCOME_LABEL, MAX_NO_ANSWER,
+  distribute, distributeFor, starReasons, STAR_LABEL, advertisableResale, advertisableProjects, CallNumber, CallOutcome, OUTCOME_LABEL, MAX_NO_ANSWER, RETRY_HOURS, NOT_INTERESTED_REASONS,
   subscribeMyNumbers, logCall, SalesDay, subscribeMyDay, AdPost, AdKind, subscribeMyAds, submitAd,
   computeProgress, dayScore, errText,
 } from '../../services/dailyTasks';
@@ -76,10 +77,13 @@ interface Props {
   currentAgent?: SalesAgent;
   viewingRequests?: ViewingRequest[];
   onAddLead: (l: Lead) => void;
+  onUpdateLead?: (l: Lead) => void;
   onGo: (tab: 'matching' | 'followups' | 'content') => void;
 }
 
-export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, viewingRequests, onAddLead, onGo }) => {
+export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, viewingRequests, onAddLead, onUpdateLead, onGo }) => {
+  /* عميل جه من المكالمات ← فورم طلبه */
+  const [reqLead, setReqLead] = useState<Lead | null>(null);
   const [settings, setSettings] = useState<DailySettings>(DEFAULT_DAILY_SETTINGS);
   const [err, setErr] = useState('');
   useEffect(() => subscribeDailySettings(setSettings, setErr), []);
@@ -189,9 +193,14 @@ export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, vie
 
       <div ref={callsRef}>
         {section === 'calls' && (
-          <CallsPanel agentId={agentId} agentName={agentName} closeHour={settings.closeHour} onAddLead={onAddLead} onClose={() => setSection(null)} />
+          <CallsPanel agentId={agentId} agentName={agentName} closeHour={settings.closeHour} onAddLead={onAddLead} onClose={() => setSection(null)} onRequest={setReqLead} />
         )}
       </div>
+
+      {reqLead && onUpdateLead && (
+        <RequestForm lead={reqLead} agentName={agentName} properties={properties}
+          onUpdateLead={onUpdateLead} onClose={() => setReqLead(null)} onSaved={() => setReqLead(null)} />
+      )}
     </div>
   );
 };
@@ -201,123 +210,185 @@ export const DailyTab: React.FC<Props> = ({ properties, leads, currentAgent, vie
    ============================================================ */
 const CallsPanel: React.FC<{
   agentId: string; agentName: string; closeHour: number;
-  onAddLead: (l: Lead) => void; onClose: () => void;
-}> = ({ agentId, agentName, closeHour, onAddLead, onClose }) => {
+  onAddLead: (l: Lead) => void; onClose: () => void; onRequest: (l: Lead) => void;
+}> = ({ agentId, agentName, closeHour, onAddLead, onClose, onRequest }) => {
   const [list, setList] = useState<CallNumber[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [err, setErr] = useState('');
   const [busyId, setBusyId] = useState('');
   const [hot, setHot] = useState<CallNumber | null>(null);
+  const [cold, setCold] = useState<CallNumber | null>(null);
+  const [, tick] = useState(0);
   useEffect(() => subscribeMyNumbers(agentId, (l) => { setList(l); setLoaded(true); }, setErr), [agentId]);
+  useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 60000); return () => clearInterval(t); }, []);
 
-  /* اللي مردش النهارده مايظهرش تاني غير بكره — عشان مايتعدّش مكالمتين في دقيقة */
-  const today = workDay(Date.now(), closeHour);
-  const shown = list.filter((x) => !(x.status === 'no_answer' && x.lastDay === today)).slice(0, 10);
-  const fresh = list.filter((x) => x.status === 'pending').length;
+  const now = Date.now();
+  const fresh = list.filter((x) => x.status === 'pending');
+  const back = list.filter((x) => x.status === 'recall');
+  const waiting = list.filter((x) => x.status === 'no_answer');
+  /* القديم من غير nextAt: بيرجع بعد ٣ ساعات من آخر مكالمة */
+  const dueAt = (x: CallNumber) => x.nextAt || ((x.lastAt || 0) + RETRY_HOURS * 3600000);
+  const waitingDue = waiting.filter((x) => dueAt(x) <= now);
+  const top = [...back, ...waitingDue, ...fresh].slice(0, 10);
+  const later = waiting.filter((x) => dueAt(x) > now).sort((a, b) => dueAt(a) - dueAt(b));
 
   const mark = async (x: CallNumber, o: CallOutcome) => {
     if (o === 'interested') { setHot(x); return; }
+    if (o === 'not_interested') { setCold(x); return; }
     setBusyId(x.id); setErr('');
     try { await logCall(x, o, agentId, agentName, '', undefined, closeHour); }
     catch (e) { setErr(errText(e)); }
     finally { setBusyId(''); }
   };
+  const hhmm = (t: number) => new Date(t).toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit', timeZone: 'Africa/Cairo' });
+
+  const row = (x: CallNumber) => {
+    const na = x.noAnswers ?? (x.status === 'no_answer' ? x.attempts : 0);
+    return (
+      <div key={x.id} className="border border-[#ECE8DF] rounded-xl p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="min-w-0">
+            <p className="font-bold text-sm truncate">{x.name || 'من غير اسم'}</p>
+            <p className="font-mono text-xs text-[#6B665C]" dir="ltr">{x.phone}</p>
+            {x.status === 'no_answer' && <p className="text-[10.5px] font-bold text-[#A07A26]">مردش {na} مرة · محاولة {na + 1} من {MAX_NO_ANSWER}</p>}
+            {x.status === 'recall' && <p className="text-[10.5px] font-bold text-[#1F4E9C]">رجعلك تاني · كان قال: {x.reason || 'مش مهتم'}</p>}
+            {x.note && <p className="text-[10px] text-[#8C877D]">{x.note}</p>}
+          </div>
+          <div className="flex gap-1.5">
+            <a href={generateCallLink(x.phone)} className="px-3 py-1.5 rounded-xl bg-[#141414] text-white text-xs font-bold flex items-center gap-1"><Phone size={13} />اتصل</a>
+            <a href={waLink(x.phone, '')} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-[#1E7A45] text-white text-xs font-bold flex items-center gap-1"><MessageCircle size={13} />واتساب</a>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {(Object.keys(OUTCOME_LABEL) as CallOutcome[]).map((o) => (
+            <button key={o} disabled={busyId === x.id} onClick={() => mark(x, o)}
+              className={`py-2 rounded-lg text-[11px] font-bold border disabled:opacity-50 ${
+                o === 'interested' ? 'bg-[#EEF5F0] text-[#1E7A45] border-[#B3E8C8]'
+                : o === 'wrong' ? 'bg-[#FBEDEA] text-[#C2412D] border-[#E9B8AE]'
+                : 'bg-[#F6F4EF] text-[#141414] border-[#ECE8DF]'}`}>
+              {OUTCOME_LABEL[o]}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="bg-white border border-[#ECE8DF] rounded-2xl p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <p className="font-bold text-sm">أرقامك <span className="text-[#8C877D] font-medium">· فاضل {n(fresh)} رقم جديد</span></p>
+        <p className="font-bold text-sm">أرقامك <span className="text-[#8C877D] font-medium">· {n(fresh.length)} جديد{waiting.length ? ` · ${n(waiting.length)} مستني يتكلم تاني` : ''}</span></p>
         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F6F4EF]"><X size={16} /></button>
       </div>
       {err && <p className="text-xs font-bold text-[#9E2A1B] bg-[#FBEDEA] rounded-xl p-2.5">{err}</p>}
       {!loaded && <p className="text-xs text-[#8C877D] flex items-center gap-1.5"><Loader2 size={13} className="animate-spin" /> بيحمّل…</p>}
-      {loaded && !shown.length && (
-        <p className="text-xs font-bold text-[#6B665C] bg-[#F6F4EF] rounded-xl p-3">
-          مفيش أرقام عندك دلوقتي — الإدارة بترفع الأرقام وبتتوزع لوحدها.
-        </p>
+      {loaded && !top.length && !later.length && (
+        <p className="text-xs font-bold text-[#6B665C] bg-[#F6F4EF] rounded-xl p-3">مفيش أرقام عندك دلوقتي — الإدارة بترفع الأرقام وبتتوزع لوحدها.</p>
       )}
-      {shown.map((x) => (
-        <div key={x.id} className="border border-[#ECE8DF] rounded-xl p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="min-w-0">
-              <p className="font-bold text-sm truncate">{x.name || 'من غير اسم'}</p>
-              <p className="font-mono text-xs text-[#6B665C]" dir="ltr">{x.phone}</p>
-              {x.status === 'no_answer' && <p className="text-[10px] font-bold text-[#A07A26]">مردش {x.attempts} مرة (بعد {MAX_NO_ANSWER} بيطلع)</p>}
-              {x.note && <p className="text-[10px] text-[#8C877D]">{x.note}</p>}
+      {top.map(row)}
+
+      {later.length > 0 && (
+        <div className="space-y-2 pt-1">
+          <p className="text-xs font-bold text-[#6B665C]">⏳ مستني يتكلم تاني · {n(later.length)}</p>
+          {later.slice(0, 15).map((x) => (
+            <div key={x.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#F6F4EF] px-3 py-2">
+              <span className="min-w-0">
+                <span className="block text-[12.5px] font-bold truncate">{x.name || 'من غير اسم'} <span className="font-mono font-medium text-[#6B665C]" dir="ltr">{x.phone}</span></span>
+                <span className="block text-[10.5px] text-[#A07A26] font-bold">محاولة {(x.noAnswers ?? x.attempts) + 1} من {MAX_NO_ANSWER} · يرجعلك الساعة {hhmm(dueAt(x))}</span>
+              </span>
+              <a href={generateCallLink(x.phone)} className="shrink-0 px-2.5 py-1.5 rounded-lg bg-white border border-[#ECE8DF] text-[11px] font-bold">اتصل دلوقتي</a>
             </div>
-            <div className="flex gap-1.5">
-              <a href={generateCallLink(x.phone)} className="px-3 py-1.5 rounded-xl bg-[#141414] text-white text-xs font-bold flex items-center gap-1"><Phone size={13} />اتصل</a>
-              <a href={waLink(x.phone, '')} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-[#1E7A45] text-white text-xs font-bold flex items-center gap-1"><MessageCircle size={13} />واتساب</a>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 gap-1.5">
-            {(Object.keys(OUTCOME_LABEL) as CallOutcome[]).map((o) => (
-              <button key={o} disabled={busyId === x.id} onClick={() => mark(x, o)}
-                className={`py-2 rounded-lg text-[11px] font-bold border disabled:opacity-50 ${
-                  o === 'interested' ? 'bg-[#EEF5F0] text-[#1E7A45] border-[#B3E8C8]'
-                  : o === 'wrong' ? 'bg-[#FBEDEA] text-[#C2412D] border-[#E9B8AE]'
-                  : 'bg-[#F6F4EF] text-[#141414] border-[#ECE8DF]'}`}>
-                {OUTCOME_LABEL[o]}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
-      ))}
+      )}
 
       {hot && (
-        <InterestedForm
-          num={hot} agentId={agentId} agentName={agentName} closeHour={closeHour}
-          onAddLead={onAddLead} onClose={() => setHot(null)}
-        />
+        <InterestedForm num={hot} agentId={agentId} agentName={agentName} closeHour={closeHour}
+          onAddLead={onAddLead} onClose={() => setHot(null)} onRequest={onRequest} />
+      )}
+      {cold && (
+        <NotInterestedForm num={cold} agentId={agentId} agentName={agentName} closeHour={closeHour} onClose={() => setCold(null)} />
       )}
     </div>
   );
 };
 
-/* المهتم بيتحوّل عميل في «جديد» — ولازم يتكتب هو عايز إيه */
-const InterestedForm: React.FC<{
-  num: CallNumber; agentId: string; agentName: string; closeHour: number;
-  onAddLead: (l: Lead) => void; onClose: () => void;
-}> = ({ num, agentId, agentName, closeHour, onAddLead, onClose }) => {
-  const [name, setName] = useState(num.name || '');
-  const [note, setNote] = useState('');
+/* رد مش مهتم: السبب إجباري، ويختار نكلّمه تاني ولا لأ */
+const NotInterestedForm: React.FC<{ num: CallNumber; agentId: string; agentName: string; closeHour: number; onClose: () => void }> = ({ num, agentId, agentName, closeHour, onClose }) => {
+  const [reason, setReason] = useState('');
+  const [other, setOther] = useState('');
+  const [days, setDays] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const why = reason === 'سبب تاني' ? other.trim() : reason;
+  const save = async () => {
+    if (!why) { setErr('اختار السبب'); return; }
+    if (days === null) { setErr('اختار نكلّمه تاني ولا لأ'); return; }
+    setBusy(true); setErr('');
+    try { await logCall(num, 'not_interested', agentId, agentName, '', undefined, closeHour, { reason: why, recallDays: days }); onClose(); }
+    catch (e) { setErr(errText(e)); setBusy(false); }
+  };
+  const chip = (on: boolean) => `px-3 py-2 rounded-xl text-xs font-bold border ${on ? 'bg-[#141414] text-white border-[#141414]' : 'bg-[#F6F4EF] border-[#ECE8DF]'}`;
+  return createPortal(
+    <div className="fixed inset-0 z-[130] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <p className="font-bold">رد مش مهتم · <span className="font-mono text-sm" dir="ltr">{num.phone}</span></p>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F6F4EF]"><X size={16} /></button>
+        </div>
+        <p className="text-xs font-bold">ليه؟ (إجباري)</p>
+        <div className="flex flex-wrap gap-1.5">{NOT_INTERESTED_REASONS.map((r) => <button key={r} onClick={() => setReason(r)} className={chip(reason === r)}>{r}</button>)}</div>
+        {reason === 'سبب تاني' && <input value={other} onChange={(e) => setOther(e.target.value)} placeholder="اكتب السبب" className="w-full px-3 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-sm" />}
+        <p className="text-xs font-bold">نكلّمه تاني؟ (إجباري)</p>
+        <div className="flex flex-wrap gap-1.5">
+          {([[0, 'لأ خالص'], [30, 'بعد شهر'], [90, 'بعد ٣ شهور']] as [number, string][]).map(([d, t]) => <button key={d} onClick={() => setDays(d)} className={chip(days === d)}>{t}</button>)}
+        </div>
+        {err && <p className="text-xs font-bold text-[#C2412D]">{err}</p>}
+        <button disabled={busy} onClick={save} className="w-full py-3 rounded-xl bg-[#141414] text-white font-bold text-sm disabled:opacity-50">{busy ? 'بيسجّل…' : 'سجّل'}</button>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+/* رد ومهتم: الاسم + ميعاد المتابعة (هو اللي يختاره) ← وبعدها فورم الطلب الحقيقي
+   (الحي، الميزانية، كاش ولا تقسيط) عشان المطابقة تشتغل عليه */
+const InterestedForm: React.FC<{
+  num: CallNumber; agentId: string; agentName: string; closeHour: number;
+  onAddLead: (l: Lead) => void; onClose: () => void; onRequest: (l: Lead) => void;
+}> = ({ num, agentId, agentName, closeHour, onAddLead, onClose, onRequest }) => {
+  const [name, setName] = useState(num.name || '');
+  const [next, setNext] = useState<{ at: number; label: string } | null>(null);
+  const [custom, setCustom] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const na = num.noAnswers ?? (num.status === 'no_answer' ? num.attempts : 0);
+  const tomorrow11 = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(11, 0, 0, 0); return d.getTime(); };
+  const opts: [string, () => number][] = [['بعد ساعة', () => Date.now() + 3600000], ['بعد ٣ ساعات', () => Date.now() + 3 * 3600000], ['بكرة ١١ الصبح', tomorrow11]];
 
   const save = async () => {
     if (!name.trim()) { setErr('اكتب اسمه'); return; }
-    if (note.trim().length < 3) { setErr('اكتب هو عايز إيه'); return; }
+    const at = next?.at || (custom ? new Date(custom).getTime() : 0);
+    if (!at || isNaN(at)) { setErr('اختار ميعاد المتابعة'); return; }
     setBusy(true); setErr('');
     const leadId = `lead_${Date.now()}`;
     try {
-      /* الرقم الأول — لو اتسجّل والعميل ماتعملش، نقدر نعيد.
-         العكس كان هيعمل عميل مكرر لو الرقم رفض. */
-      await logCall(num, 'interested', agentId, agentName, note.trim(), leadId, closeHour);
-      const lead: Lead = {
-        id: leadId,
-        name: name.trim(),
-        phone: num.phone,
-        status: 'new',
-        source: 'cold_call',
-        notes: [`مكالمة من الأرقام (${num.batch}): ${note.trim()}`],
-        assignedAgentId: agentId,
-        assignedAgentName: agentName,
-        addedByName: agentName,
-        addedById: agentId,
-        leadKind: 'old_campaign',
-        createdAt: new Date().toISOString(),
-        lastContactDate: 'الآن',
-        followUpStatus: 'pending',
-        followUpScheduledAt: 'بعد ساعتين',
-        followUpNote: note.trim(),
-        followUpUrgency: 'urgent',
-        nextActionAt: Date.now() + 2 * 3600000,
-        activity: [{ at: Date.now(), by: agentName, outcome: 'مكالمة: رد ومهتم', comment: note.trim() }],
-      } as Lead;
+      await logCall(num, 'interested', agentId, agentName, '', leadId, closeHour);
+      const tag = na ? ` · رد بعد ${na} مردش` : '';
+      const lead = {
+        id: leadId, name: name.trim(), phone: num.phone, status: 'new', source: 'cold_call',
+        notes: [], assignedAgentId: agentId, assignedAgentName: agentName, addedByName: agentName, addedById: agentId,
+        leadKind: 'old_campaign', createdAt: new Date().toISOString(), lastContactDate: 'الآن',
+        followUpStatus: 'pending', nextActionAt: at,
+        ...(na ? { afterNoAnswer: na } : {}),
+        activity: [{ at: Date.now(), by: agentName, outcome: `مكالمة: رد ومهتم (${num.batch})${tag}`, comment: '', nextAt: at }],
+      } as unknown as Lead;
       onAddLead(lead);
       onClose();
+      onRequest(lead);
     } catch (e) { setErr(errText(e)); setBusy(false); }
   };
+  const chip = (on: boolean) => `px-3 py-2 rounded-xl text-xs font-bold border ${on ? 'bg-[#141414] text-white border-[#141414]' : 'bg-[#F6F4EF] border-[#ECE8DF]'}`;
 
   return createPortal(
     <div className="fixed inset-0 z-[130] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={onClose}>
@@ -326,13 +397,18 @@ const InterestedForm: React.FC<{
           <p className="font-bold">رد ومهتم · <span className="font-mono text-sm" dir="ltr">{num.phone}</span></p>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F6F4EF]"><X size={16} /></button>
         </div>
+        {na > 0 && <p className="text-[11px] font-bold text-[#1E7A45] bg-[#EEF5F0] rounded-xl px-3 py-2">👏 رد بعد {na} مردش — هيتحسبلك</p>}
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسمه"
           className="w-full px-3 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-sm" />
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="عايز إيه؟ (حي، ميزانية، كاش ولا تقسيط…)"
-          className="w-full px-3 py-2.5 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-sm" />
+        <p className="text-xs font-bold">هتكلّمه إمتى؟ (إجباري)</p>
+        <div className="flex flex-wrap gap-1.5">
+          {opts.map(([t, f]) => <button key={t} onClick={() => { setNext({ at: f(), label: t }); setCustom(''); }} className={chip(next?.label === t)}>{t}</button>)}
+          <input type="datetime-local" value={custom} onChange={(e) => { setCustom(e.target.value); setNext(null); }} className="px-3 py-2 rounded-xl text-xs border border-[#ECE8DF] bg-[#F6F4EF]" />
+        </div>
+        <p className="text-[11px] text-[#8C877D]">بعد ما تسجّل، فورم طلبه بيفتح على طول (الحي، الميزانية، كاش ولا تقسيط).</p>
         {err && <p className="text-xs font-bold text-[#C2412D]">{err}</p>}
         <button disabled={busy} onClick={save} className="w-full py-3 rounded-xl bg-[#1E7A45] text-white font-bold text-sm disabled:opacity-50">
-          {busy ? 'بيسجّل…' : 'سجّله عميل في «جديد»'}
+          {busy ? 'بيسجّل…' : 'سجّله وافتح طلبه'}
         </button>
       </div>
     </div>,

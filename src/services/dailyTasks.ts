@@ -247,6 +247,20 @@ export const OUTCOME_LABEL: Record<CallOutcome, string> = {
 };
 /* مردش ٣ مرات = بيطلع من القايمة */
 export const MAX_NO_ANSWER = 3;
+/* مردش ← يرجع بعد ٣ ساعات */
+export const RETRY_HOURS = 3;
+export const NOT_INTERESTED_REASONS = ['مش بيدوّر دلوقتي', 'الأسعار عالية عليه', 'اشترى خلاص', 'مش عايز المنطقة', 'بيدوّر إيجار', 'سبب تاني'];
+
+/** حالة الرقم للعرض — والأرقام القديمة: «رقم غلط» بعد ٣ محاولات كان معناه «مابيردش» */
+export type CallView = 'pending' | 'no_answer' | 'gave_up' | 'wrong' | 'not_interested' | 'recall' | 'interested';
+export const VIEW_LABEL: Record<CallView, string> = {
+  pending: 'جديد', no_answer: 'مردش', gave_up: 'مابيردش', wrong: 'رقم غلط',
+  not_interested: 'مش مهتم', recall: 'هيتكلم تاني', interested: 'اتحوّل عميل',
+};
+export function callView(n: CallNumber): CallView {
+  if (n.status === 'wrong' && (n.attempts || 0) >= MAX_NO_ANSWER && !n.history?.length) return 'gave_up';
+  return n.status as CallView;
+}
 
 export interface CallNumber {
   id: string;                  // الرقم نفسه (١١ رقم) — فمفيش رقم يتكرر
@@ -256,8 +270,16 @@ export interface CallNumber {
   batch: string;               // اسم الدفعة
   assignedTo: string;
   assignedName: string;
-  status: 'pending' | CallOutcome;
+  /* recall = مش مهتم بس هيتكلم تاني بعد مدة · gave_up = مردش ٣ مرات (مابيردش) */
+  status: 'pending' | CallOutcome | 'recall' | 'gave_up';
   attempts: number;
+  noAnswers?: number;          // كام مرة مردش
+  nextAt?: number;             // مردش: يرجع يتكلم إمتى
+  reason?: string;             // مش مهتم: ليه
+  recallAt?: number;           // مش مهتم: يرجع إمتى (لو اختار)
+  wonAfter?: number;           // اتحوّل عميل بعد كام مردش
+  prevBy?: string;             // كان مع مين قبل ما يتوزع تاني
+  history?: { at: number; by: string; outcome: string; note?: string }[];
   lastAt?: number;
   lastDay?: string;
   lastBy?: string;
@@ -274,16 +296,20 @@ export function subscribeMyNumbers(agentId: string, cb: (l: CallNumber[]) => voi
   let fresh: CallNumber[] = [], retry: CallNumber[] = [];
   const emit = () => cb([
     ...fresh.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)),
-    ...retry.sort((a, b) => (a.lastAt || 0) - (b.lastAt || 0)),
+    ...retry.sort((a, b) => (a.nextAt || a.lastAt || 0) - (b.nextAt || b.lastAt || 0)),
+    ...back.filter((x) => (x.recallAt || 0) <= Date.now()),
   ]);
   const listen = (status: string, set: (l: CallNumber[]) => void) => onSnapshot(
     query(collection(db, 'call_list'), where('assignedTo', '==', agentId), where('status', '==', status), limit(80)),
     (snap) => { const l: CallNumber[] = []; snap.forEach((d) => l.push(d.data() as CallNumber)); set(l); emit(); },
     (e) => { set([]); emit(); onErr?.(errText(e)); },
   );
+  let back: CallNumber[] = [];
   const u1 = listen('pending', (l) => { fresh = l; });
   const u2 = listen('no_answer', (l) => { retry = l; });
-  return () => { u1(); u2(); };
+  /* مش مهتم وطلب نكلّمه تاني — بيظهر لما ميعاده ييجي */
+  const u3 = listen('recall', (l) => { back = l; });
+  return () => { u1(); u2(); u3(); };
 }
 
 /** مكالمات يوم معيّن لسيلز معيّن — للإدارة */
@@ -298,22 +324,65 @@ export async function remainingNumbers(agentId: string): Promise<number> {
   return c.data().count;
 }
 
-/** تسجيل نتيجة مكالمة + عدّاد اليوم */
-export async function logCall(n: CallNumber, outcome: CallOutcome, agentId: string, agentName: string, note = '', leadId?: string, closeHour = 19) {
-  const day = workDay(Date.now(), closeHour);
+/** تسجيل نتيجة مكالمة + عدّاد اليوم.
+    مردش: بيرجع بعد ٣ ساعات، وبعد ٣ مرات بيتسجّل «مابيردش» (مش بيتمسح).
+    مش مهتم: لازم سبب، ولو اختار «كلّمه تاني» بيرجعله في الميعاد.
+    كل نتيجة بتتحفظ في تاريخ الرقم — عشان السجل يقول حصل إيه بالظبط. */
+export async function logCall(
+  n: CallNumber, outcome: CallOutcome, agentId: string, agentName: string, note = '', leadId?: string, closeHour = 19,
+  extra: { reason?: string; recallDays?: number } = {},
+) {
+  const now = Date.now();
+  const day = workDay(now, closeHour);
   const attempts = (n.attempts || 0) + 1;
-  // مردش كتير → بيطلع من القايمة كـ"مردش" نهائي
-  const status: CallNumber['status'] = outcome === 'no_answer' && attempts >= MAX_NO_ANSWER ? 'wrong' : outcome;
+  const noAnswers = (n.noAnswers ?? (n.status === 'no_answer' ? (n.attempts || 0) : 0)) + (outcome === 'no_answer' ? 1 : 0);
+  let status: CallNumber['status'] = outcome;
+  const patch: Record<string, any> = { attempts, noAnswers, lastAt: now, lastDay: day, lastBy: agentId, lastNote: note || null, leadId: leadId || n.leadId || null };
+  if (outcome === 'no_answer') {
+    status = noAnswers >= MAX_NO_ANSWER ? 'gave_up' : 'no_answer';
+    patch.nextAt = now + RETRY_HOURS * 3600000;
+  } else if (outcome === 'not_interested') {
+    patch.reason = extra.reason || null;
+    if (extra.recallDays) { status = 'recall'; patch.recallAt = now + extra.recallDays * 86400000; }
+    else patch.recallAt = null;
+  } else if (outcome === 'interested') {
+    patch.wonAfter = noAnswers;
+  }
+  patch.status = status;
+  const entry = cleanFirestoreData({ at: now, by: agentName, outcome: OUTCOME_LABEL[outcome], note: [extra.reason, note].filter(Boolean).join(' — ') || undefined });
+  patch.history = [...(n.history || []), entry].slice(-20);
   const batch = writeBatch(db);
-  batch.update(doc(db, 'call_list', n.id), cleanFirestoreData({
-    status, attempts, lastAt: Date.now(), lastDay: day, lastBy: agentId,
-    lastNote: note || undefined, leadId: leadId || n.leadId,
-  }) as any);
+  batch.update(doc(db, 'call_list', n.id), patch);
   batch.set(doc(db, 'sales_daily', `${agentId}_${day}`), {
-    agentId, agentName, day, updatedAt: Date.now(),
+    agentId, agentName, day, updatedAt: now,
     calls: increment(1), [outcome]: increment(1),
   }, { merge: true });
   await batch.commit();
+}
+
+/** السجل كله — للإدارة (قراية واحدة لما تفتحه) */
+export async function allCallNumbers(): Promise<CallNumber[]> {
+  const snap = await getDocs(collection(db, 'call_list'));
+  const l: CallNumber[] = []; snap.forEach((d) => l.push(d.data() as CallNumber));
+  return l;
+}
+
+/** توزيع أرقام تاني على سيلز تانيين (بالدور) — بترجع «جديد» */
+export async function reassignNumbers(list: CallNumber[], agents: { id: string; name: string }[], by: string) {
+  if (!agents.length) throw new Error('اختار السيلز');
+  const now = Date.now();
+  for (let i = 0; i < list.length; i += 400) {
+    const b = writeBatch(db);
+    list.slice(i, i + 400).forEach((x, j) => {
+      const a = agents[(i + j) % agents.length];
+      b.update(doc(db, 'call_list', x.id), {
+        assignedTo: a.id, assignedName: a.name, status: 'pending', attempts: 0, noAnswers: 0,
+        nextAt: null, recallAt: null, prevBy: x.assignedName || x.assignedTo || null,
+        history: [...(x.history || []), { at: now, by, outcome: `اتوزّع تاني على ${a.name}` }].slice(-20),
+      });
+    });
+    await b.commit();
+  }
 }
 
 /** رفع أرقام وتوزيعها بالدور على اللي الإدارة اختارتهم */
