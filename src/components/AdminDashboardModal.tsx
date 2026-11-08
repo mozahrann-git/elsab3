@@ -373,6 +373,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [brokerAccounts, setBrokerAccounts] = useState<AccountRecord[]>([]);
   React.useEffect(() => subscribeToAccounts((list) => setBrokerAccounts(list.filter((a) => a.role === 'broker'))), []);
   const [openBroker, setOpenBroker] = useState('');
+  const [linkCodes, setLinkCodes] = useState('');
+  const [linkMsg, setLinkMsg] = useState('');
   /* عروض الملاك متقسمة: مستنية / اتقبلت / اترفضت — كلها مقفولة لحد ما تفتحها */
   const [subGroupOpen, setSubGroupOpen] = useState('');
   /* اللي بعت العرض بروكر؟ — برقم البروكر على الطلب، أو إيميل/رقم حساب بروكر.
@@ -2765,6 +2767,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               return { a, bid, units };
             }).sort((x, y) => y.units.length - x.units.length);
             const totalUnits = rows.reduce((n, r) => n + r.units.length, 0);
+            /* شقق عليها رقم بروكر مش تبع أي حساب — غالباً بروكر رقمه اتغيّر
+               (زي الحسابات القديمة اللي كان رقمها فاضي) فشققه القديمة اختفت من بوابته */
+            const knownBids = new Set(rows.map((r) => r.bid).filter(Boolean));
+            const orphans = properties.filter((p) => String(p.brokerId || '').trim() && !knownBids.has(String(p.brokerId).trim()));
+            const linkTo = (bid: string, list: Property[]) => { list.forEach((p) => onUpdateProperty({ ...p, brokerId: bid } as Property)); };
+            const linkByCodes = (bid: string, name: string) => {
+              const want = linkCodes.split(/[\s,،]+/).map((c) => c.trim().toUpperCase()).filter(Boolean);
+              const found = properties.filter((p) => want.includes(String(p.code || '').toUpperCase()));
+              const missing = want.filter((c) => !found.some((p) => String(p.code).toUpperCase() === c));
+              if (!found.length) { setLinkMsg('مفيش شقق بالأكواد دي'); return; }
+              linkTo(bid, found);
+              setLinkCodes('');
+              setLinkMsg(`اتربط ${found.length} شقة بـ ${name} ✓${missing.length ? ` · مش لاقي: ${missing.join('، ')}` : ''}`);
+            };
             return (
               <div className="space-y-4" dir="rtl">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2787,6 +2803,27 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     <p className="text-2xl font-black font-mono text-[#A07A26]">{totalUnits}</p>
                   </div>
                 </div>
+
+                {orphans.length > 0 && (
+                  <div className="bg-[#FBEDEA] border border-[#E9B8AE] rounded-2xl p-4 space-y-2">
+                    <p className="text-sm font-bold text-[#9E2A1B]">⚠️ {orphans.length} شقة عليها رقم بروكر مش تبع أي حساب — مش ظاهرة عند حد</p>
+                    {[...new Set(orphans.map((p) => String(p.brokerId).trim()))].map((ob) => {
+                      const list = orphans.filter((p) => String(p.brokerId).trim() === ob);
+                      return (
+                        <div key={ob} className="bg-white rounded-xl p-3 space-y-1.5">
+                          <p className="text-xs">رقم البروكر القديم: <b className="font-mono">{ob}</b> · {list.map((p) => p.code).join('، ')}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {rows.filter((r) => r.bid).map((r) => (
+                              <button key={r.a.email} onClick={() => { linkTo(r.bid, list); setLinkMsg(`اتربط ${list.length} شقة بـ ${r.a.name || r.bid} ✓`); }}
+                                className="px-2.5 py-1.5 rounded-lg bg-[#F6F4EF] border border-[#ECE8DF] text-[11px] font-bold">رجّعها لـ {r.a.name || r.bid}</button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {linkMsg && <p className="text-xs font-bold text-[#1E7A45] bg-[#EEF5F0] rounded-xl p-2.5">{linkMsg}</p>}
 
                 {!rows.length && (
                   <p className="text-sm bg-[#F6F4EF] rounded-2xl p-4 text-stone-600">مفيش حسابات بدور «بروكر». اعمل الحساب من زرار «الحسابات» واختار الدور بروكر.</p>
@@ -2822,6 +2859,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </div>
                             ) : (
                               <p className="text-xs text-stone-500">مفيش شقق عليها رقمه لسه — الشقق بتتربط بالبروكر لما هو يضيفها من بوابته.</p>
+                            )}
+                            {bid && (
+                              <div className="flex gap-1.5 pt-1">
+                                <input value={linkCodes} onChange={(e) => setLinkCodes(e.target.value)} dir="ltr" placeholder="BR-001, H1101"
+                                  className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white border border-[#ECE8DF] text-xs font-mono" />
+                                <button onClick={() => linkByCodes(bid, a.name || bid)} className="px-3 py-2 rounded-xl bg-[#A07A26] text-white text-xs font-bold whitespace-nowrap">اربط الشقق دي بيه</button>
+                              </div>
                             )}
                           </div>
                         )}
