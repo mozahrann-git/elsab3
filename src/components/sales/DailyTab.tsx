@@ -9,7 +9,7 @@ import { RequestForm } from './ClientRequestsPanel';
 import { Lead, Property, SalesAgent, ViewingRequest } from '../../types';
 import {
   DailySettings, DEFAULT_DAILY_SETTINGS, subscribeDailySettings, workDay, workWeek, dayLabel, cairoHour,
-  distribute, distributeFor, starReasons, STAR_LABEL, advertisableResale, advertisableProjects, CallNumber, CallOutcome, OUTCOME_LABEL, MAX_NO_ANSWER, RETRY_HOURS, NOT_INTERESTED_REASONS,
+  distribute, distributeFor, advertisableResale, advertisableProjects, CallNumber, CallOutcome, OUTCOME_LABEL, MAX_NO_ANSWER, RETRY_HOURS, NOT_INTERESTED_REASONS,
   subscribeMyNumbers, logCall, SalesDay, subscribeMyDay, AdPost, AdKind, subscribeMyAds, submitAd,
   computeProgress, dayScore, errText,
 } from '../../services/dailyTasks';
@@ -433,10 +433,11 @@ export const AdsPanel: React.FC<{
   const [kind, setKind] = useState<AdKind>('resale');
   const [openUnit, setOpenUnit] = useState<AdUnit | null>(null);
 
-  const stars = useMemo(() => starReasons(advertisableResale(properties)), [properties]);
+  /* المميز ⭐ = اللي الإدارة علّمته بإيدها */
+  const stars = useMemo(() => new Set(settings.adStars || []), [settings.adStars]);
   const mineResale = useMemo(
     () => distributeFor(advertisableResale(properties), settings, day, (c) => stars.has(c)).get(agentId) || [],
-    [properties, settings, day, agentId],
+    [properties, settings, day, agentId, stars],
   );
   const mineProjects = useMemo(
     () => distributeFor(advertisableProjects(projects), settings, day).get(agentId) || [],
@@ -513,7 +514,7 @@ export const AdsPanel: React.FC<{
               </div>
               <div className="p-3 space-y-0.5">
                 <p className="font-mono font-bold text-[13.5px]">{u.code}</p>
-                {stars.has(u.code) && <p className="text-[11px] font-bold text-[#A9842F]">⭐ {stars.get(u.code)!.map((w) => STAR_LABEL[w]).join(' · ')}</p>}
+                {stars.has(u.code) && <p className="text-[11px] font-bold text-[#A9842F]">⭐ مميزة — ركّز عليها</p>}
                 <p className="text-[11.5px] text-[#6F695D] truncate">{u.title}</p>
                 {price > 0 && <p className="text-[12px] font-bold font-mono">{price.toLocaleString('en-US')}</p>}
               </div>

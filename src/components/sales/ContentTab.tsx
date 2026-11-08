@@ -9,7 +9,7 @@ import {
 } from '../../services/salesToolsService';
 import {
   DailySettings, DEFAULT_DAILY_SETTINGS, subscribeDailySettings, workDay, workWeek,
-  AdPost, subscribeMyAds, subscribeAdsOfDay, distribute, distributeFor, assignKey, saveAdAssign, starReasons, STAR_LABEL, duplicatesOf, advertisableResale, advertisableProjects,
+  AdPost, subscribeMyAds, subscribeAdsOfDay, distribute, distributeFor, assignKey, saveAdAssign, saveAdExtras, starSuggestions, bandOf, bandLabels, bandName, priceOf, DEFAULT_BANDS, duplicatesOf, advertisableResale, advertisableProjects,
 } from '../../services/dailyTasks';
 import { Project, subscribeProjects } from '../../services/projectService';
 import { AdsPanel } from './DailyTab';
@@ -340,9 +340,15 @@ const VideoCard: React.FC<{ slot: ContentSlot; property?: Property; properties: 
 const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; properties: Property[]; projects: Project[]; week: string; day: string; dayAds: AdPost[] }> = ({ agents, settings, properties, projects, day, dayAds }) => {
   const allResale = useMemo(() => advertisableResale(properties), [properties]);
   const allProj = useMemo(() => advertisableProjects(projects), [projects]);
-  const stars = useMemo(() => starReasons(allResale), [allResale]);
-  const isStar = (c: string) => stars.has(c);
-  const resale = useMemo(() => distributeFor(allResale, settings, day, isStar), [allResale, settings, day, stars]);
+  /* المميز ⭐ = اللي إنت علّمته بإيدك بس. السيستم بيقترح أحسن ٣ لقطات في كل فئة */
+  const starSet = useMemo(() => new Set(settings.adStars || []), [settings.adStars]);
+  const isStar = (c: string) => starSet.has(c);
+  const bands = useMemo(() => [...(settings.adBands?.length ? settings.adBands : DEFAULT_BANDS)].sort((x, y) => x - y), [settings.adBands]);
+  const labels = bandLabels(bands);
+  const suggest = useMemo(() => starSuggestions(allResale, bands), [allResale, bands]);
+  const unitOf = (c: string) => (allResale as any[]).find((x) => x.code === c) || (allProj as any[]).find((x) => x.code === c);
+  const bandOfCode = (c: string) => bandOf(priceOf(unitOf(c)), bands);
+  const resale = useMemo(() => distributeFor(allResale, settings, day, isStar), [allResale, settings, day, starSet]);
   const proj = useMemo(() => distributeFor(allProj, settings, day), [allProj, settings, day]);
   const dups = useMemo(() => duplicatesOf(resale as any, proj as any), [resale, proj]);
   const team = settings.agentIds.map((id) => agents.find((a) => a.id === id)).filter((a): a is SalesAgent => !!a);
@@ -359,11 +365,15 @@ const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; proper
   const [hoodPick, setHoodPick] = useState<{ id: string; hoods: Set<string> } | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [move, setMove] = useState<string>('');           // كود الشقة اللي بتتنقل
+  const [bandsTxt, setBandsTxt] = useState<string | null>(null);
+  const [starQ, setStarQ] = useState('');
+  const liveMoves: Record<string, string> = live?.moves || {};
   const nameOf = (id?: string) => agents.find((a) => a.id === id)?.name || '';
   const save = async (patch: Partial<NonNullable<DailySettings['adAssign']>>) => {
     setBusy(true); setMsg('');
     try {
-      await saveAdAssign({ period, key, mode, map: liveMap, hoods: liveHoods, ...patch });
+      await saveAdAssign({ period, key, mode, map: liveMap, hoods: liveHoods, moves: liveMoves, ...patch });
       setMsg('اتحفظ ✓');
     } catch { setMsg('الحفظ ماوصلش — جرّب تاني'); }
     finally { setBusy(false); }
@@ -389,8 +399,29 @@ const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; proper
       await save({ hoods: hs });
     }
   };
-  const starAll = [...stars.keys()];
+  const starAll = [...starSet].filter((c) => unitOf(c));
   const starFree = starAll.filter((c) => !holderOf(c).length);
+  const setStars = async (list: string[]) => {
+    setBusy(true); setMsg('');
+    try { await saveAdExtras({ adStars: [...new Set(list)] }); setMsg('اتحفظ ✓'); }
+    catch { setMsg('الحفظ ماوصلش — جرّب تاني'); }
+    finally { setBusy(false); }
+  };
+  const toggleStar = (c: string) => setStars(isStar(c) ? [...starSet].filter((x) => x !== c) : [...starSet, c]);
+  const saveBands = async () => {
+    const b = [...new Set(String(bandsTxt || '').split(/[,،\s]+/).map(Number).filter((x) => x > 0))].sort((x, y) => x - y);
+    if (!b.length) { setMsg('اكتب حدود الفئات بالمليون، مثلاً: 2، 3، 5'); return; }
+    setBusy(true); setMsg('');
+    try { await saveAdExtras({ adBands: b }); setBandsTxt(null); setMsg('اتحفظ ✓'); }
+    catch { setMsg('الحفظ ماوصلش — جرّب تاني'); }
+    finally { setBusy(false); }
+  };
+  /* نقل شقة بعد التقسيم: لسيلز تاني أو تتشال */
+  const moveTo = async (code: string, to: string) => { await save({ moves: { ...liveMoves, [code]: to } }); setMove(''); };
+  const undoMove = async (code: string) => { const m = { ...liveMoves }; delete m[code]; await save({ moves: m }); setMove(''); };
+  const movedCount = Object.keys(liveMoves).length;
+  /* الشقق اللي اتشالت من التوزيع */
+  const removed = Object.entries(liveMoves).filter(([, to]) => !to).map(([c]) => c);
 
   return (
     <div className="rounded-[28px] bg-white border border-[#E7DFCF] p-4 sm:p-5 space-y-3">
@@ -408,7 +439,7 @@ const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; proper
 
       {/* طريقة التقسيم */}
       <div className="grid grid-cols-3 gap-1.5">
-        {([['manual', 'يدوي', 'تختار شقق كل واحد'], ['hood', 'بالحي', 'كل سيلز ياخد أحياء'], ['smart', 'بالتساوي الذكي', 'نفس العدد والمميز بالعدل']] as const).map(([k, t, d]) => (
+        {([['manual', 'يدوي', 'تختار شقق كل واحد'], ['hood', 'بالحي', 'كل سيلز ياخد أحياء'], ['smart', 'بالبادجت', 'كل واحد من كل الأسعار']] as const).map(([k, t, d]) => (
           <button key={k} disabled={busy} onClick={() => save({ mode: k })}
             className={`rounded-[16px] p-2.5 text-right border ${mode === k ? 'bg-[#17150F] text-white border-[#17150F]' : 'bg-[#F5F0E6] border-[#E7DFCF]'}`}>
             <span className="block text-[13px] font-bold">{t}</span>
@@ -419,18 +450,79 @@ const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; proper
       {cur && cur.key !== key && <p className="text-[11.5px] text-[#7A5E12] bg-[#FFF4D9] rounded-2xl px-3 py-2">التوزيع المتحفظ كان لفترة تانية ({cur.key}) — دلوقتي شغال أوتوماتيك لحد ما تختار.</p>}
       {msg && <p className="text-[12px] font-bold text-[#22483A]">{msg}</p>}
 
-      {/* المميز */}
-      {starAll.length > 0 && (
-        <div className="rounded-[18px] bg-[#FBF5E6] border border-[#EBDDB8] px-3.5 py-2.5 space-y-1">
-          <p className="text-[13px] font-bold">⭐ عندك {starAll.length} شقة مميزة: {starAll.length - starFree.length} متوزعين{starFree.length ? ` و${starFree.length} مع محدش` : ''}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {starAll.map((c) => (
-              <span key={c} title={stars.get(c)!.map((w) => STAR_LABEL[w]).join(' · ')}
-                className={`text-[11px] px-2 py-1 rounded-lg ${holderOf(c).length ? 'bg-white' : 'bg-[#D3262B] text-white'}`}>
-                <b className="font-mono">{c}</b> · {stars.get(c)!.map((w) => STAR_LABEL[w]).join('، ')}{holderOf(c).length ? ` · ${holderOf(c).map(nameOf).join('، ')}` : ' · مع محدش'}
-              </span>
+      {/* فئات البادجت */}
+      {mode === 'smart' && (
+        <div className="rounded-[18px] bg-[#F5F0E6] px-3.5 py-2.5 space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-[13px] font-bold">فئات البادجت</p>
+            {bandsTxt === null && <button onClick={() => setBandsTxt(bands.join('، '))} className="h-8 px-3 rounded-full bg-white border border-[#E7DFCF] text-[11.5px] font-bold">عدّل الفئات</button>}
+          </div>
+          {bandsTxt === null ? (
+            <div className="flex flex-wrap gap-1.5">
+              {labels.map((l, i) => <span key={i} className="text-[11.5px] font-bold px-2.5 py-1 rounded-full bg-white">{l} · {allResale.filter((x) => bandOf(priceOf(x), bands) === i).length} شقة</span>)}
+              {allResale.some((x) => !priceOf(x)) && <span className="text-[11.5px] px-2.5 py-1 rounded-full bg-white text-[#6F695D]">من غير سعر · {allResale.filter((x) => !priceOf(x)).length}</span>}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <p className="text-[11.5px] text-[#6F695D]">اكتب الحدود بالمليون بينهم فاصلة. مثلاً «2، 3، 5» يعني: أقل من ٢ · ٢–٣ · ٣–٥ · فوق ٥</p>
+              <div className="flex gap-1.5">
+                <input value={bandsTxt} onChange={(e) => setBandsTxt(e.target.value)} dir="ltr" className="flex-1 min-w-0 h-10 px-3 rounded-[12px] bg-white border border-[#E7DFCF] text-sm font-mono" />
+                <button disabled={busy} onClick={saveBands} className="h-10 px-4 rounded-[12px] bg-[#17150F] text-[#F5F0E6] text-[12px] font-bold">احفظ</button>
+                <button onClick={() => setBandsTxt(null)} className="h-10 px-3 rounded-[12px] bg-white border border-[#E7DFCF] text-[12px] font-bold">إلغاء</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* المميز ⭐ — بإيدك */}
+      <div className="rounded-[18px] bg-[#FBF5E6] border border-[#EBDDB8] px-3.5 py-2.5 space-y-2">
+        <p className="text-[13px] font-bold">⭐ المميز {starAll.length ? `(${starAll.length})` : ''}{starFree.length ? ` · ${starFree.length} مع محدش` : ''}</p>
+        {starAll.length > 0 ? (
+          <div className="space-y-1.5">
+            {[...new Set([...starAll.map(bandOfCode)])].sort((x, y) => x - y).map((b) => (
+              <div key={b} className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-bold text-[#8E6C1F] min-w-[70px]">{bandName(b, bands)}</span>
+                {starAll.filter((c) => bandOfCode(c) === b).map((c) => (
+                  <span key={c} className={`text-[11px] pl-1 pr-2 py-1 rounded-lg flex items-center gap-1 ${holderOf(c).length ? 'bg-white' : 'bg-[#D3262B] text-white'}`}>
+                    <b className="font-mono">{c}</b> · {holderOf(c).length ? holderOf(c).map(nameOf).join('، ') : 'مع محدش'}
+                    <button disabled={busy} onClick={() => toggleStar(c)} title="شيل التمييز" className="p-0.5 rounded hover:bg-black/10"><X size={11} /></button>
+                  </span>
+                ))}
+              </div>
             ))}
           </div>
+        ) : <p className="text-[11.5px] text-[#6F695D]">مفيش شقق مميزة. علّم من الاقتراحات تحت، أو اكتب الكود، أو دوس على أي شقة في كارت السيلز.</p>}
+        <div className="flex gap-1.5">
+          <input value={starQ} onChange={(e) => setStarQ(e.target.value)} placeholder="ميّز بالكود — مثلاً H1101" dir="ltr" className="flex-1 min-w-0 h-9 px-3 rounded-[12px] bg-white border border-[#E7DFCF] text-[12px] font-mono" />
+          <button disabled={busy || !starQ.trim()} onClick={() => {
+            const c = starQ.trim().toUpperCase();
+            const u = (allResale as any[]).find((x) => String(x.code).toUpperCase() === c) || (allProj as any[]).find((x) => String(x.code).toUpperCase() === c);
+            if (!u) { setMsg(`مفيش شقة متاحة للإعلان بالكود ${c}`); return; }
+            setStarQ(''); if (!isStar(u.code)) setStars([...starSet, u.code]);
+          }} className="h-9 px-3 rounded-[12px] bg-[#17150F] text-[#F5F0E6] text-[12px] font-bold disabled:opacity-40">⭐ ميّز</button>
+        </div>
+        {[...suggest.keys()].some((c) => !isStar(c)) && (
+          <div className="space-y-1.5 pt-1 border-t border-[#EBDDB8]">
+            <p className="text-[11.5px] font-bold text-[#6F695D]">اقتراح: أحسن لقطات في كل فئة (سعر المتر أقل من متوسط الحي) — دوس عشان تميّزها</p>
+            {[...new Set([...suggest.keys()].filter((c) => !isStar(c)).map(bandOfCode))].sort((x, y) => x - y).map((b) => (
+              <div key={b} className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-bold text-[#8E6C1F] min-w-[70px]">{bandName(b, bands)}</span>
+                {[...suggest].filter(([c]) => !isStar(c) && bandOfCode(c) === b).map(([c, pct]) => (
+                  <button key={c} disabled={busy} onClick={() => toggleStar(c)} className="text-[11px] px-2 py-1 rounded-lg bg-white border border-dashed border-[#D9C68F]">
+                    + <b className="font-mono">{c}</b> · أرخص {pct}٪
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {live && movedCount > 0 && (
+        <div className="flex items-center justify-between gap-2 flex-wrap text-[12px] bg-[#F5F0E6] rounded-2xl px-3 py-2">
+          <span className="font-bold">عدّلت {movedCount} شقة بإيدك بعد التقسيم{removed.length ? ` (${removed.length} اتشالت: ${removed.join('، ')})` : ''}</span>
+          <button disabled={busy} onClick={() => save({ moves: {} })} className="h-8 px-3 rounded-full bg-white border border-[#E7DFCF] text-[11.5px] font-bold">رجّع التقسيم زي ما كان</button>
         </div>
       )}
 
@@ -464,6 +556,7 @@ const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; proper
                 <span className="block font-semibold text-[14.5px] truncate">{a.name} <span className={`text-[10.5px] px-2 py-0.5 rounded-full ${own && live ? 'bg-[#17150F] text-white' : 'bg-white text-[#6F695D]'}`}>{!live ? 'أوتوماتيك' : mode === 'smart' ? 'بالتساوي' : own ? (mode === 'hood' ? 'بالحي' : 'يدوي') : 'أوتوماتيك من الباقي'}</span></span>
                 <span className="block text-[11.5px] text-[#6F695D]">معاه {r.length} ريسيل{nStar ? ` (⭐${nStar})` : ''} · {p.length} مشروع · النهارده {rr}/{T.adsResale} · {pp}/{T.adsOffPlan}{ok ? ' ✓' : ''}</span>
                 {mode === 'hood' && liveHoods[a.id]?.length ? <span className="block text-[11px] text-[#8E6C1F] truncate">{liveHoods[a.id].join('، ')}</span> : null}
+                {r.length > 0 && <span className="block text-[11px] text-[#8E6C1F]">{[...labels.map((l, i) => [l, r.filter((x) => bandOf(priceOf(x), bands) === i).length] as const), ['من غير سعر', r.filter((x) => !priceOf(x)).length] as const].filter(([, n]) => n).map(([l, n]) => `${l}: ${n}`).join(' · ')}</span>}
               </button>
               {mode === 'manual' && (
                 <button onClick={() => setPick({ id: a.id, codes: new Set(liveMap[a.id] || [...r, ...p].map((x) => x.code)), q: '' })}
@@ -475,10 +568,28 @@ const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; proper
               )}
             </div>
             {open === a.id && (
-              <div className="flex flex-wrap gap-1.5">
-                {[...r.map((x) => x.code), ...p.map((x) => x.code)].map((c) => (
-                  <span key={c} className={`font-mono text-[11px] px-2 py-1 rounded-lg ${mine.some((m) => m.code === c) ? 'bg-[#22483A] text-white' : dups.has(c) ? 'bg-[#FBECEA] text-[#9E2A1B]' : 'bg-white'}`}>{isStar(c) ? '⭐' : ''}{c}</span>
-                ))}
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-[#6F695D]">دوس على أي شقة عشان تنقلها لسيلز تاني أو تشيلها أو تميّزها</p>
+                {[...labels.map((_, i) => i), -1].map((b) => {
+                  const cs = r.filter((x) => bandOf(priceOf(x), bands) === b).map((x) => x.code);
+                  if (!cs.length) return null;
+                  return (
+                    <div key={b} className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10.5px] font-bold text-[#8E6C1F] min-w-[64px]">{bandName(b, bands)}</span>
+                      {cs.map((c) => (
+                        <button key={c} onClick={() => setMove(c)} className={`font-mono text-[11px] px-2 py-1 rounded-lg ${mine.some((m) => m.code === c) ? 'bg-[#22483A] text-white' : dups.has(c) ? 'bg-[#FBECEA] text-[#9E2A1B]' : 'bg-white'} ${liveMoves[c] ? 'ring-1 ring-[#A9842F]' : ''}`}>{isStar(c) ? '⭐' : ''}{c}</button>
+                      ))}
+                    </div>
+                  );
+                })}
+                {p.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10.5px] font-bold text-[#8E6C1F] min-w-[64px]">مشاريع</span>
+                    {p.map((x) => (
+                      <button key={x.code} onClick={() => setMove(x.code)} className={`font-mono text-[11px] px-2 py-1 rounded-lg ${mine.some((m) => m.code === x.code) ? 'bg-[#22483A] text-white' : 'bg-white'} ${liveMoves[x.code] ? 'ring-1 ring-[#A9842F]' : ''}`}>{x.code}</button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -491,12 +602,12 @@ const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; proper
           if (q && !code.toLowerCase().includes(q) && !sub.toLowerCase().includes(q)) return null;
           const on = pick.codes.has(code);
           const other = Object.entries(liveMap).find(([id, cs]) => id !== pick.id && cs.includes(code))?.[0];
-          const st = stars.get(code);
+          const st = isStar(code);
           return (
             <button key={k} onClick={() => { const n = new Set(pick.codes); on ? n.delete(code) : n.add(code); setPick({ ...pick, codes: n }); }}
               className={`text-right rounded-[14px] border px-3 py-2 ${on ? 'bg-[#17150F] text-white border-[#17150F]' : 'bg-white border-[#E7DFCF]'}`}>
               <span className="block font-mono font-bold text-[13px]">{on ? '✓ ' : ''}{st ? '⭐' : ''}{code}</span>
-              <span className={`block text-[10.5px] truncate ${on ? 'text-white/70' : 'text-[#6F695D]'}`}>{sub}{st ? ` · ${st.map((w) => STAR_LABEL[w]).join('، ')}` : ''}{other ? ` · مع ${nameOf(other)}` : ''}</span>
+              <span className={`block text-[10.5px] truncate ${on ? 'text-white/70' : 'text-[#6F695D]'}`}>{sub}{other ? ` · مع ${nameOf(other)}` : ''}</span>
             </button>
           );
         };
@@ -522,6 +633,46 @@ const AdsSplit: React.FC<{ agents: SalesAgent[]; settings: DailySettings; proper
                 <button disabled={busy} onClick={async () => { const m = { ...liveMap }; delete m[pick.id]; await save({ map: m }); setPick(null); }}
                   className="h-12 px-4 rounded-[16px] bg-white border border-[#E7DFCF] text-[12.5px] font-bold">رجّعه أوتوماتيك</button>
               </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {move && (() => {
+        const u: any = unitOf(move);
+        const holders = holderOf(move);
+        if (!live) return (
+          <div className="fixed inset-0 z-[80] bg-black/50 flex items-end sm:items-center justify-center" dir="rtl" onClick={() => setMove('')}>
+            <div className="bg-[#F5F0E6] w-full sm:max-w-md rounded-t-[28px] sm:rounded-[28px] p-4 space-y-2" onClick={(e) => e.stopPropagation()}>
+              <p className="text-[13px] font-bold">اختار طريقة التقسيم الأول (يدوي / بالحي / بالبادجت) عشان تقدر تعدّل.</p>
+              <button onClick={() => setMove('')} className="w-full h-11 rounded-[14px] bg-white border border-[#E7DFCF] font-bold text-[13px]">تمام</button>
+            </div>
+          </div>
+        );
+        return (
+          <div className="fixed inset-0 z-[80] bg-black/50 flex items-end sm:items-center justify-center" dir="rtl" onClick={() => setMove('')}>
+            <div className="bg-[#F5F0E6] w-full sm:max-w-md max-h-[90dvh] overflow-y-auto rounded-t-[28px] sm:rounded-[28px] p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-readex font-semibold text-[17px] font-mono">{isStar(move) ? '⭐ ' : ''}{move}</p>
+                  <p className="text-[12px] text-[#6F695D]">{u?.neighborhood || u?.name || ''}{priceOf(u) ? ` · ${priceOf(u).toLocaleString('en-US')} ج · ${bandName(bandOfCode(move), bands)}` : ''}</p>
+                  <p className="text-[12px] font-bold mt-0.5">دلوقتي مع: {holders.length ? holders.map(nameOf).join('، ') : 'محدش'}</p>
+                </div>
+                <button onClick={() => setMove('')} className="p-1.5 rounded-lg hover:bg-white"><X size={16} /></button>
+              </div>
+              <p className="text-[12px] font-bold">انقلها لـ:</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {team.filter((t) => !holders.includes(t.id)).map((t) => (
+                  <button key={t.id} disabled={busy} onClick={() => moveTo(move, t.id)} className="h-10 rounded-[12px] bg-white border border-[#E7DFCF] text-[12.5px] font-bold truncate px-2">{t.name}</button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button disabled={busy} onClick={() => toggleStar(move)} className="h-10 rounded-[12px] bg-[#FBF5E6] border border-[#EBDDB8] text-[12.5px] font-bold">{isStar(move) ? 'شيل التمييز' : '⭐ ميّزها'}</button>
+                <button disabled={busy || !holders.length} onClick={() => moveTo(move, '')} className="h-10 rounded-[12px] bg-[#FBECEA] border border-[#EBC1BC] text-[#9E2A1B] text-[12.5px] font-bold disabled:opacity-40">شيلها من التوزيع</button>
+              </div>
+              {liveMoves[move] !== undefined && (
+                <button disabled={busy} onClick={() => undoMove(move)} className="w-full h-10 rounded-[12px] bg-white border border-[#E7DFCF] text-[12px] font-bold">رجّعها مكانها الأصلي</button>
+              )}
             </div>
           </div>
         );

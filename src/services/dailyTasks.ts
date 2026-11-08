@@ -49,8 +49,15 @@ export interface DailySettings {
     mode?: 'manual' | 'hood' | 'smart';
     map: Record<string, string[]>;
     hoods?: Record<string, string[]>;
+    /* تعديل بعد التقسيم: كود الشقة ← السيلز اللي تروحله ('' = اتشالت من التوزيع) */
+    moves?: Record<string, string>;
   };
+  /* الشقق المميزة ⭐ — الإدارة بتختارها بإيدها، وبتفضل لحد ما تشيلها */
+  adStars?: string[];
+  /* حدود فئات البادجت بالمليون (مثلاً [2,3,5] = أقل من ٢ · ٢–٣ · ٣–٥ · فوق ٥) */
+  adBands?: number[];
 }
+export const DEFAULT_BANDS = [2, 3, 5];
 export const DEFAULT_TARGETS: DailyTargets = {
   calls: 50, requests: 10, requestsImportant: 7,
   ads: 7, adsResale: 5, adsOffPlan: 2,
@@ -67,6 +74,8 @@ export function subscribeDailySettings(cb: (s: DailySettings) => void, onErr?: (
       closeHour: typeof d.closeHour === 'number' ? d.closeHour : 19,
       startHour: typeof d.startHour === 'number' ? d.startHour : 11,
       adAssign: d.adAssign && typeof d.adAssign === 'object' ? d.adAssign as any : undefined,
+      adStars: Array.isArray(d.adStars) ? d.adStars : [],
+      adBands: Array.isArray(d.adBands) && d.adBands.length ? d.adBands : DEFAULT_BANDS,
     });
   }, (e) => { cb(DEFAULT_DAILY_SETTINGS); onErr?.(errText(e)); });
 }
@@ -74,6 +83,12 @@ export async function saveDailySettings(s: Partial<DailySettings>) {
   await setDoc(doc(db, 'settings', 'daily_tasks'), cleanFirestoreData(s), { merge: true });
 }
 /* التوزيع بيتكتب كله من جديد (مش دمج) — عشان «رجّعه أوتوماتيك» يمسح اختيار السيلز فعلاً */
+/** المميز وفئات البادجت — بيتحفظوا لوحدهم من غير ما يلمسوا باقي الإعدادات */
+export async function saveAdExtras(v: { adStars?: string[]; adBands?: number[] }) {
+  const keys = Object.keys(v) as ('adStars' | 'adBands')[];
+  if (!keys.length) return;
+  await setDoc(doc(db, 'settings', 'daily_tasks'), v, { mergeFields: keys });
+}
 export async function saveAdAssign(v: NonNullable<DailySettings['adAssign']>) {
   await setDoc(doc(db, 'settings', 'daily_tasks'), { adAssign: cleanFirestoreData(v) }, { mergeFields: ['adAssign'] });
 }
@@ -187,22 +202,82 @@ export function starReasons(all: Property[], now = Date.now()): Map<string, Star
   return out;
 }
 
+/* ---------- فئات البادجت ---------- */
+export const priceOf = (p: any) => Number(p?.price || p?.askingPrice || 0) || 0;
+const fmtM = (x: number) => (Math.round(x * 10) / 10).toLocaleString('en-US');
+/** رقم الفئة: 0..bands.length — والشقة اللي من غير سعر بتاخد -1 */
+export function bandOf(price: number, bands: number[]): number {
+  if (!price) return -1;
+  const m = price / 1e6;
+  const i = bands.findIndex((b) => m < b);
+  return i === -1 ? bands.length : i;
+}
+export function bandLabels(bands: number[]): string[] {
+  const b = [...bands].sort((x, y) => x - y);
+  return [`أقل من ${fmtM(b[0])} م`, ...b.slice(1).map((x, i) => `${fmtM(b[i])}–${fmtM(x)} م`), `فوق ${fmtM(b[b.length - 1])} م`];
+}
+export const bandName = (i: number, bands: number[]) => (i < 0 ? 'من غير سعر' : bandLabels(bands)[i] || '');
+
+/** اقتراح مميز: أحسن ٣ لقطات في كل فئة (سعر المتر أقل من متوسط الحي بـ١٠٪+) — مجرد اقتراح */
+export function starSuggestions(all: Property[], bands: number[], perBand = 3): Map<string, number> {
+  const ppm = (p: any) => (priceOf(p) > 0 && Number(p.area) > 0 ? priceOf(p) / Number(p.area) : 0);
+  const byHood = new Map<string, number[]>();
+  all.forEach((p: any) => { const v = ppm(p); if (v) byHood.set(p.neighborhood, [...(byHood.get(p.neighborhood) || []), v]); });
+  const cands: { code: string; band: number; pct: number }[] = [];
+  all.forEach((p: any) => {
+    const v = ppm(p);
+    const peers = (byHood.get(p.neighborhood) || []).filter((x) => x !== v);
+    if (!v || peers.length < 3) return;
+    const avg = peers.reduce((t, x) => t + x, 0) / peers.length;
+    const pct = Math.round((1 - v / avg) * 100);
+    if (pct >= 10) cands.push({ code: p.code, band: bandOf(priceOf(p), bands), pct });
+  });
+  const out = new Map<string, number>();
+  const groups = new Map<number, typeof cands>();
+  cands.forEach((c) => groups.set(c.band, [...(groups.get(c.band) || []), c]));
+  groups.forEach((g) => g.sort((x, y) => y.pct - x.pct).slice(0, perBand).forEach((c) => out.set(c.code, c.pct)));
+  return out;
+}
+
+/** التعديلات اللي الإدارة عملتها بعد التقسيم (نقل شقة لسيلز تاني أو شيلها) */
+function applyMoves<T extends { code: string }>(out: Map<string, T[]>, items: T[], moves: Record<string, string> | undefined, agentIds: string[]) {
+  if (!moves) return out;
+  Object.entries(moves).forEach(([code, to]) => {
+    const it = items.find((x) => x.code === code);
+    if (!it) return;
+    out.forEach((l, id) => out.set(id, l.filter((x) => x.code !== code)));
+    if (to && agentIds.includes(to)) out.set(to, [...(out.get(to) || []), it]);
+  });
+  return out;
+}
+
 /** التوزيع الفعلي حسب طريقة الإدارة (يدوي / بالحي / بالتساوي الذكي) في الفترة الحالية، والباقي أوتوماتيك */
 export function distributeFor<T extends { code: string; neighborhood?: string }>(items: T[], s: DailySettings, day: string, isStar?: (code: string) => boolean): Map<string, T[]> {
+  const a = s.adAssign;
+  const live = !!a && a.key === assignKey(a.period, day);
+  return applyMoves(baseDistribute(items, s, day, isStar), items, live ? a!.moves : undefined, s.agentIds);
+}
+function baseDistribute<T extends { code: string; neighborhood?: string }>(items: T[], s: DailySettings, day: string, isStar?: (code: string) => boolean): Map<string, T[]> {
   const week = workWeek(day);
   const a = s.adAssign;
   const live = !!a && a.key === assignKey(a.period, day);
   const mode = (live && a!.mode) || 'manual';
   if (live && mode === 'smart') {
-    /* المميز الأول بالدور، وبعده الباقي بالدور — كله نفس العدد والمميز متقسّم بالعدل */
+    /* بالبادجت: كل فئة سعر بتتقسم بالدور على الكل (المميز فيها الأول)،
+       والدور بيكمّل من فئة للتانية — فكل واحد ياخد من كل الأسعار ونفس العدد تقريباً */
     const ids = [...s.agentIds].sort();
     const out = new Map<string, T[]>(); ids.forEach((id) => out.set(id, []));
     if (!ids.length) return out;
+    const bands = [...(s.adBands?.length ? s.adBands : DEFAULT_BANDS)].sort((x, y) => x - y);
     const byCode = (x: T, y: T) => x.code.localeCompare(y.code);
-    const list = items.filter((x) => x.code);
-    const ordered = [...list.filter((x) => isStar?.(x.code)).sort(byCode), ...list.filter((x) => !isStar?.(x.code)).sort(byCode)];
-    const shift = weekIndex(week) % ids.length;
-    ordered.forEach((it, i) => out.get(ids[(i + shift) % ids.length])!.push(it));
+    const groups = new Map<number, T[]>();
+    items.filter((x) => x.code).forEach((x) => { const b = bandOf(priceOf(x), bands); groups.set(b, [...(groups.get(b) || []), x]); });
+    let c = weekIndex(week) % ids.length;
+    [...groups.keys()].sort((x, y) => x - y).forEach((b) => {
+      const g = groups.get(b)!;
+      [...g.filter((x) => isStar?.(x.code)).sort(byCode), ...g.filter((x) => !isStar?.(x.code)).sort(byCode)]
+        .forEach((it) => { out.get(ids[c % ids.length])!.push(it); c++; });
+    });
     return out;
   }
   const pickers: Record<string, (it: T) => boolean> = {};
