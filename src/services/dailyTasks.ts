@@ -386,26 +386,39 @@ export async function reassignNumbers(list: CallNumber[], agents: { id: string; 
 }
 
 /** رفع أرقام وتوزيعها بالدور على اللي الإدارة اختارتهم */
+export interface SkippedNumber { phone: string; name?: string; why: 'sheet' | 'list' | 'client'; withName?: string; status?: string; batch?: string }
 export async function uploadNumbers(
   rows: { phone: string; name?: string; note?: string }[],
   agents: { id: string; name: string }[],
   batchName: string,
-  knownPhones: Set<string>,
-): Promise<{ added: number; dupes: number; clients: number }> {
+  knownPhones: Map<string, string> | Set<string>,
+): Promise<{ added: number; dupes: number; clients: number; skipped: SkippedNumber[] }> {
   if (!agents.length) throw new Error('اختار السيلز اللي هيتوزع عليهم');
-  // الأرقام الموجودة قبل كده — عشان رقم مايتوزعش مرتين
-  const existing = new Set<string>();
+  // الأرقام الموجودة قبل كده — عشان رقم مايتوزعش مرتين (ونعرف هو مع مين)
+  const existing = new Map<string, CallNumber>();
   const snap = await getDocs(collection(db, 'call_list'));
-  snap.forEach((d) => existing.add(d.id));
+  snap.forEach((d) => existing.set(d.id, d.data() as CallNumber));
 
   let dupes = 0, clients = 0;
+  const skipped: SkippedNumber[] = [];
   const fresh: typeof rows = [];
   const seen = new Set<string>();
   rows.forEach((r) => {
     const id = r.phone.replace(/\D/g, '');
-    if (seen.has(id) || existing.has(id)) { dupes++; return; }
+    if (seen.has(id)) { dupes++; skipped.push({ phone: r.phone, name: r.name, why: 'sheet' }); return; }
+    const ex = existing.get(id);
+    if (ex) {
+      dupes++;
+      skipped.push({ phone: r.phone, name: r.name || ex.name, why: 'list', withName: ex.assignedName || '—', status: VIEW_LABEL[callView(ex)] || ex.status, batch: ex.batch });
+      return;
+    }
     seen.add(id);
-    if (knownPhones.has(id.slice(-10))) { clients++; return; }
+    const k = id.slice(-10);
+    if (knownPhones.has(k)) {
+      clients++;
+      skipped.push({ phone: r.phone, name: r.name, why: 'client', withName: knownPhones instanceof Map ? (knownPhones.get(k) || '—') : '—' });
+      return;
+    }
     fresh.push(r);
   });
 
@@ -424,7 +437,7 @@ export async function uploadNumbers(
     });
     await b.commit();
   }
-  return { added: fresh.length, dupes, clients };
+  return { added: fresh.length, dupes, clients, skipped };
 }
 
 /* ============================================================

@@ -7,7 +7,7 @@ import {
   DailySettings, DEFAULT_DAILY_SETTINGS, DailyTargets, subscribeDailySettings, saveDailySettings,
   workDay, prevWorkDay, nextWorkDay, dayLabel, SalesDay, subscribeSalesDays, setDayOff,
   AdPost, subscribeAdsOfDay, subscribePendingAds, reviewAd, computeProgress, dayScore, Progress,
-  uploadNumbers, numbersCalledOn, remainingNumbers, CallNumber, OUTCOME_LABEL, errText,
+  uploadNumbers, SkippedNumber, numbersCalledOn, remainingNumbers, CallNumber, OUTCOME_LABEL, errText,
 } from '../../services/dailyTasks';
 import { ContentSlot, subscribeSlots, weekKey } from '../../services/salesToolsService';
 import { PresenceCheck, subscribePresenceOfDay, summarize } from '../../services/presence';
@@ -322,7 +322,7 @@ const UploadModal: React.FC<{ agents: SalesAgent[]; settings: DailySettings; lea
   const [ids, setIds] = useState<string[]>(settings.agentIds);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [res, setRes] = useState<{ added: number; dupes: number; clients: number } | null>(null);
+  const [res, setRes] = useState<{ added: number; dupes: number; clients: number; skipped: SkippedNumber[] } | null>(null);
   const [left, setLeft] = useState<Record<string, number>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const team = agents.filter((a) => settings.agentIds.includes(a.id));
@@ -362,7 +362,9 @@ const UploadModal: React.FC<{ agents: SalesAgent[]; settings: DailySettings; lea
     setBusy(true); setErr(''); setRes(null);
     try {
       const chosen = agents.filter((a) => ids.includes(a.id)).map((a) => ({ id: a.id, name: a.name }));
-      const known = new Set<string>(leads.map((l) => normPhone(l.phone)));
+      /* رقم العميل ← اسمه ومع مين — عشان نقول الرقم المشال مع مين */
+      const known = new Map<string, string>();
+      leads.forEach((l) => { const k = normPhone(l.phone); if (k) known.set(k, `عميل: ${l.name || '—'} · مع ${l.assignedAgentName || 'مش متوزع'}`); });
       const r = await uploadNumbers(rows, chosen, batch.trim() || `دفعة ${new Date().toLocaleDateString('en-GB')}`, known);
       setRes(r); setText('');
     } catch (e) { setErr(errText(e)); }
@@ -408,6 +410,23 @@ const UploadModal: React.FC<{ agents: SalesAgent[]; settings: DailySettings; lea
         <p className="text-xs font-bold text-[#1E7A45] bg-[#EEF5F0] rounded-xl p-3">
           اتوزع {res.added} رقم{res.dupes ? ` · ${res.dupes} متكرر اتشال` : ''}{res.clients ? ` · ${res.clients} عملاء عندنا أصلاً اتشالوا` : ''}
         </p>
+      )}
+      {res && res.skipped.length > 0 && (
+        <div className="border border-[#ECE8DF] rounded-xl overflow-hidden">
+          <p className="text-xs font-bold px-3 py-2 bg-[#F6F4EF]">الأرقام اللي اتشالت ({res.skipped.length}) — ومع مين</p>
+          <div className="max-h-64 overflow-y-auto divide-y divide-[#F1ECE2]">
+            {res.skipped.map((x, i) => (
+              <div key={i} className="px-3 py-1.5 text-[11.5px]">
+                <span className="font-mono font-bold" dir="ltr">{x.phone}</span>{x.name ? <span className="font-bold"> · {x.name}</span> : null}
+                <span className="block text-[#6B665C]">
+                  {x.why === 'sheet' ? 'متكرر في نفس الشيت اللي رفعته'
+                    : x.why === 'list' ? `موجود قبل كده مع ${x.withName}${x.status ? ` · ${x.status}` : ''}${x.batch ? ` · دفعة ${x.batch}` : ''}`
+                    : x.withName}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
       <button disabled={busy || !rows.length || !ids.length} onClick={go}
         className="w-full py-3 rounded-xl bg-[#141414] text-white font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-2">
