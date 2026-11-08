@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { LateFixModal } from './sales/LateFixModal';
 import { 
   Lead, 
   SalesAgent, 
@@ -423,6 +424,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   /* زرار «المتأخر»: يعرض المتأخرين بس مرة واحدة. للإدارة بيمشي
      على اختيار «كل الفريق» أو مندوب معيّن، وللسيلز على عملاؤه. */
   const [lateOnly, setLateOnly] = useState(false);
+  const [lateFixOpen, setLateFixOpen] = useState(false);
   const lateCount = useMemo(
     () => followUpList.filter((l) => followUpState(l.nextActionAt, l.followUpStatus) === 'late').length,
     [followUpList],
@@ -1588,6 +1590,12 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 >
                   {lateOnly ? `اعرض الكل` : `المتأخر (${lateCount})`}
                 </button>
+                {isAdmin && (
+                  <button onClick={() => setLateFixOpen(true)}
+                    className="h-10 px-4 rounded-[14px] text-[13px] font-bold bg-[#17150F] text-[#F5F0E6]">
+                    حل المتأخر
+                  </button>
+                )}
                 <button onClick={toggleCompact} className="px-3.5 py-2 rounded-xl bg-[#F6F4EF] border border-[#ECE8DF] text-xs font-bold text-[#141414]">
                   {compactView ? 'عرض مفصّل' : 'عرض مختصر'}
                 </button>
@@ -2178,6 +2186,11 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           distributorName={currentAgent?.name || 'الإدارة'}
           onDistribute={onAddLeadsBulk}
         />
+      )}
+
+      {lateFixOpen && (
+        <LateFixModal leads={leads} agents={agents} adminName={currentAgent?.name || 'الإدارة'}
+          onUpdateLead={onUpdateLead} onOpenLead={(l) => setSelectedLeadForDetails(l)} onClose={() => setLateFixOpen(false)} />
       )}
 
       {/* اختيار العميل للمطابقة: بحث بالاسم أو الرقم، والأحدث فوق */}
