@@ -1,5 +1,5 @@
 /*
-  رفع الصور والفيديوهات: كان على Cloudinary، ودلوقتي على Firebase Storage (شوف send تحت).
+  رفع الصور والفيديوهات على Cloudinary (مجاني لحد 25 جيجا، ومن غير كارت).
   Firestore بيخزن الرابط بس، فمفيش مستند هيعدّي حد الـ 1 ميجا تاني.
 
   قبل الاستخدام: اكتب اسم الحساب واسم الـ Upload Preset في الخانتين تحت.
@@ -28,64 +28,50 @@ export function thumbUrl(url: string | undefined, w = 200): string {
   return clean.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${w},c_fill/`);
 }
 
-/* ---------- الرفع على Firebase Storage ----------
-   حساب Cloudinary المجاني اتقفل (عدّى الحد)، فالرفع الجديد كله بقى على
-   Firebase Storage (باكت elsab3-33.firebasestorage.app). الروابط القديمة
-   بتاعة Cloudinary بتفضل زي ما هي لحد ما تتنقل.
-   Cloudinary كان بيصغّر الصور لوحده — دلوقتي بنصغّرها على الجهاز قبل الرفع
-   (أقصى عرض ١٦٠٠ بكسل) عشان تفضل خفيفة وسريعة. */
-const extOf = (type: string, name = '') => {
-  const fromName = (name.split('.').pop() || '').toLowerCase();
-  if (fromName && fromName.length <= 4 && /^[a-z0-9]+$/.test(fromName)) return fromName;
-  return type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : type.startsWith('image') ? 'jpg'
-    : type.includes('quicktime') ? 'mov' : type.includes('webm') ? 'webm' : type.startsWith('audio') ? (type.includes('mp4') ? 'm4a' : 'webm') : 'mp4';
-};
-
-/** بتصغّر الصورة لأقصى عرض ١٦٠٠ وبتحوّلها JPEG — لو فشلت بترجع الأصل */
-async function shrinkImage(blob: Blob, max = 1600): Promise<Blob> {
-  if (!blob.type.startsWith('image/') || /gif|svg/.test(blob.type) || blob.size < 250 * 1024) return blob;
-  try {
-    const bmp = await createImageBitmap(blob);
-    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-    const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
-    c.getContext('2d')!.drawImage(bmp, 0, 0, w, h);
-    const out: Blob | null = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.82));
-    return out && out.size < blob.size ? out : blob;
-  } catch { return blob; }
-}
-
-async function send(
-  payload: Blob,
+/* بنستخدم XMLHttpRequest مش fetch عشان نعرف نطلّع نسبة الرفع للمستخدم،
+   وعشان نمسك رسالة الخطأ الحقيقية اللي Cloudinary بيرجّعها بدل رسالة عامة. */
+function send(
+  payload: Blob | string,
   folder: string,
   id: string,
+  kind: 'image' | 'video',
   onProgress?: (percent: number) => void,
-  name = '',
 ): Promise<string> {
-  const [{ getStorage, ref, uploadBytesResumable, getDownloadURL }, fb] = await Promise.all([
-    import('firebase/storage'), import('./firebaseService'),
-  ]);
-  await fb.ensureAuth();
-  const body = await shrinkImage(payload);
-  const type = body.type || payload.type || 'application/octet-stream';
-  const path = `elsab3/${safe(folder)}/${safe(id)}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${extOf(type, name)}`;
-  const task = uploadBytesResumable(ref(getStorage(fb.firebaseApp), path), body, {
-    contentType: type, cacheControl: 'public, max-age=31536000',
-  });
+  if (CLOUDINARY_CLOUD_NAME.startsWith('اكتب')) {
+    return Promise.reject(new Error('Cloudinary مش متظبط: اكتب CLOUDINARY_CLOUD_NAME في mediaStorage.ts'));
+  }
+  const form = new FormData();
+  form.append('file', payload);
+  form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  form.append('folder', `elsab3/${folder}/${safe(id)}`);
+
   return new Promise<string>((resolve, reject) => {
-    task.on('state_changed',
-      (snap) => { if (onProgress && snap.totalBytes) onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)); },
-      (err: any) => {
-        const code = String(err?.code || '');
-        reject(new Error(
-          code.includes('unauthorized') ? 'مش مسموح بالرفع — قواعد التخزين لسه ماترفعتش (firebase deploy)'
-          : code.includes('canceled') ? 'الرفع اتلغى.'
-          : code.includes('retry-limit') ? 'الاتصال اتقطع أكتر من مرة. اتأكد من النت وجرّب تاني.'
-          : `فشل الرفع (${code || err?.message || 'unknown'})`,
-        ));
-      },
-      async () => { try { resolve(await getDownloadURL(task.snapshot.ref)); } catch (e) { reject(e); } },
-    );
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${kind}/upload`);
+    xhr.timeout = 15 * 60 * 1000; // ربع ساعة: الفيديو الكبير على نت ضعيف بياخد وقت
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+
+    xhr.onload = () => {
+      let data: any = null;
+      try { data = JSON.parse(xhr.responseText || '{}'); } catch { /* رد مش JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300 && data?.secure_url) {
+        resolve(optimize(data.secure_url, kind === 'image'));
+        return;
+      }
+      // الرسالة الحقيقية من Cloudinary — دي اللي بتقول السبب بالظبط
+      const raw = data?.error?.message || (xhr.responseText || '').slice(0, 200);
+      reject(new Error(raw ? `Cloudinary (${xhr.status}): ${raw}` : `فشل الرفع (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error('الاتصال بالسحابة اتقطع. اتأكد من النت وجرّب تاني.'));
+    xhr.ontimeout = () => reject(new Error('الرفع خد وقت طويل جداً واتوقف. جرّب فيديو أصغر أو رابط يوتيوب.'));
+    xhr.onabort = () => reject(new Error('الرفع اتلغى.'));
+
+    xhr.send(form);
   });
 }
 
@@ -96,19 +82,19 @@ export async function uploadFile(
   id: string,
   onProgress?: (percent: number) => void,
 ): Promise<string> {
-  const isVideo = file.type.startsWith('video');
-  // الفيديو الكبير بيستهلك تحميل كتير مع كل فتحة — الحد ٢٠٠ ميجا
-  if (isVideo && file.size > 200 * 1024 * 1024) {
+  const kind = file.type.startsWith('video') || file.type.startsWith('audio') ? 'video' : 'image';
+  // حد Cloudinary للرفع المباشر من غير توقيع: 100 ميجا. أكبر من كده بيترفض من عندهم.
+  if (kind === 'video' && file.size > 100 * 1024 * 1024) {
     const mb = Math.round(file.size / (1024 * 1024));
-    throw new Error(`الفيديو حجمه ${mb} ميجا، والحد الأقصى ٢٠٠ ميجا. صغّره أو ارفعه على يوتيوب (غير مدرج) والصق الرابط.`);
+    throw new Error(`الفيديو حجمه ${mb} ميجا، والحد الأقصى ١٠٠ ميجا. صغّره أو ارفعه على يوتيوب (غير مدرج) والصق الرابط.`);
   }
-  return send(file, folder, id, onProgress, file.name);
+  return send(file, folder, id, kind, onProgress);
 }
 
 /** رفع صورة موجودة كـ base64 والرجوع برابط */
 export async function uploadDataUrl(dataUrl: string, folder: string, id: string): Promise<string> {
-  const blob = await (await fetch(dataUrl)).blob();
-  return send(blob, folder, id);
+  const kind = dataUrl.startsWith('data:video') ? 'video' : 'image';
+  return send(dataUrl, folder, id, kind);
 }
 
 /** لو القيمة base64 بترفعها وترجع الرابط، ولو رابط بترجعه زي ما هو.
