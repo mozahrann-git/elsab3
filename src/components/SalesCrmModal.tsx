@@ -356,7 +356,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   // Selected Lead for Smart Matching — من عملاء الشخص الداخل بس
   const selectedMatchingLead = useMemo(() => {
-    return scopedLeads.find((l) => l.id === matchingLeadId) || scopedLeads[0] || null;
+    /* لو محدش اختار عميل: أول عميل شغّال (مش «غير مهتم» ولا «اتقفلت») */
+    return scopedLeads.find((l) => l.id === matchingLeadId)
+      || scopedLeads.find((l) => l.status !== 'lost' && l.status !== 'closed') || null;
   }, [scopedLeads, matchingLeadId]);
 
   // Matched Properties List for the selected lead
@@ -1761,6 +1763,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
               {selectedMatchingLead && (
                 <div className="space-y-2">
+                  {(selectedMatchingLead.status === 'lost' || selectedMatchingLead.status === 'closed') && (
+                    <p className="text-[12px] font-bold text-[#6F695D] bg-[#F5F0E6] rounded-[12px] px-3 py-2">
+                      العميل ده في «{selectedMatchingLead.status === 'lost' ? 'غير مهتم / مؤجل' : 'صفقة مغلقة'}» — لو رجع مهتم انقله من كارته الأول
+                    </p>
+                  )}
+                  <button type="button" onClick={() => setSelectedLeadForDetails(selectedMatchingLead)}
+                    className="w-full h-10 rounded-[14px] text-[13px] font-bold bg-white border border-[#E7DFCF] text-[#17150F]">
+                    افتح كارته (الكومنتات والرحلة كلها)
+                  </button>
                   <div className="flex flex-wrap gap-1.5">
                     {briefLine(selectedMatchingLead).split(' · ').map((p, i) => (
                       <span key={i} className="px-2.5 py-1 rounded-full text-[12px] font-semibold bg-[#F5F0E6] border border-[#E7DFCF]">{p}</span>
@@ -2174,8 +2185,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         const q = clientPickQ.trim().toLowerCase();
         const digitsQ = q.replace(/\D/g, '');
         const lastAt = (l: Lead) => Math.max(...[(l.activity || [])[0]?.at || 0, new Date(l.createdAt || 0).getTime() || 0]);
+        /* «غير مهتم» و«اتقفلت» مش بيظهروا في القايمة — بيظهروا بس لو دوّرت عليهم بالاسم أو الرقم */
         const list = scopedLeads
-          .filter((l) => !q || l.name.toLowerCase().includes(q) || (digitsQ && String(l.phone || '').replace(/\D/g, '').includes(digitsQ)))
+          .filter((l) => q ? (l.name.toLowerCase().includes(q) || (digitsQ && String(l.phone || '').replace(/\D/g, '').includes(digitsQ))) : (l.status !== 'lost' && l.status !== 'closed'))
           /* الأحدث فوق — من غير ما اللي عنده طلب ياخد الأولوية، عشان العملاء الجداد
              (اللي لسه مالهمش طلب) كانوا بيتزقوا لتحت ويختفوا بعد أول ٦٠ */
           .sort((x, y) => lastAt(y) - lastAt(x))
@@ -2209,7 +2221,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                       className={`w-full text-right flex items-center gap-3 p-3 rounded-[18px] ${on ? 'bg-white ring-2 ring-[#17150F]' : 'hover:bg-white'}`}>
                       <span className="w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center font-bold" style={{ background: t.bg, color: t.fg }}>{l.name.charAt(0)}</span>
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5 font-semibold text-[15px] min-w-0"><span className="truncate">{l.name}</span>{l.status === 'new' && <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#D3262B] text-white">جديد</span>}</span>
+                        <span className="flex items-center gap-1.5 font-semibold text-[15px] min-w-0"><span className="truncate">{l.name}</span>{l.status === 'new' && <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#D3262B] text-white">جديد</span>}{l.status === 'lost' && <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#E7DFCF] text-[#6F695D]">غير مهتم</span>}{l.status === 'closed' && <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#EEF5F0] text-[#1E7A45]">اتقفلت</span>}</span>
                         <span className="block text-[11.5px] text-[#6F695D] truncate">{(l as any).discovery ? briefLine(l) : 'لسه مالوش طلب'}</span>
                       </span>
                       <span className="shrink-0 text-[11px] font-mono text-[#6F695D]" dir="ltr">{String(l.phone || '').slice(-4)}</span>
