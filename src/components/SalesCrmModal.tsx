@@ -2458,6 +2458,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             onUpdateLead(updated);
             setSelectedLeadForDetails(updated);
           }}
+          onOpenMatching={(l) => { setSelectedLeadForDetails(null); setMatchingLeadId(l.id); setActiveTab('matching'); }}
           onOpenAffiliateModal={onOpenAffiliateModal ? (prop) => {
             setSelectedLeadForDetails(null);
             onOpenAffiliateModal(prop);

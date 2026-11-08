@@ -22,8 +22,7 @@ import {
   MapPin,
   DollarSign,
   User,
-  Eye
-} from 'lucide-react';
+  Eye, Target } from 'lucide-react';
 import { formatPrice, generateWhatsAppLink, generateCallLink, waLink } from '../utils/helpers';
 import { createUnitViewing } from '../services/portalService';
 
@@ -39,6 +38,8 @@ interface LeadDetailsModalProps {
   /* اسم اللي فاتح الملف دلوقتي — بيتسجّل على طلب تعديل الميزانية */
   currentUserName?: string;
   currentUserId?: string;
+  /* يفتح المطابقة على العميل ده على طول */
+  onOpenMatching?: (lead: Lead) => void;
 }
 
 const STAGES: { id: LeadStatus; label: string; badgeStyle: string }[] = [
@@ -63,6 +64,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   onOpenAffiliateModal,
   isAdmin = false,
   currentUserName,
+  onOpenMatching,
   currentUserId
 }) => {
   const [newNote, setNewNote] = useState('');
@@ -250,6 +252,16 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
             <Calendar size={14} />
             <span>حجز معاينة</span>
           </button>
+
+          {onOpenMatching && (
+            <button
+              onClick={() => onOpenMatching(lead)}
+              className="p-2.5 bg-white border border-[#E9DFCA] hover:bg-[#FAF4E5] text-[#141414] rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer"
+            >
+              <Target size={14} />
+              <span>طابق العميل</span>
+            </button>
+          )}
 
         </div>
 
