@@ -256,8 +256,12 @@ const TARGET_FIELDS: [keyof DailyTargets, string][] = [
 const SettingsModal: React.FC<{ settings: DailySettings; agents: SalesAgent[]; onClose: () => void }> = ({ settings, agents, onClose }) => {
   const [ids, setIds] = useState<string[]>(settings.agentIds);
   const [t, setT] = useState<DailyTargets>(settings.targets);
-  const [close, setClose] = useState(settings.closeHour);
-  const [start, setStart] = useState(settings.startHour);
+  /* بنخزّن اللي بيتكتب زي ما هو، وبنظبطه وقت الحفظ بس —
+     عشان تقدر تمسح وتكتب ١٩ من غير ما يقفز لـ ١٢ */
+  const [closeTxt, setClose] = useState(String(settings.closeHour));
+  const [startTxt, setStart] = useState(String(settings.startHour));
+  const close = Math.min(24, Math.max(12, Math.round(Number(closeTxt)) || 19));
+  const start = Math.min(14, Math.max(6, Math.round(Number(startTxt)) || 11));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const list = agents.filter((a) => a.isActive !== false || ids.includes(a.id));
@@ -296,12 +300,12 @@ const SettingsModal: React.FC<{ settings: DailySettings; agents: SalesAgent[]; o
         ))}
         <label className="text-[11px] font-bold text-[#6B665C] space-y-1">
           الشغل بيبدأ الساعة («موجود؟» بيطلع لو مالمسش السيستم نص ساعة من بعدها)
-          <input type="number" min={6} max={14} value={start} onChange={(e) => setStart(Math.min(14, Math.max(6, Number(e.target.value) || 11)))}
+          <input type="number" min={6} max={14} value={startTxt} onChange={(e) => setStart(e.target.value)} onBlur={() => setStart(String(start))}
             className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-sm font-mono text-[#141414]" />
         </label>
         <label className="text-[11px] font-bold text-[#6B665C] space-y-1">
           اليوم بيتقفل الساعة (٢٤ ساعة)
-          <input type="number" min={12} max={24} value={close} onChange={(e) => setClose(Math.min(24, Math.max(12, Number(e.target.value) || 19)))}
+          <input type="number" min={12} max={24} value={closeTxt} onChange={(e) => setClose(e.target.value)} onBlur={() => setClose(String(close))}
             className="w-full px-3 py-2 bg-[#F6F4EF] border border-[#ECE8DF] rounded-xl text-sm font-mono text-[#141414]" />
         </label>
       </div>
