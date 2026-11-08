@@ -2176,8 +2176,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
         const lastAt = (l: Lead) => Math.max(...[(l.activity || [])[0]?.at || 0, new Date(l.createdAt || 0).getTime() || 0]);
         const list = scopedLeads
           .filter((l) => !q || l.name.toLowerCase().includes(q) || (digitsQ && String(l.phone || '').replace(/\D/g, '').includes(digitsQ)))
-          .sort((x, y) => Number(!!(y as any).discovery) - Number(!!(x as any).discovery) || lastAt(y) - lastAt(x))
-          .slice(0, 60);
+          /* الأحدث فوق — من غير ما اللي عنده طلب ياخد الأولوية، عشان العملاء الجداد
+             (اللي لسه مالهمش طلب) كانوا بيتزقوا لتحت ويختفوا بعد أول ٦٠ */
+          .sort((x, y) => lastAt(y) - lastAt(x))
+          .slice(0, q ? 60 : 100);
         return (
           <div className="fixed inset-0 z-[70] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={() => setClientPickerOpen(false)}>
             <div className="bg-[#F5F0E6] w-full sm:max-w-lg rounded-t-[28px] sm:rounded-[28px] max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -2207,7 +2209,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                       className={`w-full text-right flex items-center gap-3 p-3 rounded-[18px] ${on ? 'bg-white ring-2 ring-[#17150F]' : 'hover:bg-white'}`}>
                       <span className="w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center font-bold" style={{ background: t.bg, color: t.fg }}>{l.name.charAt(0)}</span>
                       <span className="min-w-0 flex-1">
-                        <span className="block font-semibold text-[15px] truncate">{l.name}</span>
+                        <span className="flex items-center gap-1.5 font-semibold text-[15px] min-w-0"><span className="truncate">{l.name}</span>{l.status === 'new' && <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#D3262B] text-white">جديد</span>}</span>
                         <span className="block text-[11.5px] text-[#6F695D] truncate">{(l as any).discovery ? briefLine(l) : 'لسه مالوش طلب'}</span>
                       </span>
                       <span className="shrink-0 text-[11px] font-mono text-[#6F695D]" dir="ltr">{String(l.phone || '').slice(-4)}</span>
