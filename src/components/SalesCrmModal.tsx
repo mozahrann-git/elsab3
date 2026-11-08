@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { 
   Lead, 
   SalesAgent, 
@@ -321,17 +321,23 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
   }, [leads, isAdmin, currentSalesAgent, visibleAgents, viewAgentId]);
 
   // Filtered Leads
-  const filteredLeads = useMemo(() => {
-    if (!leadSearchQuery.trim()) return scopedLeads;
-    const q = leadSearchQuery.toLowerCase();
-    return scopedLeads.filter((l) => 
-      l.name.toLowerCase().includes(q) ||
-      l.phone.includes(q) ||
+  /* البحث واحد لكل الشاشات (مسار العملاء والمتابعات).
+     الرقم بيتقارن بآخر ١٠ أرقام — عشان 012… و 2012… و +20 12… يطلعوا نفس العميل */
+  const matchesSearch = useCallback((l: Lead) => {
+    const q = leadSearchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const qd = q.replace(/\D/g, '');
+    const pd = String(l.phone || '').replace(/\D/g, '');
+    return String(l.name || '').toLowerCase().includes(q) ||
+      (qd.length >= 4 && (pd.includes(qd) || (qd.length >= 10 && pd.slice(-10) === qd.slice(-10)) || pd.includes(qd.replace(/^0/, '')))) ||
       (l.interestedPropertyCode && l.interestedPropertyCode.toLowerCase().includes(q)) ||
       (l.preferredNeighborhood && l.preferredNeighborhood.toLowerCase().includes(q)) ||
-      (l.followUpNote && l.followUpNote.toLowerCase().includes(q))
-    );
-  }, [scopedLeads, leadSearchQuery]);
+      (l.followUpNote && l.followUpNote.toLowerCase().includes(q));
+  }, [leadSearchQuery]);
+  const filteredLeads = useMemo(() => {
+    if (!leadSearchQuery.trim()) return scopedLeads;
+    return scopedLeads.filter(matchesSearch);
+  }, [scopedLeads, leadSearchQuery, matchesSearch]);
 
   // Count leads per stage
   const stageCounts = useMemo(() => {
@@ -420,8 +426,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     [followUpList],
   );
   const shownFollowUps = useMemo(
-    () => (lateOnly ? followUpList.filter((l) => followUpState(l.nextActionAt, l.followUpStatus) === 'late') : followUpList),
-    [followUpList, lateOnly],
+    () => (lateOnly ? followUpList.filter((l) => followUpState(l.nextActionAt, l.followUpStatus) === 'late') : followUpList).filter(matchesSearch),
+    [followUpList, lateOnly, matchesSearch],
   );
 
   const followUpMatches = useMemo(() => {
@@ -1600,6 +1606,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             <div className="space-y-3">
               {lateOnly && lateCount === 0 && (
                 <p className="text-xs font-bold text-[#1E7A45] bg-[#EEF5F0] rounded-2xl p-4 text-center">مفيش متابعات متأخرة</p>
+              )}
+              {leadSearchQuery.trim() && !shownFollowUps.length && (
+                <p className="text-xs font-bold text-[#6B665C] bg-[#F6F4EF] rounded-2xl p-4 text-center">مفيش متابعة بـ «{leadSearchQuery.trim()}» — العميل ممكن يكون في مسار العملاء من غير ميعاد متابعة</p>
               )}
               {shownFollowUps
                 .map((lead) => {
