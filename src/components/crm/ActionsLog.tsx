@@ -36,6 +36,7 @@ export function actionsOn(leads: Lead[], day: string): ActionRow[] {
       if (typeof a.at !== 'number' || cairoDay(a.at) !== day) return;
       if ((a.by || '').trim() === 'النظام') return;   // تسجيلات أوتوماتيك مش شغل حد
       if ((a as any).kind === 'note') return;           // ملاحظة/تأجيل مش أكشن
+      if (/^(الإدارة|الادارة|admin|الأدمن)$/i.test((a.by || '').trim())) return;   // أكشن الإدارة مش بيظهر وسط شغل الفريق
       out.push({
         at: a.at, by: (a.by || '—').trim(), outcome: a.outcome || '', comment: a.comment || '', nextAt: a.nextAt,
         leadId: l.id, leadName: l.name, leadPhone: l.phone, assignedName: l.assignedAgentName,
