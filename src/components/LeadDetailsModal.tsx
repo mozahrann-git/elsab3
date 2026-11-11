@@ -1,4 +1,5 @@
 import { LeadActionPanel } from './LeadActionPanel';
+import { callBatchOf } from '../utils/callBatch';
 import { ViewingRequestForm } from './crm/ViewingRequestForm';
 import { WhenPicker, formatWhen, relTime } from './common/WhenPicker';
 import React, { useState } from 'react';
@@ -205,6 +206,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                     <span>·</span>
                     <span>{lead.source === 'facebook_group' ? 'جروب فيسبوك' : lead.source === 'website_whatsapp' ? 'واتساب المنصة' : lead.source === 'referral' ? 'ترشيح' : lead.source === 'campaign' ? 'حملة' : lead.source === 'direct' ? 'مباشر' : 'مكالمة باردة'}</span>
                     {lead.assignedAgentName && (<><span>·</span><span>مع {lead.assignedAgentName}</span></>)}
+                    {callBatchOf(lead) && (<><span>·</span><span className="font-bold">📞 من الأرقام · {callBatchOf(lead)}</span></>)}
                   </div>
                 </div>
                 <button onClick={onClose} aria-label="إغلاق" className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center cursor-pointer" style={{ border: `1px solid ${c.line}` }}>

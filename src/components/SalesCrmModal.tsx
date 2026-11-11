@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { LateFixModal } from './sales/LateFixModal';
+import { callBatchOf } from '../utils/callBatch';
+import { callBatchForPhone } from '../services/dailyTasks';
 import { 
   Lead, 
   SalesAgent, 
@@ -693,6 +695,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
     };
 
     onAddLead(newLead);
+    /* لو الرقم من أرقام المكالمات المرفوعة — بنعلّم العميل باسم الدفعة */
+    callBatchForPhone(newLead.phone).then((b) => { if (b) onUpdateLead({ ...newLead, callBatch: b } as Lead); }).catch(() => {});
     clearDraft('new_lead');
     setIsAddLeadOpen(false);
     // عميل الكامبين بييجي بالجملة فبيتضاف بسرعة. العميل اللي السيلز كلّمه بنفسه،
@@ -1451,6 +1455,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                                 {late ? <AlertTriangle size={16} /> : <Clock size={16} />}
                                 <span className="truncate">{b.text || st.defaultBadge}</span>
                                 {tone.tone !== 'none' && <span className="mr-auto text-[13.5px] px-2.5 py-0.5 rounded-full shrink-0" style={{ background: c.chip }}>{tone.label}</span>}
+                                {callBatchOf(lead) && <span className={`${tone.tone !== 'none' ? '' : 'mr-auto '}text-[13px] px-2.5 py-0.5 rounded-full shrink-0 truncate max-w-[45%]`} style={{ background: c.chip }}>📞 {callBatchOf(lead)}</span>}
                               </span>
                             </button>
                           );
@@ -1488,6 +1493,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                               {/* الاسم والطلب */}
                               <button onClick={() => setSelectedLeadForDetails(lead)} className="text-right flex flex-col gap-0.5 cursor-pointer">
                                 <span className="font-readex font-semibold text-[17px] leading-snug truncate">{lead.name}</span>
+                                {callBatchOf(lead) && <span className="self-start text-[10.5px] font-extrabold px-2 py-0.5 rounded-full max-w-full truncate" style={{ background: c.chip }}>📞 من الأرقام · {callBatchOf(lead)}</span>}
                                 <span className="text-[12.5px] truncate" style={{ color: c.soft }}>
                                   {lead.preferredBedrooms ? `${lead.preferredBedrooms} غرف · ` : ''}
                                   {lead.preferredNeighborhood || 'الهضبة الوسطى'}
@@ -1665,6 +1671,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                           )}
                           {paymentOf(lead) && (
                             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: c.chip }}>{PAY_LABEL[paymentOf(lead)!]}</span>
+                          )}
+                          {callBatchOf(lead) && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: c.chip }}>📞 من الأرقام · {callBatchOf(lead)}</span>
                           )}
                         </div>
                         {lead.campaignName && (tone.tone === 'fresh' || tone.tone === 'old_campaign') && (

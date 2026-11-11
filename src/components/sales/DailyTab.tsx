@@ -378,7 +378,7 @@ const InterestedForm: React.FC<{
       const lead = {
         id: leadId, name: name.trim(), phone: num.phone, status: 'new', source: 'cold_call',
         notes: [], assignedAgentId: agentId, assignedAgentName: agentName, addedByName: agentName, addedById: agentId,
-        leadKind: 'old_campaign', createdAt: new Date().toISOString(), lastContactDate: 'الآن',
+        leadKind: 'old_campaign', callBatch: num.batch, createdAt: new Date().toISOString(), lastContactDate: 'الآن',
         followUpStatus: 'pending', nextActionAt: at,
         ...(na ? { afterNoAnswer: na } : {}),
         activity: [{ at: Date.now(), by: agentName, outcome: `مكالمة: رد ومهتم (${num.batch})${tag}`, comment: '', nextAt: at }],

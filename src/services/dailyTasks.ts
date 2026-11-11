@@ -15,7 +15,7 @@
 */
 import {
   collection, doc, setDoc, updateDoc, onSnapshot, query, where, limit,
-  getDocs, writeBatch, increment, getCountFromServer,
+  getDocs, getDoc, writeBatch, increment, getCountFromServer,
 } from 'firebase/firestore';
 import { db, cleanFirestoreData } from './firebaseService';
 import { Lead, Property, ClientRequest, ViewingRequest } from '../types';
@@ -436,6 +436,20 @@ export async function logCall(
 }
 
 /** السجل كله — للإدارة (قراية واحدة لما تفتحه) */
+/** الرقم ده من أرقام المكالمات المرفوعة؟ بيرجّع اسم الدفعة أو '' */
+export async function callBatchForPhone(phone: string): Promise<string> {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (d.length < 10) return '';
+  const last = d.slice(-10);
+  for (const id of [...new Set([d, '0' + last, '20' + last, last])]) {
+    try {
+      const s = await getDoc(doc(db, 'call_list', id));
+      if (s.exists()) return String((s.data() as any).batch || 'أرقام المكالمات');
+    } catch { return ''; }
+  }
+  return '';
+}
+
 export async function allCallNumbers(): Promise<CallNumber[]> {
   const snap = await getDocs(collection(db, 'call_list'));
   const l: CallNumber[] = []; snap.forEach((d) => l.push(d.data() as CallNumber));
