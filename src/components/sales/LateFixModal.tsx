@@ -63,7 +63,8 @@ export const LateFixModal: React.FC<{
   const byAgent = useMemo(() => {
     const m = new Map<string, Lead[]>();
     late.forEach((l) => { const k = l.assignedAgentId || ''; m.set(k, [...(m.get(k) || []), l]); });
-    m.forEach((list, k) => m.set(k, list.sort((a, b) => (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9) || (a.nextActionAt || 0) - (b.nextActionAt || 0))));
+    /* الأقرب ميعاداً الأول: اللي لسه متأخر من يوم ياخد أول مكان، والأقدم في الآخر */
+    m.forEach((list, k) => m.set(k, list.sort((a, b) => (b.nextActionAt || 0) - (a.nextActionAt || 0))));
     return [...m.entries()].sort((a, b) => b[1].length - a[1].length);
   }, [late]);
 
@@ -158,7 +159,7 @@ export const LateFixModal: React.FC<{
           {tab === 'spread' && (
             <>
               <div className="bg-white border border-[#ECE8DF] rounded-2xl p-3 space-y-2.5">
-                <p className="text-xs text-[#6B665C]">كل متأخر بياخد ميعاد جديد في الأيام الجاية (الجمعة إجازة). الأهم الأول: تفاوض ← معاينة مؤكدة ← تمت المعاينة ← … ← جديد. اللي مردش ٣ مرات مش هنا — في التاب التاني.</p>
+                <p className="text-xs text-[#6B665C]">المتأخر بس هو اللي بيتحرّك: كل يوم بياخد العدد اللي اخترته من المتأخر، والأقرب ميعاداً الأول (اللي اتأخر من يوم قبل اللي اتأخر من شهر). المتابعات اللي ميعادها جاي أصلاً مابتتلمسش ومش محسوبة في العدد. الجمعة إجازة. اللي مردش ٣ مرات مش هنا — في التاب التاني.</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold">في اليوم لكل سيلز:</span>
                   {[10, 15, 20, 30].map((x) => <button key={x} onClick={() => setPerDay(x)} className={chip(perDay === x)}>{x}</button>)}
