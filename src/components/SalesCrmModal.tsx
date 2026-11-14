@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { LateFixModal } from './sales/LateFixModal';
 import { callBatchOf } from '../utils/callBatch';
+import { heatOf, lateLevel, dueToday, dueAt, todayRank, TODAY_LIMIT, RANK_TITLE, HEAT_LABEL, Heat, HeatInfo } from '../utils/heat';
 import { callBatchForPhone } from '../services/dailyTasks';
 import { 
   Lead, 
@@ -425,16 +426,49 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   /* زرار «المتأخر»: يعرض المتأخرين بس مرة واحدة. للإدارة بيمشي
      على اختيار «كل الفريق» أو مندوب معيّن، وللسيلز على عملاؤه. */
-  const [lateOnly, setLateOnly] = useState(false);
+  /* المتابعات ٣ شاشات: «شغلك النهارده» (٢٠ اسم بالأهم) — الكل — المتأخر بجد (السخن) */
+  const [fuMode, setFuMode] = useState<'today' | 'all' | 'late' | 'req'>('today');
+  const [waOpen, setWaOpen] = useState(false);
+  const [wa, setWa] = useState({ name: '', phone: '', note: '' });
+  const lateOnly = fuMode === 'late';
+  const setLateOnly = (f: (v: boolean) => boolean) => setFuMode(f(lateOnly) ? 'late' : 'all');
+  const [todayAll, setTodayAll] = useState(false);
+  const [heatF, setHeatF] = useState<Heat | ''>('');
   const [lateFixOpen, setLateFixOpen] = useState(false);
+  /* حرارة كل عميل 🔥🌤❄️ — بتتحسب مرة لكل تغيير */
+  const heatMap = useMemo(() => {
+    const m = new Map<string, HeatInfo>();
+    scopedLeads.forEach((l) => { if (l.status !== 'closed') m.set(l.id, heatOf(l)); });
+    return m;
+  }, [scopedLeads]);
+  const heatOfL = useCallback((l: Lead) => heatMap.get(l.id) || heatOf(l), [heatMap]);
+  const isLateL = useCallback((l: Lead) => lateLevel(l, undefined, heatOfL(l)) === 'late', [heatOfL]);
+  const todayList = useMemo(() => {
+    const now = Date.now();
+    return scopedLeads
+      .filter((l) => l.status !== 'closed' && dueToday(l, now, heatOfL(l)))
+      .map((l) => ({ l, r: todayRank(l, now, heatOfL(l)), at: dueAt(l, heatOfL(l).heat) }))
+      .sort((a, b) => a.r - b.r || a.at - b.at);
+  }, [scopedLeads, heatOfL]);
+  const heatCounts = useMemo(() => {
+    const c: Record<Heat, number> = { hot: 0, warm: 0, cold: 0 };
+    heatMap.forEach((h) => { c[h.heat]++; });
+    return c;
+  }, [heatMap]);
   const lateCount = useMemo(
-    () => followUpList.filter((l) => followUpState(l.nextActionAt, l.followUpStatus) === 'late').length,
-    [followUpList],
+    () => followUpList.filter(isLateL).length,
+    [followUpList, isLateL],
   );
-  const shownFollowUps = useMemo(
-    () => (lateOnly ? followUpList.filter((l) => followUpState(l.nextActionAt, l.followUpStatus) === 'late') : followUpList).filter(matchesSearch),
-    [followUpList, lateOnly, matchesSearch],
-  );
+  const shownFollowUps = useMemo(() => {
+    const q = !!leadSearchQuery.trim();
+    const base = q ? followUpList
+      : fuMode === 'today' ? todayList.slice(0, todayAll ? undefined : TODAY_LIMIT).map((x) => x.l)
+      : fuMode === 'late' ? followUpList.filter(isLateL)
+      : fuMode === 'req' ? scopedLeads.filter((l) => (l as any).heatRequest)
+      : followUpList;
+    return base.filter((l) => !heatF || heatOfL(l).heat === heatF).filter(matchesSearch);
+  }, [followUpList, fuMode, todayList, todayAll, heatF, isLateL, heatOfL, matchesSearch, leadSearchQuery, scopedLeads]);
+  const heatReqCount = useMemo(() => scopedLeads.filter((l) => (l as any).heatRequest).length, [scopedLeads]);
 
   const followUpMatches = useMemo(() => {
     const m = new Map<string, Property[]>();
@@ -607,8 +641,11 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
   /* لون الكارت في كل مكان في الـCRM: المتأخر أحمر، وبعده تنبيه (فريش/كامبين/سارة)، وبعده لون المرحلة */
   const cardLook = (lead: Lead, fallback = '') => {
-    const b = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || fallback);
-    const late = b.tone === 'late';
+    const b0 = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || fallback);
+    const lv = lateLevel(lead, undefined, heatOfL(lead));
+    /* الأحمر للسخن المتأخر بس — الدافي اللي فات ميعاده «فاتك» والبارد مابيتأخرش */
+    const b = b0.tone === 'late' && lv !== 'late' ? { text: lv === 'missed' ? b0.text.replace('متأخر', 'فاتك') : 'يرجعلك لما ييجي دوره', tone: 'calm' as const } : b0;
+    const late = lv === 'late';
     const tone = toneStyle(lead);
     const c = late ? LATE_TONE
       : tone.tone !== 'none'
@@ -1386,6 +1423,13 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                   <span className="w-2 h-2 rounded-full" style={{ background: c }} />{t}
                 </span>
               ))}
+              {(['', 'hot', 'warm', 'cold'] as const).map((h) => (
+                <button key={h || 'all'} type="button" onClick={() => setHeatF(h)}
+                  className="px-2.5 py-1 rounded-full border font-bold"
+                  style={heatF === h ? { background: T.ink, color: T.ground, borderColor: T.ink } : { borderColor: T.line, background: T.surface, color: T.ink }}>
+                  {h ? `${HEAT_LABEL[h]} ${heatCounts[h]}` : 'كل الحرارات'}
+                </button>
+              ))}
               <span className="mr-auto flex items-center h-9 rounded-full border p-0.5" style={{ borderColor: T.line, background: T.surface }} role="group" aria-label="حجم الكروت">
                 <button type="button" onClick={() => setPipeZoom(pipeZoom - 1)} disabled={pipeZoom === 0} aria-label="صغّر الكروت"
                   className="w-8 h-8 rounded-full flex items-center justify-center text-[18px] font-bold leading-none disabled:opacity-30 active:scale-90 transition" style={{ color: T.ink }}>−</button>
@@ -1401,7 +1445,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
               {CRM_PIPELINE_STAGES
                 .filter((st) => activeMobileStageFilter === 'all' || activeMobileStageFilter === st.id)
                 .map((st) => {
-                  const stageLeads = filteredLeads.filter((l) => l.status === st.id);
+                  const stageLeads = filteredLeads.filter((l) => l.status === st.id && (!heatF || (l.status !== 'closed' && heatOfL(l).heat === heatF)));
                   const sTone = stageTone(st.id);
 
                   return (
@@ -1430,8 +1474,8 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                           const tone = toneStyle(lead);
                           /* لون الكارت = المرحلة. التنبيهات (فريش / كامبين / تحديث سارة) بتغطّي عليه
                              لأنها حاجة لازم تتشاف — ومعاها كلمتها دايماً */
-                          const b = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || st.defaultBadge);
-                          const late = b.tone === 'late';
+                          const { b, late } = cardLook(lead, st.defaultBadge);
+                          const hInfo = heatOfL(lead);
                           /* المتأخر بيقلب أحمر كله — أهم من أي لون تاني */
                           const c = late ? LATE_TONE
                             : tone.tone !== 'none'
@@ -1456,6 +1500,7 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                                 <span className="truncate">{b.text || st.defaultBadge}</span>
                                 {tone.tone !== 'none' && <span className="mr-auto text-[13.5px] px-2.5 py-0.5 rounded-full shrink-0" style={{ background: c.chip }}>{tone.label}</span>}
                                 {callBatchOf(lead) && <span className={`${tone.tone !== 'none' ? '' : 'mr-auto '}text-[13px] px-2.5 py-0.5 rounded-full shrink-0 truncate max-w-[45%]`} style={{ background: c.chip }}>📞 {callBatchOf(lead)}</span>}
+                                {lead.status !== 'closed' && <span className={`${tone.tone !== 'none' || callBatchOf(lead) ? '' : 'mr-auto '}text-[13px] px-2 py-0.5 rounded-full shrink-0`} style={{ background: c.chip }}>{HEAT_LABEL[hInfo.heat].split(' ')[0]}</span>}
                               </span>
                             </button>
                           );
@@ -1492,7 +1537,10 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
                               {/* الاسم والطلب */}
                               <button onClick={() => setSelectedLeadForDetails(lead)} className="text-right flex flex-col gap-0.5 cursor-pointer">
-                                <span className="font-readex font-semibold text-[17px] leading-snug truncate">{lead.name}</span>
+                                <span className="flex items-center gap-1.5 min-w-0">
+                                  <span className="font-readex font-semibold text-[17px] leading-snug truncate">{lead.name}</span>
+                                  {lead.status !== 'closed' && <span className="shrink-0 text-[10.5px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: c.chip }} title={hInfo.reason}>{HEAT_LABEL[hInfo.heat]}</span>}
+                                </span>
                                 {callBatchOf(lead) && <span className="self-start text-[10.5px] font-extrabold px-2 py-0.5 rounded-full max-w-full truncate" style={{ background: c.chip }}>📞 من الأرقام · {callBatchOf(lead)}</span>}
                                 <span className="text-[12.5px] truncate" style={{ color: c.soft }}>
                                   {lead.preferredBedrooms ? `${lead.preferredBedrooms} غرف · ` : ''}
@@ -1580,7 +1628,15 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-readex font-semibold text-[26px] leading-tight text-[#17150F]">المتابعات</h3>
-                <p className="text-[13px] text-[#6F695D]">مين ميعاده جه، ومين اتأخر — الأحمر الأول</p>
+                <p className="text-[13px] text-[#6F695D]">الأحمر = 🔥 سخن متأخر بس · 🌤 الدافي «فاتك» · ❄️ البارد بيرجع كل ١٥ يوم</p>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {(['', 'hot', 'warm', 'cold'] as const).map((h) => (
+                    <button key={h || 'all'} onClick={() => setHeatF(h)}
+                      className={`h-8 px-3 rounded-full text-[12px] font-bold border ${heatF === h ? 'bg-[#17150F] text-[#F5F0E6] border-[#17150F]' : 'bg-white border-[#E7DFCF] text-[#17150F]'}`}>
+                      {h ? `${HEAT_LABEL[h]} ${heatCounts[h]}` : 'كل الحرارات'}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
                 {(isAdmin || isLead) && (
@@ -1590,12 +1646,30 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                     {visibleAgents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 )}
-                <button
-                  onClick={() => setLateOnly((v) => !v)}
-                  className={`h-10 px-4 rounded-[14px] text-[13px] font-bold border ${lateOnly ? 'bg-[#D3262B] text-white border-[#D3262B]' : 'bg-white text-[#D3262B] border-[#F0C2BF]'}`}
-                >
-                  {lateOnly ? `اعرض الكل` : `المتأخر (${lateCount})`}
+                <button onClick={() => setFuMode('today')}
+                  className={`h-10 px-4 rounded-[14px] text-[13px] font-bold border ${fuMode === 'today' ? 'bg-[#17150F] text-[#F5F0E6] border-[#17150F]' : 'bg-white text-[#17150F] border-[#E7DFCF]'}`}>
+                  شغلك النهارده ({Math.min(todayList.length, TODAY_LIMIT)})
                 </button>
+                <button onClick={() => setFuMode('all')}
+                  className={`h-10 px-4 rounded-[14px] text-[13px] font-bold border ${fuMode === 'all' ? 'bg-[#17150F] text-[#F5F0E6] border-[#17150F]' : 'bg-white text-[#17150F] border-[#E7DFCF]'}`}>
+                  كل المتابعات
+                </button>
+                <button onClick={() => setFuMode('late')}
+                  className={`h-10 px-4 rounded-[14px] text-[13px] font-bold border ${lateOnly ? 'bg-[#D3262B] text-white border-[#D3262B]' : 'bg-white text-[#D3262B] border-[#F0C2BF]'}`}>
+                  🔥 متأخر بجد ({lateCount})
+                </button>
+                {isAdmin && heatReqCount > 0 && (
+                  <button onClick={() => setFuMode('req')}
+                    className={`h-10 px-4 rounded-[14px] text-[13px] font-bold border ${fuMode === 'req' ? 'bg-[#C98A1B] text-white border-[#C98A1B]' : 'bg-[#FFF4D9] text-[#7A5E12] border-[#EBD9A6]'}`}>
+                    طلبات تعديل الحرارة ({heatReqCount})
+                  </button>
+                )}
+                {currentSalesAgent && (
+                  <button onClick={() => setWaOpen(true)}
+                    className="h-10 px-4 rounded-[14px] text-[13px] font-bold bg-[#1E7A45] text-white">
+                    + عميل من واتساب
+                  </button>
+                )}
                 {isAdmin && (
                   <button onClick={() => setLateFixOpen(true)}
                     className="h-10 px-4 rounded-[14px] text-[13px] font-bold bg-[#17150F] text-[#F5F0E6]">
@@ -1627,13 +1701,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                 <p className="text-xs font-bold text-[#6B665C] bg-[#F6F4EF] rounded-2xl p-4 text-center">مفيش متابعة بـ «{leadSearchQuery.trim()}» — العميل ممكن يكون في مسار العملاء من غير ميعاد متابعة</p>
               )}
               {shownFollowUps
-                .map((lead) => {
+                .map((lead, fuIdx) => {
+                const fuRank = fuMode === 'today' && !leadSearchQuery.trim() ? todayRank(lead, undefined, heatOfL(lead)) : -1;
+                const fuHead = fuRank >= 0 && (fuIdx === 0 || todayRank(shownFollowUps[fuIdx - 1], undefined, heatOfL(shownFollowUps[fuIdx - 1])) !== fuRank)
+                  ? <p className="text-[13px] font-extrabold text-[#17150F] pt-2">{RANK_TITLE[fuRank]}</p> : null;
                 const stageObj = CRM_PIPELINE_STAGES.find((s) => s.id === lead.status) || CRM_PIPELINE_STAGES[0];
                 const { b, late, tone, c } = cardLook(lead, stageObj.defaultBadge);
                 const pill = 'h-9 px-3 rounded-full text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition active:scale-95 cursor-pointer';
                 return (
+                  <React.Fragment key={lead.id}>
+                  {fuHead}
                   <div
-                    key={lead.id}
                     className={`rounded-[24px] p-4 space-y-3 ${late ? 'crm-late' : ''}`}
                     style={{ background: c.bg, color: c.fg, boxShadow: '0 1px 0 rgba(0,0,0,.04), 0 14px 30px -18px rgba(0,0,0,.5)' }}
                   >
@@ -1674,6 +1752,9 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                           )}
                           {callBatchOf(lead) && (
                             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: c.chip }}>📞 من الأرقام · {callBatchOf(lead)}</span>
+                          )}
+                          {lead.status !== 'closed' && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: c.chip }} title={heatOfL(lead).reason}>{HEAT_LABEL[heatOfL(lead).heat]}{(lead as any).heatRequest ? ' · طلب تعديل مستني' : ''}</span>
                           )}
                         </div>
                         {lead.campaignName && (tone.tone === 'fresh' || tone.tone === 'old_campaign') && (
@@ -1745,8 +1826,17 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
                       )}
                     </div>
                   </div>
+                  </React.Fragment>
                 );
               })}
+              {fuMode === 'today' && !leadSearchQuery.trim() && !heatF && todayList.length > TODAY_LIMIT && (
+                <button onClick={() => setTodayAll((v) => !v)} className="w-full h-11 rounded-[14px] bg-white border border-[#E7DFCF] text-[13px] font-bold">
+                  {todayAll ? `اعرض أهم ${TODAY_LIMIT} بس` : `خلصت؟ اعرض الباقي (${todayList.length - TODAY_LIMIT})`}
+                </button>
+              )}
+              {fuMode === 'today' && !leadSearchQuery.trim() && !shownFollowUps.length && (
+                <p className="text-xs font-bold text-[#1E7A45] bg-[#EEF5F0] rounded-2xl p-4 text-center">خلصت شغل النهارده 👏</p>
+              )}
             </div>
           </div>
         )}
@@ -2195,6 +2285,44 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
           distributorName={currentAgent?.name || 'الإدارة'}
           onDistribute={onAddLeadsBulk}
         />
+      )}
+
+      {waOpen && currentSalesAgent && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end sm:items-center justify-center" dir="rtl" onClick={() => setWaOpen(false)}>
+          <div className="bg-[#F5F0E6] w-full sm:max-w-md rounded-t-[28px] sm:rounded-[28px] p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <p className="font-readex font-semibold text-[19px]">عميل من واتساب</p>
+              <button onClick={() => setWaOpen(false)} className="p-1.5 rounded-lg hover:bg-white"><X size={16} /></button>
+            </div>
+            <p className="text-[12px] text-[#6F695D]">بيظهر أول «شغلك النهارده» تحت «جديد النهارده»، ومش بيتحسب عليه تأخير أول ٢٤ ساعة.</p>
+            <input value={wa.name} onChange={(e) => setWa({ ...wa, name: e.target.value })} placeholder="الاسم"
+              className="w-full h-11 px-3 rounded-[14px] bg-white border border-[#E7DFCF] text-sm" />
+            <input value={wa.phone} onChange={(e) => setWa({ ...wa, phone: e.target.value })} placeholder="الرقم" dir="ltr" inputMode="tel"
+              className="w-full h-11 px-3 rounded-[14px] bg-white border border-[#E7DFCF] text-sm font-mono" />
+            <input value={wa.note} onChange={(e) => setWa({ ...wa, note: e.target.value })} placeholder="سطر واحد: عايز إيه؟ (اختياري)"
+              className="w-full h-11 px-3 rounded-[14px] bg-white border border-[#E7DFCF] text-sm" />
+            <button disabled={!wa.name.trim() || wa.phone.replace(/\D/g, '').length < 10}
+              onClick={() => {
+                const dup = leads.find((l) => String(l.phone || '').replace(/\D/g, '').slice(-10) === wa.phone.replace(/\D/g, '').slice(-10));
+                if (dup) { showToast(`الرقم ده موجود: ${dup.name} مع ${dup.assignedAgentName || '—'}`); return; }
+                const nowT = Date.now();
+                const nl = {
+                  id: `lead_${nowT}`, name: wa.name.trim(), phone: wa.phone.trim(), status: 'new', source: 'direct',
+                  notes: [wa.note.trim() ? `واتساب: ${wa.note.trim()}` : 'عميل من واتساب'],
+                  assignedAgentId: currentSalesAgent.id, assignedAgentName: currentSalesAgent.name,
+                  addedByName: currentSalesAgent.name, addedById: currentSalesAgent.id, leadKind: 'personal',
+                  createdAt: new Date(nowT).toISOString(), lastContactDate: 'الآن', followUpStatus: 'pending',
+                  followUpScheduledAt: 'بعد ٣ ساعات', followUpNote: wa.note.trim() || 'عميل من واتساب',
+                  followUpUrgency: 'urgent', nextActionAt: nowT + 3 * 3600000,
+                } as unknown as Lead;
+                onAddLead(nl);
+                callBatchForPhone(nl.phone).then((b) => { if (b) onUpdateLead({ ...nl, callBatch: b } as Lead); }).catch(() => {});
+                setWa({ name: '', phone: '', note: '' }); setWaOpen(false); setFuMode('today');
+                showToast('اتضاف ✓ — هتلاقيه أول شغلك النهارده');
+              }}
+              className="w-full h-12 rounded-[14px] bg-[#1E7A45] text-white font-bold text-sm disabled:opacity-40">ضيفه</button>
+          </div>
+        </div>
       )}
 
       {lateFixOpen && (

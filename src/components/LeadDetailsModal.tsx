@@ -1,5 +1,7 @@
 import { LeadActionPanel } from './LeadActionPanel';
 import { callBatchOf } from '../utils/callBatch';
+import { lateLevel } from '../utils/heat';
+import { HeatBox } from './crm/HeatBox';
 import { ViewingRequestForm } from './crm/ViewingRequestForm';
 import { WhenPicker, formatWhen, relTime } from './common/WhenPicker';
 import React, { useState } from 'react';
@@ -185,14 +187,15 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       >
         {/* رأس الملف: بلون المرحلة (أو أحمر لو متأخر) وخط المراحل — نفس كارت العميل في المسار */}
         {(() => {
-          const late = followUpBadge(lead.nextActionAt, lead.followUpStatus, '').tone === 'late';
+          const late = lateLevel(lead) === 'late';
           const c = late ? LATE_TONE : stageTone(lead.status);
           const steps: [string, string[]][] = [
             ['جديد', ['new', 'contacted', 'sent_details']], ['معاينة', ['visit_requested', 'visit_booked', 'visit_done']],
             ['تفاوض', ['negotiation']], ['اتقفلت', ['closed']],
           ];
           const at = steps.findIndex(([, ids]) => ids.includes(lead.status));
-          const badge = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || '');
+          const badge0 = followUpBadge(lead.nextActionAt, lead.followUpStatus, lead.followUpScheduledAt || '');
+          const badge = badge0.tone === 'late' && !late ? { ...badge0, text: badge0.text.replace('متأخر', 'فاتك') } : badge0;
           return (
             <div className="-mx-5 -mt-5 sm:-mx-7 sm:-mt-7 px-5 sm:px-7 pt-5 pb-4 rounded-t-[28px] shrink-0 space-y-3" style={{ background: c.bg, color: c.fg }}>
               <div className="flex items-start justify-between gap-3">
@@ -208,6 +211,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                     {lead.assignedAgentName && (<><span>·</span><span>مع {lead.assignedAgentName}</span></>)}
                     {callBatchOf(lead) && (<><span>·</span><span className="font-bold">📞 من الأرقام · {callBatchOf(lead)}</span></>)}
                   </div>
+                  <HeatBox lead={lead} isAdmin={!!isAdmin} byName={currentUserName || 'الفريق'} chip={c.chip} fg={c.fg} onUpdateLead={onUpdateLead} />
                 </div>
                 <button onClick={onClose} aria-label="إغلاق" className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center cursor-pointer" style={{ border: `1px solid ${c.line}` }}>
                   <X size={18} />

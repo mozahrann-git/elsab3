@@ -126,7 +126,9 @@ service cloud.firestore {
           // بعد كده: لازم تفضل زي ما هي
           || (request.resource.data.get('budgetMin', 0) == resource.data.get('budgetMin', 0)
               && request.resource.data.get('budgetMax', 0) == resource.data.get('budgetMax', 0))
-        );
+        )
+        /* حرارة العميل: السيلز بيطلب (heatRequest) والإدارة بس اللي بتوافق (heatOverride) */
+        && request.resource.data.get('heatOverride', null) == resource.data.get('heatOverride', null);
     }
 
     match /owner_submissions/{id} {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { lateLevel } from '../utils/heat';
 import { createPortal } from 'react-dom';
 import { Bell, BellRing, Phone, MessageCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { Lead } from '../types';
@@ -84,6 +85,8 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
     return mine
       .filter((l) => typeof l.nextActionAt === 'number' && l.nextActionAt! <= now)
       .filter((l) => l.followUpStatus !== 'completed' && l.status !== 'closed' && l.status !== 'lost')
+      /* البوب-أب للسخن المتأخر بس (والدافي لو عدّى ٣ أيام) — مش لكل كارت فات ميعاده */
+      .filter((l) => lateLevel(l) === 'late')
       .filter((l) => !seen.has(`${l.id}:${l.nextActionAt}`))
       .sort((a, b) => (a.nextActionAt || 0) - (b.nextActionAt || 0));
   }, [mine, tick, seen]);
