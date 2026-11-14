@@ -1,6 +1,5 @@
 import { Lead } from '../types';
 import { now as serverNow } from '../services/serverClock';
-import { heatOf, lateLevel } from './heat';
 
 /*
   مصدر واحد لحساب التنبيهات.
@@ -127,9 +126,6 @@ export function buildAlerts(leads: Lead[], now = serverNow()): LeadAlert[] {
       assignedAgentId: lead.assignedAgentId, assignedAgentName: lead.assignedAgentName,
     };
 
-    /* 🔥🌤❄️: البارد مالوش تنبيه، والدافي اللي «فاتك» مش مستعجل */
-    const lv = at && at <= now ? lateLevel(lead, now) : 'none';
-    if (at && at <= now && heatOf(lead, now).heat === 'cold') return;
     if (at && lead.followUpStatus !== 'completed') {
       const f = fmt(at);
       list.push({
@@ -139,9 +135,9 @@ export function buildAlerts(leads: Lead[], now = serverNow()): LeadAlert[] {
         title: `متابعة ${lead.name}`,
         dueTime: f.t,
         note: lead.followUpNote || '',
-        urgency: at <= now ? (lv === 'late' ? 'urgent' : 'upcoming') : at <= eod ? 'today' : 'upcoming',
+        urgency: at <= now ? 'urgent' : at <= eod ? 'today' : 'upcoming',
         relativeTimeText: f.rel,
-        isOverdue: at <= now && lv === 'late',
+        isOverdue: at <= now,
         lateMinutes: Math.max(0, Math.round((now - at) / 60000)),
         at,
       });
