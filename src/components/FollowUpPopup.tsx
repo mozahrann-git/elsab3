@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { markNoAnswer, naNextAt } from '../utils/noAnswer';
 import { createPortal } from 'react-dom';
 import { Bell, BellRing, Phone, MessageCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { Lead } from '../types';
@@ -209,6 +210,7 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
           عشان يلحق يقرا الملاحظة/الفيدباك قبل ما يأجّل */}
       {due && createPortal(<DueCard key={`${due.id}:${due.nextActionAt}`} lead={due} more={dueList.length - 1}
         snoozesLeft={MAX_SNOOZE - snoozesFor(due)}
+        onNoAnswer={onUpdateLead ? () => { const l = due; dismiss(l); onUpdateLead(markNoAnswer(l, actorName || l.assignedAgentName || '—')); } : undefined}
         onLater={() => later(due)} onOpen={() => { const l = due; dismiss(l); onOpenLead(l); }}
         onCloseAll={dueList.length > 20 ? dismissAll : undefined} />, document.body)}
     </>
@@ -218,7 +220,9 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
 export default FollowUpPopup;
 
 const WAIT = 8;
-const DueCard: React.FC<{ lead: Lead; more: number; snoozesLeft: number; onLater: () => void; onOpen: () => void; onCloseAll?: () => void }> = ({ lead, more, snoozesLeft, onLater, onOpen, onCloseAll }) => {
+const DueCard: React.FC<{ lead: Lead; more: number; snoozesLeft: number; onLater: () => void; onOpen: () => void; onCloseAll?: () => void; onNoAnswer?: () => void }> = ({ lead, more, snoozesLeft, onLater, onOpen, onCloseAll, onNoAnswer }) => {
+  const [naOpen, setNaOpen] = useState(false);
+  const naInfo = naNextAt(lead);
   const [left, setLeft] = useState(WAIT);
   const [shown, setShown] = useState(false);
   useEffect(() => { const r = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(r); }, []);
@@ -264,6 +268,27 @@ const DueCard: React.FC<{ lead: Lead; more: number; snoozesLeft: number; onLater
               className="py-2.5 rounded-xl bg-[#1E7A45] text-white font-bold text-xs flex items-center justify-center gap-1.5"><MessageCircle size={14} />واتساب</a>
             <button onClick={onOpen} className="py-2.5 rounded-xl bg-[#A07A26] text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"><CheckCircle2 size={14} />سجّل</button>
           </div>
+          {onNoAnswer && !naOpen && (
+            <button onClick={() => setNaOpen(true)} className="w-full py-2 rounded-xl bg-[#FBEDEA] border border-[#E8C4BC] text-[#C2412D] font-bold text-xs">
+              📵 مابيردش{naInfo.n > 1 ? ` (مرة ${naInfo.n})` : ''}
+            </button>
+          )}
+          {onNoAnswer && naOpen && (
+            naInfo.week ? (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-[#6B665C]">تالت مرة مابيردش — هيرجعلك بعد أسبوع</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button onClick={onNoAnswer} className="py-2 rounded-xl bg-[#141414] text-white font-bold text-xs">تمام — بعد أسبوع</button>
+                  <button onClick={() => setNaOpen(false)} className="py-2 rounded-xl bg-[#F6F4EF] font-bold text-xs">إلغاء</button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1.5">
+                <button onClick={onNoAnswer} className="py-2 rounded-xl bg-[#141414] text-white font-bold text-xs">بعد ٤٨ ساعة</button>
+                <button onClick={onOpen} className="py-2 rounded-xl bg-[#F6F4EF] border border-[#E4DFD4] font-bold text-xs">هحدد أنا</button>
+              </div>
+            )
+          )}
           {snoozesLeft <= 0 ? (
             <p className="w-full py-2 rounded-xl bg-[#FBEDEA] text-[#9E2A1B] font-bold text-xs text-center">أجّلت مرتين — لازم تسجّل أكشن على العميل ده</p>
           ) : (

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lead, LeadStatus } from '../types';
 import { WhenPicker, WhenValue, formatWhen, relTime } from './common/WhenPicker';
+import { markNoAnswer, naNextAt } from '../utils/noAnswer';
 
 /*
   نقل العميل لمرحلة: لازم كومنت عشان رحلة العميل تتسجل بالتفصيل،
@@ -38,6 +39,10 @@ export const LeadActionPanel: React.FC<{
   const [next, setNext] = useState<WhenValue | null>(null);
   const [saved, setSaved] = useState('');
   const [kind, setKind] = useState<'action' | 'viewing' | 'note' | ''>('');
+  /* «مابيردش»: '' مقفول · 'pick' مفتوح الاختيارين · 'self' هيحدد الميعاد بنفسه */
+  const [na, setNa] = useState<'' | 'pick' | 'self'>('');
+  const [naNext, setNaNext] = useState<WhenValue | null>(null);
+  const naInfo = naNextAt(lead);
   const act = (lead.activity || []) as LeadActivity[];
   const nextAt = lead.nextActionAt || undefined;
   const label = (id: string) => stages.find((s) => s.id === id)?.label || id;
@@ -110,6 +115,40 @@ export const LeadActionPanel: React.FC<{
         <p className="font-bold text-[#141414]">نقل وتسجيل</p>
         {nextAt ? <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${nextAt < Date.now() ? 'bg-[#FBEDEA] text-[#C2412D]' : 'bg-[#EEF5F0] text-[#1E7A45]'}`}>الأكشن: {formatWhen(nextAt)} · {relTime(nextAt)}</span> : null}
       </div>
+      {/* 📵 مابيردش — تسجيل بدوسة */}
+      {!na && (
+        <button type="button" onClick={() => setNa('pick')} className="w-full rounded-xl py-2.5 bg-[#FBEDEA] text-[#C2412D] border border-[#E8C4BC] font-bold text-sm">
+          📵 مابيردش{naInfo.n > 1 ? ` (مرة ${naInfo.n})` : ''}
+        </button>
+      )}
+      {na && (
+        <div className="rounded-xl border border-[#E8C4BC] bg-white p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-[#C2412D]">📵 مابيردش — مرة {naInfo.n}</p>
+            <button type="button" onClick={() => { setNa(''); setNaNext(null); }} className="text-xs font-bold text-[#8C877D]">إلغاء</button>
+          </div>
+          {naInfo.week ? (
+            <>
+              <p className="text-xs text-[#6B665C]">دي تالت مرة ورا بعض — هيرجعلك بعد أسبوع، ومفيش تنبيه قبلها. والإدارة هتشوفه في «مابيردش ٣ مرات».</p>
+              <button type="button" onClick={() => { onUpdateLead(markNoAnswer(lead, byName)); setNa(''); setSaved('اتسجّل مابيردش — هيرجعلك بعد أسبوع'); }}
+                className="w-full rounded-xl py-2.5 bg-[#141414] text-white font-bold text-sm">تمام — بعد أسبوع</button>
+            </>
+          ) : na === 'pick' ? (
+            <div className="grid grid-cols-2 gap-1.5">
+              <button type="button" onClick={() => { onUpdateLead(markNoAnswer(lead, byName)); setNa(''); setSaved('اتسجّل مابيردش — هيرجعلك بعد ٤٨ ساعة'); }}
+                className="rounded-xl py-2.5 bg-[#141414] text-white font-bold text-sm">بعد ٤٨ ساعة</button>
+              <button type="button" onClick={() => setNa('self')}
+                className="rounded-xl py-2.5 bg-[#F6F4EF] border border-[#E4DFD4] font-bold text-sm">هحدد أنا</button>
+            </div>
+          ) : (
+            <>
+              <WhenPicker value={naNext} onChange={setNaNext} label="هتكلّمه تاني إمتى؟" />
+              <button type="button" disabled={!naNext} onClick={() => { onUpdateLead(markNoAnswer(lead, byName, naNext!)); setNa(''); setNaNext(null); setSaved(`اتسجّل مابيردش — التنبيه ${formatWhen(naNext!.at)}`); }}
+                className="w-full rounded-xl py-2.5 bg-[#141414] text-white font-bold text-sm disabled:opacity-40">سجّل</button>
+            </>
+          )}
+        </div>
+      )}
       {ask && (
         <div className="space-y-1.5">
           <p className="text-xs font-bold text-[#141414]">العميل نزل معاينة جديدة فعلاً؟ (إجباري)</p>
