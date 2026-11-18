@@ -51,9 +51,17 @@ interface Props {
   /** الإدارة بتشوف تنبيهات الكل، السيلز بيشوف عملاءه هو */
   seeAll?: boolean;
   onOpenLead: (lead: Lead) => void;
+  /* «مش دلوقتي» بيتسجّل على العميل (الإدارة بتشوفه) ومسموح بيه مرتين بس لكل ميعاد */
+  onUpdateLead?: (lead: Lead) => void;
+  actorName?: string;
 }
 
-export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, onOpenLead }) => {
+export const MAX_SNOOZE = 2;
+/** كام مرة اتدّاس «مش دلوقتي» على الميعاد الحالي للعميل */
+export const snoozesFor = (lead: Lead) =>
+  (((lead as any).activity || []) as any[]).filter((e) => e?.snooze && e.forAt === lead.nextActionAt).length;
+
+export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, onOpenLead, onUpdateLead, actorName }) => {
   const [due, setDue] = useState<Lead | null>(null);
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>(
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
@@ -123,12 +131,33 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
     setDue(null);
   };
 
-  /* لما المتأخرين يعدّوا ٢٠ — قفلهم كلهم مرة واحدة (لحد الريفرش الجاي) */
+  /* «مش دلوقتي»: بيتسجّل في رحلة العميل كملاحظة (مش أكشن) عشان الإدارة تشوفه */
+  const recordSnooze = (lead: Lead) => {
+    if (!onUpdateLead) return;
+    const n = snoozesFor(lead);
+    onUpdateLead({
+      ...lead,
+      activity: [{
+        at: Date.now(), by: actorName || lead.assignedAgentName || '—', outcome: '⏰ أجّل التنبيه (مش دلوقتي)',
+        comment: `مرة ${n + 1} من ${MAX_SNOOZE}`, kind: 'note', snooze: true, forAt: lead.nextActionAt,
+      }, ...(((lead as any).activity || []) as any[])].slice(0, 80),
+    } as Lead);
+  };
+  const later = (lead: Lead) => {
+    if (snoozesFor(lead) >= MAX_SNOOZE) return;
+    recordSnooze(lead);
+    dismiss(lead);
+  };
+
+  /* لما المتأخرين يعدّوا ٢٠ — قفلهم كلهم مرة واحدة (لحد الريفرش الجاي).
+     كل واحد بيتحسب تأجيل، واللي خلّص مرتينه بيفضل */
   const dismissAll = () => {
+    const all = [...dueList, ...(due ? [due] : [])].filter((l) => snoozesFor(l) < MAX_SNOOZE);
+    const ids = new Set<string>();
+    all.forEach((l) => { if (!ids.has(l.id)) { ids.add(l.id); recordSnooze(l); } });
     setSeen((prev) => {
       const next = new Set<string>(prev);
-      dueList.forEach((l) => next.add(`${l.id}:${l.nextActionAt}`));
-      if (due) next.add(`${due.id}:${due.nextActionAt}`);
+      all.forEach((l) => next.add(`${l.id}:${l.nextActionAt}`));
       writeSeen(next);
       return next;
     });
@@ -179,7 +208,8 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
       {/* كارت التنبيه: بيطلع على جنب ومش بيوقف الشاشة. «مش دلوقتي» بتتفتح بعد ٨ ثواني
           عشان يلحق يقرا الملاحظة/الفيدباك قبل ما يأجّل */}
       {due && createPortal(<DueCard key={`${due.id}:${due.nextActionAt}`} lead={due} more={dueList.length - 1}
-        onLater={() => dismiss(due)} onOpen={() => { const l = due; dismiss(l); onOpenLead(l); }}
+        snoozesLeft={MAX_SNOOZE - snoozesFor(due)}
+        onLater={() => later(due)} onOpen={() => { const l = due; dismiss(l); onOpenLead(l); }}
         onCloseAll={dueList.length > 20 ? dismissAll : undefined} />, document.body)}
     </>
   );
@@ -188,7 +218,7 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
 export default FollowUpPopup;
 
 const WAIT = 8;
-const DueCard: React.FC<{ lead: Lead; more: number; onLater: () => void; onOpen: () => void; onCloseAll?: () => void }> = ({ lead, more, onLater, onOpen, onCloseAll }) => {
+const DueCard: React.FC<{ lead: Lead; more: number; snoozesLeft: number; onLater: () => void; onOpen: () => void; onCloseAll?: () => void }> = ({ lead, more, snoozesLeft, onLater, onOpen, onCloseAll }) => {
   const [left, setLeft] = useState(WAIT);
   const [shown, setShown] = useState(false);
   useEffect(() => { const r = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(r); }, []);
@@ -234,14 +264,18 @@ const DueCard: React.FC<{ lead: Lead; more: number; onLater: () => void; onOpen:
               className="py-2.5 rounded-xl bg-[#1E7A45] text-white font-bold text-xs flex items-center justify-center gap-1.5"><MessageCircle size={14} />واتساب</a>
             <button onClick={onOpen} className="py-2.5 rounded-xl bg-[#A07A26] text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"><CheckCircle2 size={14} />سجّل</button>
           </div>
+          {snoozesLeft <= 0 ? (
+            <p className="w-full py-2 rounded-xl bg-[#FBEDEA] text-[#9E2A1B] font-bold text-xs text-center">أجّلت مرتين — لازم تسجّل أكشن على العميل ده</p>
+          ) : (
           <button
             disabled={left > 0}
             onClick={onLater}
             className="relative w-full py-2 rounded-xl bg-[#F6F4EF] text-[#6B665C] font-bold text-xs flex items-center justify-center gap-1.5 overflow-hidden disabled:cursor-not-allowed"
           >
             {left > 0 && <span className="absolute inset-y-0 right-0 bg-[#ECE4D2] transition-all duration-1000 ease-linear" style={{ width: `${((WAIT - left) / WAIT) * 100}%` }} />}
-            <span className="relative flex items-center gap-1.5"><Clock size={13} />{left > 0 ? `اقرا الأول… مش دلوقتي بعد ${left}` : 'مش دلوقتي'}</span>
+            <span className="relative flex items-center gap-1.5"><Clock size={13} />{left > 0 ? `اقرا الأول… مش دلوقتي بعد ${left}` : `مش دلوقتي (فاضل ${snoozesLeft === 1 ? 'مرة' : 'مرتين'})`}</span>
           </button>
+          )}
           {onCloseAll && (
             <button onClick={onCloseAll} className="w-full py-2 rounded-xl border border-[#E8D3A6] text-[#8E6C1F] font-bold text-xs cursor-pointer">
               اقفلهم كلهم ({more + 1})

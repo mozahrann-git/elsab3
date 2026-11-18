@@ -1392,7 +1392,9 @@ export default function App() {
   const handleUpdateLead = (updatedLead: Lead) => {
     /* علامة "فريش" بتتشال أول ما حد يتحرّك على الليد فعلاً:
        يسجّل نشاط، أو ينقله من خانة "جديد". */
-    const touched = (updatedLead.activity?.length || 0) > 0 || updatedLead.status !== 'new';
+    /* «مش دلوقتي» على التنبيه مجرد ملاحظة — مش تواصل، فمايشيلش «فريش» ولا يتحسب أول تواصل */
+    const onlySnooze = !!(updatedLead.activity?.[0] as any)?.snooze;
+    const touched = (((updatedLead.activity || []) as any[]).some((e) => !e?.snooze)) || updatedLead.status !== 'new';
     const lead: Lead = updatedLead.isFresh && touched ? { ...updatedLead, isFresh: false } : updatedLead;
 
     /* بنقارن بالقديم عشان نسجّل التغيير الحقيقي بس:
@@ -1405,7 +1407,7 @@ export default function App() {
     const beforeActivity = before?.activity?.length || 0;
     const afterActivity = lead.activity?.length || 0;
 
-    if (afterActivity > beforeActivity) {
+    if (afterActivity > beforeActivity && !onlySnooze) {
       logEvent('lead_activity', base);
       // أول نشاط مسجّل = أول تواصل. ده اللي بنقيس عليه سرعة الرد.
       if (beforeActivity === 0) logEvent('lead_first_contact', base);
@@ -2836,6 +2838,8 @@ export default function App() {
              ده كان فاضل مفتوح: الجرس والتوست اتظبطوا والبوب-أب لأ،
              فالأدمن كان لسه بينطّ له ١٧٠ متابعة مش بتاعته. */
           seeAll={false}
+          onUpdateLead={handleUpdateLead}
+          actorName={currentAgent?.name}
           onOpenLead={(lead) => {
             setIsSalesNotificationsOpen(false);
             setPendingLeadId(lead.id);

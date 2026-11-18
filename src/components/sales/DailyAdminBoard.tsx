@@ -78,7 +78,13 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
       leads, salesDay: sd, ads, viewings: viewingRequests, slots,
       slotWeekKey: shownDay === today ? weekKey() : undefined,
     });
-    return { a, p, score: dayScore(p, T) };
+    /* كام مرة داس «مش دلوقتي» على تنبيه في اليوم ده */
+    const cairoDay = (t: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date(t));
+    let snoozes = 0;
+    leads.forEach((l) => ((l as any).activity || []).forEach((e: any) => {
+      if (e?.snooze && e.by === a.name && typeof e.at === 'number' && cairoDay(e.at) === shownDay) snoozes++;
+    }));
+    return { a, p, score: dayScore(p, T), snoozes };
   }), [team, days, ads, leads, viewingRequests, slots, shownDay, settings.closeHour, T, today]);
 
   const [showSettings, setShowSettings] = useState(false);
@@ -124,13 +130,13 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
           <table className="w-full text-right text-xs">
             <thead className="bg-[#F6F4EF] text-[#6B665C]">
               <tr>
-                {['السيلز', 'الإنجاز', 'موجود؟', 'مكالمات', 'طلبات', 'إعلانات', 'متابعات', 'معاينات الأسبوع', 'فيديو الأسبوع', ''].map((h) => (
+                {['السيلز', 'الإنجاز', 'موجود؟', 'مكالمات', 'طلبات', 'إعلانات', 'متابعات', 'معاينات الأسبوع', 'فيديو الأسبوع', '⏰ أجّل تنبيه', ''].map((h) => (
                   <th key={h} className="px-3 py-2.5 font-bold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ a, p, score }) => (
+              {rows.map(({ a, p, score, snoozes }) => (
                 <tr key={a.id} className="border-t border-[#F0ECE4] align-top">
                   <td className="px-3 py-3 font-bold whitespace-nowrap">
                     <button onClick={() => setDetail({ a, p })} className="underline decoration-dotted">{a.name}</button>
@@ -172,6 +178,10 @@ export const DailyAdminBoard: React.FC<Props> = ({ agents, leads, viewingRequest
                   </td>
                   <td className="px-3 py-3"><Cell done={p.viewingsWeek} target={T.viewingsWeek} /></td>
                   <td className="px-3 py-3"><Cell done={p.videosWeek} target={T.videosWeek} /></td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <span className={`font-mono font-bold ${snoozes >= 5 ? 'text-[#C2412D]' : snoozes ? 'text-[#A07A26]' : 'text-[#8C877D]'}`}>{snoozes}</span>
+                    {snoozes > 0 && <span className="block text-[10px] text-[#8C877D]">مرة «مش دلوقتي»</span>}
+                  </td>
                   <td className="px-3 py-3">
                     <button onClick={() => toggleOff(a, !p.off)} className="px-2 py-1 rounded-lg bg-[#F6F4EF] border border-[#ECE8DF] text-[10px] font-bold whitespace-nowrap">
                       {p.off ? 'شيل الإجازة' : 'إجازة'}
