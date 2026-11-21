@@ -250,7 +250,7 @@ const CallsPanel: React.FC<{
           <div className="min-w-0">
             <p className="font-bold text-sm truncate">{x.name || 'من غير اسم'}</p>
             <p className="font-mono text-xs text-[#6B665C]" dir="ltr">{x.phone}</p>
-            {x.status === 'no_answer' && <p className="text-[10.5px] font-bold text-[#A07A26]">مردش {na} مرة · محاولة {na + 1} من {MAX_NO_ANSWER}</p>}
+            {x.status === 'no_answer' && <p className="text-[10.5px] font-bold text-[#A07A26]">مردش {na === 1 ? 'مرة' : na === 2 ? 'مرتين' : `${na} مرات`} · {MAX_NO_ANSWER - na <= 1 ? 'دي آخر محاولة — لو مردش هيتقفل' : `فاضل ${MAX_NO_ANSWER - na} محاولات`}</p>}
             {x.status === 'recall' && <p className="text-[10.5px] font-bold text-[#1F4E9C]">رجعلك تاني · كان قال: {x.reason || 'مش مهتم'}</p>}
             {x.note && <p className="text-[10px] text-[#8C877D]">{x.note}</p>}
           </div>
@@ -294,7 +294,7 @@ const CallsPanel: React.FC<{
             <div key={x.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#F6F4EF] px-3 py-2">
               <span className="min-w-0">
                 <span className="block text-[12.5px] font-bold truncate">{x.name || 'من غير اسم'} <span className="font-mono font-medium text-[#6B665C]" dir="ltr">{x.phone}</span></span>
-                <span className="block text-[10.5px] text-[#A07A26] font-bold">محاولة {(x.noAnswers ?? x.attempts) + 1} من {MAX_NO_ANSWER} · يرجعلك الساعة {hhmm(dueAt(x))}</span>
+                <span className="block text-[10.5px] text-[#A07A26] font-bold">مردش {(x.noAnswers ?? x.attempts) === 1 ? 'مرة' : 'مرتين'} · {MAX_NO_ANSWER - (x.noAnswers ?? x.attempts) <= 1 ? 'آخر محاولة' : 'المحاولة التانية'} الساعة {hhmm(dueAt(x))}</span>
               </span>
               <a href={generateCallLink(x.phone)} className="shrink-0 px-2.5 py-1.5 rounded-lg bg-white border border-[#ECE8DF] text-[11px] font-bold">اتصل دلوقتي</a>
             </div>
