@@ -1381,11 +1381,6 @@ export const SalesCrmModal: React.FC<SalesCrmModalProps> = ({
 
             {/* دليل ألوان التنبيه — اللون معاه كلمة دايماً، وجنبه تكبير/تصغير الكروت */}
             <div className="flex items-center gap-1.5 flex-wrap text-[11px] px-1">
-              {([['#C2410C', 'ليد فريش'], ['#4A5568', 'كامبين قديم'], ['#1F5FB0', 'تحديث من سارة']] as const).map(([c, t]) => (
-                <span key={c} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-semibold" style={{ borderColor: T.line, background: T.surface, color: T.ink }}>
-                  <span className="w-2 h-2 rounded-full" style={{ background: c }} />{t}
-                </span>
-              ))}
               <span className="mr-auto flex items-center h-9 rounded-full border p-0.5" style={{ borderColor: T.line, background: T.surface }} role="group" aria-label="حجم الكروت">
                 <button type="button" onClick={() => setPipeZoom(pipeZoom - 1)} disabled={pipeZoom === 0} aria-label="صغّر الكروت"
                   className="w-8 h-8 rounded-full flex items-center justify-center text-[18px] font-bold leading-none disabled:opacity-30 active:scale-90 transition" style={{ color: T.ink }}>−</button>
