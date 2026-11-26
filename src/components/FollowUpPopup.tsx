@@ -72,6 +72,8 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
      فبيلاقي نفس المتابعة لسه مستحقة ويفتح تاني على طول — وده اللي كان بيخلّيه يعلّق. */
   const [seen, setSeen] = useState<Set<string>>(() => readSeen());
   const [tick, setTick] = useState(0);
+  /* اللي خلّص «مش دلوقتي» مرتين: «اقفلهم كلهم» بيخفيه نص ساعة بس وبعدين يرجع */
+  const [hold, setHold] = useState<Map<string, number>>(() => new Map());
 
   // بنراجع كل نص دقيقة: الميعاد ممكن يعدّي والصفحة مفتوحة
   useEffect(() => {
@@ -94,8 +96,9 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
       .filter((l) => typeof l.nextActionAt === 'number' && l.nextActionAt! <= now)
       .filter((l) => l.followUpStatus !== 'completed' && l.status !== 'closed' && l.status !== 'lost')
       .filter((l) => !seen.has(`${l.id}:${l.nextActionAt}`))
+      .filter((l) => (hold.get(`${l.id}:${l.nextActionAt}`) || 0) <= now)
       .sort((a, b) => (a.nextActionAt || 0) - (b.nextActionAt || 0));
-  }, [mine, tick, seen]);
+  }, [mine, tick, seen, hold]);
 
   const nextDue = dueList[0] || null;
 
@@ -151,9 +154,20 @@ export const FollowUpPopup: React.FC<Props> = ({ leads, currentAgentId, seeAll, 
   };
 
   /* لما المتأخرين يعدّوا ٢٠ — قفلهم كلهم مرة واحدة (لحد الريفرش الجاي).
-     كل واحد بيتحسب تأجيل، واللي خلّص مرتينه بيفضل */
+     كل واحد بيتحسب تأجيل. اللي خلّص مرتينه بيستخبى نص ساعة بس وبيرجع.
+     (قبل كده كان بيفضل ظاهر، فالزرار كان شكله مش شغال) */
   const dismissAll = () => {
-    const all = [...dueList, ...(due ? [due] : [])].filter((l) => snoozesFor(l) < MAX_SNOOZE);
+    const everyone = [...dueList, ...(due ? [due] : [])];
+    const limited = everyone.filter((l) => snoozesFor(l) >= MAX_SNOOZE);
+    if (limited.length) {
+      setHold((prev) => {
+        const next = new Map(prev);
+        const until = Date.now() + 30 * 60000;
+        limited.forEach((l) => next.set(`${l.id}:${l.nextActionAt}`, until));
+        return next;
+      });
+    }
+    const all = everyone.filter((l) => snoozesFor(l) < MAX_SNOOZE);
     const ids = new Set<string>();
     all.forEach((l) => { if (!ids.has(l.id)) { ids.add(l.id); recordSnooze(l); } });
     setSeen((prev) => {
